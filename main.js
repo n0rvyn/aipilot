@@ -13988,7 +13988,6 @@ var AIPilot = class extends import_obsidian.Plugin {
     this.requestId = null;
   }
   async onload() {
-    console.log("AI Text Developer plugin loaded!");
     await this.loadSettings();
     this.addSettingTab(new AITextSettingTab(this.app, this));
     this.addRibbonIcon("pencil", "Organize Text", () => this.organizeText());
@@ -13999,22 +13998,17 @@ var AIPilot = class extends import_obsidian.Plugin {
     this.initializeRequestId();
   }
   onunload() {
-    console.log("AI Text Developer plugin unloaded!");
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    console.log("Loaded settings:", this.settings);
   }
   async saveSettings() {
     await this.saveData(this.settings);
-    console.log("Saved settings:", this.settings);
   }
   initializeRequestId() {
     if (!this.requestId) {
       this.requestId = (0, import_uuid_browser.v4)();
-      console.log("Generated new request_id:", this.requestId);
     } else {
-      console.log("Reusing existing request_id:", this.requestId);
     }
   }
   addCommands() {
@@ -14043,7 +14037,6 @@ var AIPilot = class extends import_obsidian.Plugin {
     const {apiKey, model, provider} = this.settings;
     let url2 = "";
     let data = {};
-    console.log(`Calling AI with content: "${content}"`);
     if (provider === "openai") {
       url2 = "https://api.openai.com/v1/completions";
       data = {
@@ -14062,14 +14055,12 @@ var AIPilot = class extends import_obsidian.Plugin {
       };
     }
     try {
-      console.log(`Sending request to ${url2} with data:`, data);
       const response = await axios_default.post(url2, data, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`
         }
       });
-      console.log("Received AI response:", response.data);
       return provider === "openai" ? response.data.choices[0].text || "No response" : response.data.choices[0].message.content || "No response";
     } catch (error) {
       console.error("Error calling AI:", error);
