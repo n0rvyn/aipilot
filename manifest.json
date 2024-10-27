@@ -1,0 +1,9 @@
+{
+  "id": "aipilot",
+  "name": "AI Text Copilot",
+  "description": "AI powered writing & organization assistance.",
+  "author": "norvyn@norvyn.com",
+
+  "minAppVersion": "0.11.0",
+  "version": "0.0.1"
+}
