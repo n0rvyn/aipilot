@@ -13990,10 +13990,10 @@ var AIPilot = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
     this.addSettingTab(new AITextSettingTab(this.app, this));
-    this.addRibbonIcon("pencil", "Organize Text", () => this.organizeText());
-    this.addRibbonIcon("spell-check", "Check Grammar", () => this.checkGrammar());
-    this.addRibbonIcon("file-text", "Generate Content", () => this.generateAIContent());
-    this.addRibbonIcon("documents", "Compare Text Differences", () => this.compareTextDifferences());
+    this.addRibbonIcon("pencil", "Organize text", () => this.organizeText());
+    this.addRibbonIcon("spell-check", "Check grammar", () => this.checkGrammar());
+    this.addRibbonIcon("file-text", "Generate content", () => this.generateAIContent());
+    this.addRibbonIcon("documents", "Compare text differences", () => this.compareTextDifferences());
     this.addCommands();
     this.initializeRequestId();
   }
@@ -14008,29 +14008,33 @@ var AIPilot = class extends import_obsidian.Plugin {
   initializeRequestId() {
     if (!this.requestId) {
       this.requestId = (0, import_uuid_browser.v4)();
-    } else {
     }
   }
   addCommands() {
     this.addCommand({
       id: "organize-text",
-      name: "Organize Text",
-      callback: () => this.organizeText()
+      name: "Organize text",
+      editorCallback: (editor, view) => this.organizeText(editor)
     });
     this.addCommand({
       id: "check-grammar",
-      name: "Check Grammar",
-      callback: () => this.checkGrammar()
+      name: "Check grammar",
+      editorCallback: (editor, view) => this.checkGrammar(editor)
     });
     this.addCommand({
       id: "generate-content",
-      name: "Generate Content",
-      callback: () => this.generateAIContent()
+      name: "Generate content",
+      editorCallback: (editor, view) => this.generateAIContent(editor)
     });
     this.addCommand({
       id: "compare-text-differences",
-      name: "Compare Text Differences",
-      callback: () => this.compareTextDifferences()
+      name: "Compare text differences",
+      checkCallback: (checking) => {
+        if (checking) {
+          return this.app.workspace.getActiveFile() != null;
+        }
+        this.compareTextDifferences();
+      }
     });
   }
   async callAI(content) {
@@ -14061,114 +14065,104 @@ var AIPilot = class extends import_obsidian.Plugin {
           Authorization: `Bearer ${apiKey}`
         }
       });
-      return provider === "openai" ? response.data.choices[0].text || "No response" : response.data.choices[0].message.content || "No response";
+      return provider === "openai" ? response.data.choices[0]?.text || "No response" : response.data.choices[0]?.message?.content || "No response";
     } catch (error) {
       console.error("Error calling AI:", error);
       return "Error fetching AI response";
     }
   }
-  async organizeText() {
+  async organizeText(editor) {
     this.initializeRequestId();
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    if (view) {
-      const selectedText = view.editor.getSelection();
-      if (!selectedText) {
-        new ConfirmModal(this.app, "No text selected. Apply organization to the entire document?", () => {
-          const content = view.editor.getValue();
-          this.processOrganize(content, view);
-        }).open();
-      } else {
-        this.processOrganize(selectedText, view);
-      }
+    const selectedText = editor.getSelection();
+    if (!selectedText) {
+      new ConfirmModal(this.app, "No text selected. Apply organization to the entire document?", () => {
+        const content = editor.getValue();
+        this.processOrganize(content, editor);
+      }).open();
+    } else {
+      await this.processOrganize(selectedText, editor);
     }
   }
-  async processOrganize(content, view) {
+  async processOrganize(content, editor) {
     const loadingModal = new LoadingModal(this.app);
     loadingModal.open();
     const organizedText = await this.callAI(`${this.settings.promptOrganize}${content}`);
     loadingModal.close();
     new AIContentModal(this.app, organizedText, (newContent) => {
-      if (view.editor.getSelection()) {
-        view.editor.replaceSelection(newContent);
+      if (editor.getSelection()) {
+        editor.replaceSelection(newContent);
       } else {
-        view.editor.setValue(newContent);
+        editor.setValue(newContent);
       }
     }).open();
   }
-  async checkGrammar() {
+  async checkGrammar(editor) {
     this.initializeRequestId();
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    if (view) {
-      const selectedText = view.editor.getSelection();
-      if (!selectedText) {
-        new ConfirmModal(this.app, "No text selected. Apply grammar check to the entire document?", () => {
-          const content = view.editor.getValue();
-          this.processGrammar(content, view);
-        }).open();
-      } else {
-        this.processGrammar(selectedText, view);
-      }
+    const selectedText = editor.getSelection();
+    if (!selectedText) {
+      new ConfirmModal(this.app, "No text selected. Apply grammar check to the entire document?", () => {
+        const content = editor.getValue();
+        this.processGrammar(content, editor);
+      }).open();
+    } else {
+      await this.processGrammar(selectedText, editor);
     }
   }
-  async processGrammar(content, view) {
+  async processGrammar(content, editor) {
     const loadingModal = new LoadingModal(this.app);
     loadingModal.open();
     const grammarCheckedText = await this.callAI(`${this.settings.promptCheckGrammar}${content}`);
     loadingModal.close();
     new AIContentModal(this.app, grammarCheckedText, (newContent) => {
-      if (view.editor.getSelection()) {
-        view.editor.replaceSelection(newContent);
+      if (editor.getSelection()) {
+        editor.replaceSelection(newContent);
       } else {
-        view.editor.setValue(newContent);
+        editor.setValue(newContent);
       }
     }).open();
   }
-  async generateAIContent() {
+  async generateAIContent(editor) {
     this.initializeRequestId();
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    if (view) {
-      const selectedText = view.editor.getSelection();
-      if (!selectedText) {
-        new ConfirmModal(this.app, "No text selected. Apply content generation to the entire document?", () => {
-          const content = view.editor.getValue();
-          this.processGenerate(content, view);
-        }).open();
-      } else {
-        this.processGenerate(selectedText, view);
-      }
+    const selectedText = editor.getSelection();
+    if (!selectedText) {
+      new ConfirmModal(this.app, "No text selected. Apply content generation to the entire document?", () => {
+        const content = editor.getValue();
+        this.processGenerate(content, editor);
+      }).open();
+    } else {
+      await this.processGenerate(selectedText, editor);
     }
   }
-  async processGenerate(content, view) {
+  async processGenerate(content, editor) {
     const loadingModal = new LoadingModal(this.app);
     loadingModal.open();
     const generatedContent = await this.callAI(`${this.settings.promptGenerateContent}${content}`);
     loadingModal.close();
     new AIContentModal(this.app, generatedContent, (newContent) => {
-      if (view.editor.getSelection()) {
-        view.editor.replaceSelection(newContent);
+      if (editor.getSelection()) {
+        editor.replaceSelection(newContent);
       } else {
-        view.editor.setValue(newContent);
+        editor.setValue(newContent);
       }
     }).open();
   }
   async compareTextDifferences() {
     this.initializeRequestId();
-    const selectedNotes = this.app.workspace.getActiveFile();
-    if (!selectedNotes || selectedNotes.length !== 2) {
-      new import_obsidian.Notice("Please select exactly two notes to compare.");
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new import_obsidian.Notice("Please select a note to compare.");
       return;
     }
-    const [file1, file2] = selectedNotes;
-    const content1 = await this.app.vault.read(file1);
-    const content2 = await this.app.vault.read(file2);
-    const loadingModal = new LoadingModal(this.app);
-    loadingModal.open();
-    const comparisonPrompt = `${this.settings.promptCompareText} 
-Text 1: ${content1}
-Text 2: ${content2}`;
-    const comparisonResult = await this.callAI(comparisonPrompt);
-    loadingModal.close();
-    new AIContentModal(this.app, comparisonResult, () => {
+    new ConfirmModal(this.app, "Compare the entire document content?", async () => {
+      const content1 = await this.app.vault.read(activeFile);
+      const comparisonPrompt = `${this.settings.promptCompareText} 
+Text 1: ${content1}`;
+      const loadingModal = new LoadingModal(this.app);
+      loadingModal.open();
+      const comparisonResult = await this.callAI(comparisonPrompt);
+      loadingModal.close();
+      new AIContentModal(this.app, comparisonResult, () => {
+      }).open();
     }).open();
   }
 };
@@ -14180,7 +14174,7 @@ var LoadingModal = class extends import_obsidian.Modal {
   onOpen() {
     const {contentEl} = this;
     contentEl.empty();
-    contentEl.createEl("h2", {text: "Generating AI Content..."});
+    contentEl.createEl("h2", {text: "Generating AI content..."});
     contentEl.createEl("p", {text: "Please wait while the AI processes the request."});
   }
   onClose() {
@@ -14196,8 +14190,8 @@ var AIContentModal = class extends import_obsidian.Modal {
   onOpen() {
     const {contentEl} = this;
     contentEl.empty();
-    contentEl.createEl("h2", {text: "AI Generated Content"});
-    const markdownContainer = contentEl.createEl("div");
+    contentEl.createEl("h2", {text: "AI generated content"});
+    const markdownContainer = contentEl.createDiv({cls: "ai-markdown-container"});
     import_obsidian.MarkdownRenderer.renderMarkdown(this.content, markdownContainer, "", null);
     const applyBtn = contentEl.createEl("button", {text: "Apply"});
     const copyBtn = contentEl.createEl("button", {text: "Copy"});
@@ -14261,8 +14255,8 @@ var AITextSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const {containerEl} = this;
     containerEl.empty();
-    containerEl.createEl("h2", {text: "AI Pilot Settings"});
-    new import_obsidian.Setting(containerEl).setName("API Key").setDesc("Enter your API Key for the AI service.").addText((text) => text.setPlaceholder("API Key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("AI Pilot settings").setHeading();
+    new import_obsidian.Setting(containerEl).setName("API key").setDesc("Enter your API key for the AI service.").addText((text) => text.setPlaceholder("API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
       this.plugin.settings.apiKey = value;
       await this.plugin.saveSettings();
     }));
@@ -14271,7 +14265,7 @@ var AITextSettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
       this.display();
     }));
-    new import_obsidian.Setting(containerEl).setName("AI Model").setDesc("Choose the AI model.").addDropdown((dropdown) => {
+    new import_obsidian.Setting(containerEl).setName("AI model").setDesc("Choose the AI model.").addDropdown((dropdown) => {
       const models = this.plugin.settings.provider === "openai" ? {
         "gpt-4": "GPT-4",
         "gpt-4-turbo": "GPT-4 Turbo",
@@ -14285,21 +14279,21 @@ var AITextSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Organize Text Prompt").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptOrganize).setValue(this.plugin.settings.promptOrganize).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("Organize text prompt").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptOrganize).setValue(this.plugin.settings.promptOrganize).onChange(async (value) => {
       this.plugin.settings.promptOrganize = value;
       await this.plugin.saveSettings();
-    }).inputEl.style.height = "100px");
-    new import_obsidian.Setting(containerEl).setName("Check Grammar Prompt").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptCheckGrammar).setValue(this.plugin.settings.promptCheckGrammar).onChange(async (value) => {
+    }).inputEl.style.height = "200px");
+    new import_obsidian.Setting(containerEl).setName("Check grammar prompt").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptCheckGrammar).setValue(this.plugin.settings.promptCheckGrammar).onChange(async (value) => {
       this.plugin.settings.promptCheckGrammar = value;
       await this.plugin.saveSettings();
-    }).inputEl.style.height = "100px");
-    new import_obsidian.Setting(containerEl).setName("Generate Content Prompt").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptGenerateContent).setValue(this.plugin.settings.promptGenerateContent).onChange(async (value) => {
+    }).inputEl.style.height = "200px");
+    new import_obsidian.Setting(containerEl).setName("Generate content prompt").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptGenerateContent).setValue(this.plugin.settings.promptGenerateContent).onChange(async (value) => {
       this.plugin.settings.promptGenerateContent = value;
       await this.plugin.saveSettings();
-    }).inputEl.style.height = "100px");
-    new import_obsidian.Setting(containerEl).setName("Compare Text Prompt").setDesc("Prompt used for text comparison.").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptCompareText).setValue(this.plugin.settings.promptCompareText).onChange(async (value) => {
+    }).inputEl.style.height = "200px");
+    new import_obsidian.Setting(containerEl).setName("Compare text prompt").setDesc("Prompt used for text comparison.").addTextArea((text) => text.setPlaceholder(DEFAULT_SETTINGS.promptCompareText).setValue(this.plugin.settings.promptCompareText).onChange(async (value) => {
       this.plugin.settings.promptCompareText = value;
       await this.plugin.saveSettings();
-    }).inputEl.style.height = "100px");
+    }).inputEl.style.height = "200px");
   }
 };
