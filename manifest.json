@@ -1,9 +1,8 @@
 {
   "id": "aipilot",
-  "name": "AI Text Copilot",
+  "name": "AI Pilot",
   "description": "AI powered writing & organization assistance.",
   "author": "norvyn@norvyn.com",
-
   "minAppVersion": "0.11.0",
   "version": "0.0.1"
 }
