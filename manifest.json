@@ -3,6 +3,7 @@
   "name": "AI Pilot",
   "description": "AI powered writing & organization assistance.",
   "author": "norvyn@norvyn.com",
+  "isDesktopOnly": false,
   "minAppVersion": "0.11.0",
   "version": "0.0.1"
 }
