@@ -10,9 +10,8 @@ import {
     MarkdownRenderer,
     Notice,
     EditorPosition,
+    requestUrl
 } from "obsidian";
-import axios from "axios";
-import { v4 as uuidv4 } from "uuid-browser";
 
 import "./styles.css";
 
@@ -61,7 +60,7 @@ export default class AIPilot extends Plugin {
 
     initializeRequestId() {
         if (!this.requestId) {
-            this.requestId = uuidv4();
+            this.requestId = crypto.randomUUID();
         }
     }
 
@@ -94,7 +93,6 @@ export default class AIPilot extends Plugin {
             editorCallback: (editor, view) => this.engageInDialogue(editor),
         });
 
-        // **New Command for Custom Prompt**
         this.addCommand({
             id: "custom-prompt",
             name: "Custom Prompt",
@@ -137,19 +135,25 @@ export default class AIPilot extends Plugin {
         }
 
         try {
-            const response = await axios.post(url, data, {
+            const response = await requestUrl({
+                url: url,
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${apiKey}`,
                 },
+                body: JSON.stringify(data),
+                contentType: 'application/json',
             });
 
+            const responseData = response.json;
+
             if (provider === 'openai' && chatModels.includes(model)) {
-                return response.data.choices[0]?.message?.content || 'No response';
+                return responseData.choices[0]?.message?.content || 'No response';
             } else if (provider === 'openai') {
-                return response.data.choices[0]?.text || 'No response';
+                return responseData.choices[0]?.text || 'No response';
             } else {
-                return response.data.choices[0]?.message?.content || 'No response';
+                return responseData.choices[0]?.message?.content || 'No response';
             }
         } catch (error) {
             console.error("Error calling AI:", error);
@@ -180,14 +184,20 @@ export default class AIPilot extends Plugin {
         }
 
         try {
-            const response = await axios.post(url, data, {
+            const response = await requestUrl({
+                url: url,
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${apiKey}`,
                 },
+                body: JSON.stringify(data),
+                contentType: 'application/json',
             });
 
-            return response.data.choices[0]?.message?.content || 'No response';
+            const responseData = response.json;
+
+            return responseData.choices[0]?.message?.content || 'No response';
         } catch (error) {
             console.error("Error calling AI:", error);
             return 'Error fetching AI response';
@@ -224,7 +234,14 @@ export default class AIPilot extends Plugin {
 
         loadingModal.close();
 
-        new AIContentModal(this.app, this, organizedText, editor).open();
+        new AIContentModal(this.app, this, organizedText, editor, (updatedContent) => {
+            // Handle apply changes
+            if (editor.somethingSelected()) {
+                editor.replaceSelection(updatedContent);
+            } else {
+                editor.setValue(updatedContent);
+            }
+        }).open();
     }
 
     async checkGrammar(editor?: any) {
@@ -257,7 +274,14 @@ export default class AIPilot extends Plugin {
 
         loadingModal.close();
 
-        new AIContentModal(this.app, this, grammarCheckedText, editor).open();
+        new AIContentModal(this.app, this, grammarCheckedText, editor, (updatedContent) => {
+            // Handle apply changes
+            if (editor.somethingSelected()) {
+                editor.replaceSelection(updatedContent);
+            } else {
+                editor.setValue(updatedContent);
+            }
+        }).open();
     }
 
     async generateAIContent(editor?: any) {
@@ -290,7 +314,14 @@ export default class AIPilot extends Plugin {
 
         loadingModal.close();
 
-        new AIContentModal(this.app, this, generatedContent, editor).open();
+        new AIContentModal(this.app, this, generatedContent, editor, (updatedContent) => {
+            // Handle apply changes
+            if (editor.somethingSelected()) {
+                editor.replaceSelection(updatedContent);
+            } else {
+                editor.setValue(updatedContent);
+            }
+        }).open();
     }
 
     async engageInDialogue(editor?: any) {
@@ -332,7 +363,6 @@ export default class AIPilot extends Plugin {
         new ChatModal(this.app, this, history, editor).open();
     }
 
-    // **New Method for Custom Prompt**
     async handleCustomPrompt(editor?: any) {
         if (!editor) {
             const mdView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -347,25 +377,18 @@ export default class AIPilot extends Plugin {
         const selectedText = editor.getSelection();
         let contentToProcess: string;
 
-        if (!selectedText) {
-            new CustomPromptInputModal(this.app, async (inputPrompt: string) => {
-                if (!inputPrompt) {
-                    new Notice("No prompt entered.");
-                    return;
-                }
-                contentToProcess = inputPrompt;
-                await this.processCustomPrompt(contentToProcess, editor);
-            }).open();
-        } else {
-            new CustomPromptInputModal(this.app, async (inputPrompt: string) => {
-                if (!inputPrompt) {
-                    new Notice("No prompt entered.");
-                    return;
-                }
+        new CustomPromptInputModal(this.app, async (inputPrompt: string) => {
+            if (!inputPrompt) {
+                new Notice("No prompt entered.");
+                return;
+            }
+            if (selectedText) {
                 contentToProcess = `${inputPrompt} ${selectedText}`;
-                await this.processCustomPrompt(contentToProcess, editor);
-            }).open();
-        }
+            } else {
+                contentToProcess = inputPrompt;
+            }
+            await this.processCustomPrompt(contentToProcess, editor);
+        }).open();
     }
 
     async processCustomPrompt(content: string, editor: any) {
@@ -376,11 +399,17 @@ export default class AIPilot extends Plugin {
 
         loadingModal.close();
 
-        new AIContentModal(this.app, this, customResponse, editor).open();
+        new AIContentModal(this.app, this, customResponse, editor, (updatedContent) => {
+            // Handle apply changes
+            if (editor.somethingSelected()) {
+                editor.replaceSelection(updatedContent);
+            } else {
+                editor.setValue(updatedContent);
+            }
+        }).open();
     }
 }
 
-// **Moved CustomPromptInputModal outside of any other class**
 class CustomPromptInputModal extends Modal {
     onSubmit: (inputPrompt: string) => void;
 
@@ -398,15 +427,6 @@ class CustomPromptInputModal extends Modal {
             placeholder: "Type your custom prompt here...",
             cls: "custom-prompt-input",
         });
-        promptInput.style.width = '100%';
-        promptInput.style.height = '150px';
-        promptInput.style.marginBottom = '10px';
-        promptInput.style.color = 'var(--text-normal)';
-        promptInput.style.backgroundColor = 'var(--background-primary)';
-        promptInput.style.padding = '10px';
-        promptInput.style.border = '1px solid var(--border-normal)';
-        promptInput.style.borderRadius = '4px';
-        promptInput.style.resize = 'vertical';
 
         const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
 
@@ -433,7 +453,6 @@ class CustomPromptInputModal extends Modal {
     }
 }
 
-// Modal to select between the 5 features
 class FeatureSelectionModal extends Modal {
     plugin: AIPilot;
 
@@ -453,9 +472,8 @@ class FeatureSelectionModal extends Modal {
         const grammarBtn = buttonContainer.createEl("button", { text: "Check Grammar" });
         const generateBtn = buttonContainer.createEl("button", { text: "Generate Content" });
         const dialogueBtn = buttonContainer.createEl("button", { text: "Engage in Dialogue" });
-        const customPromptBtn = buttonContainer.createEl("button", { text: "Custom Prompt" }); // **New Button**
+        const customPromptBtn = buttonContainer.createEl("button", { text: "Custom Prompt" });
 
-        // Assigning event handlers to buttons
         organizeBtn.onclick = () => {
             this.close();
             this.plugin.organizeText();
@@ -472,7 +490,7 @@ class FeatureSelectionModal extends Modal {
             this.close();
             this.plugin.engageInDialogue();
         };
-        customPromptBtn.onclick = () => { // **Handler for New Button**
+        customPromptBtn.onclick = () => {
             this.close();
             this.plugin.handleCustomPrompt();
         };
@@ -483,7 +501,6 @@ class FeatureSelectionModal extends Modal {
     }
 }
 
-// Loading Modal
 class LoadingModal extends Modal {
     constructor(app: App) {
         super(app);
@@ -501,7 +518,6 @@ class LoadingModal extends Modal {
     }
 }
 
-// AI Content Modal with corrected button declarations and multi-level Undo functionality
 class AIContentModal extends Modal {
     content: string;
     onApply: (content: string) => void;
@@ -524,22 +540,11 @@ class AIContentModal extends Modal {
 
         const messageContainer = contentEl.createDiv({ cls: 'message-container' });
 
-        // Render the content
         const msgDiv = messageContainer.createDiv({ cls: 'ai-message' });
         await MarkdownRenderer.renderMarkdown(this.content, msgDiv, '', null);
-        msgDiv.style.padding = '10px';
-        msgDiv.style.borderRadius = '5px';
-        msgDiv.style.backgroundColor = 'var(--background-secondary)';
-        msgDiv.style.color = 'var(--text-normal)';
-        msgDiv.style.marginBottom = '10px';
 
-        // Button container
         const buttonContainer = msgDiv.createDiv({ cls: 'button-container' });
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '10px';
-        buttonContainer.style.marginTop = '5px';
 
-        // Copy Button
         const copyBtn = buttonContainer.createEl("button", { text: "Copy" });
         copyBtn.onclick = async () => {
             try {
@@ -551,18 +556,14 @@ class AIContentModal extends Modal {
             }
         };
 
-        // Insert Button
         const insertBtn = buttonContainer.createEl("button", { text: "Insert" });
         insertBtn.onclick = () => {
             if (this.editor) {
                 const startPos = this.editor.getCursor();
                 const insertedContent = this.content;
-                // Insert the content
                 this.editor.replaceRange(insertedContent, startPos);
-                // Calculate the end position after insertion
                 const endOffset = this.editor.posToOffset(startPos) + insertedContent.length;
                 const endPos = this.editor.offsetToPos(endOffset);
-                // Store the positions and original text (assuming original text is empty)
                 this.undoStack.push({ from: startPos, to: endPos, text: '' });
                 new Notice("Content inserted at cursor position!");
             } else {
@@ -570,7 +571,6 @@ class AIContentModal extends Modal {
             }
         };
 
-        // Undo Button
         const undoBtn = buttonContainer.createEl("button", { text: "Undo" });
         undoBtn.onclick = () => {
             if (this.undoStack.length > 0 && this.editor) {
@@ -584,16 +584,13 @@ class AIContentModal extends Modal {
             }
         };
 
-        // Chat Button
         const chatBtn = buttonContainer.createEl("button", { text: "Chat" });
         chatBtn.onclick = () => {
             this.close();
             new ChatModal(this.app, this.plugin, [{ role: 'assistant', content: this.content }], this.editor).open();
         };
 
-        // Apply Button
-        const applyBtn = contentEl.createEl("button", { text: "Apply Changes" });
-        applyBtn.style.marginTop = '10px';
+        const applyBtn = contentEl.createEl("button", { text: "Apply Changes", cls: 'apply-button' });
         applyBtn.onclick = () => {
             this.onApply(this.content);
             this.close();
@@ -605,7 +602,6 @@ class AIContentModal extends Modal {
     }
 }
 
-// Chat Modal with corrected button declarations and multi-level Undo functionality
 class ChatModal extends Modal {
     plugin: AIPilot;
     history: { role: 'user' | 'assistant', content: string }[];
@@ -625,29 +621,12 @@ class ChatModal extends Modal {
         contentEl.createEl("h2", { text: "Chat with AI" });
 
         const chatContainer = contentEl.createDiv({ cls: 'chat-container' });
-        chatContainer.style.maxHeight = '400px';
-        chatContainer.style.overflowY = 'auto';
-        chatContainer.style.marginBottom = '20px';
-        chatContainer.style.display = 'flex';
-        chatContainer.style.flexDirection = 'column';
 
         await this.renderChatHistory(chatContainer);
 
         const inputContainer = contentEl.createDiv({ cls: 'input-container' });
-        inputContainer.style.marginTop = '20px';
 
         const inputEl = inputContainer.createEl("textarea", { cls: 'chat-input', placeholder: 'Type your message...' });
-        inputEl.style.width = '100%';
-        inputEl.style.height = '80px';
-        inputEl.style.marginBottom = '10px';
-        inputEl.style.color = 'var(--text-normal)';
-        inputEl.style.backgroundColor = 'var(--background-primary)';
-        inputEl.style.padding = '10px';
-        inputEl.style.border = '2px solid var(--border-primary, #4CAF50)'; /* 增加边框宽度和颜色 */
-        inputEl.style.borderRadius = '4px';
-        inputEl.style.resize = 'vertical';
-        inputEl.style.outline = 'none';
-        inputEl.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.1)';
 
         const sendBtn = inputContainer.createEl("button", { text: "Send" });
         sendBtn.onclick = async () => {
@@ -659,9 +638,6 @@ class ChatModal extends Modal {
 
                 const loadingMsg = chatContainer.createDiv({ cls: 'ai-message' });
                 loadingMsg.setText('AI is typing...');
-                loadingMsg.style.marginBottom = '10px';
-                loadingMsg.style.alignSelf = 'flex-start';
-                loadingMsg.style.color = 'var(--text-normal)';
 
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
@@ -682,21 +658,9 @@ class ChatModal extends Modal {
         for (const msg of this.history) {
             const msgDiv = container.createDiv({ cls: msg.role === 'user' ? 'user-message' : 'ai-message' });
             await MarkdownRenderer.renderMarkdown(msg.content, msgDiv, '', null);
-            msgDiv.style.marginBottom = '10px';
-            msgDiv.style.padding = '10px';
-            msgDiv.style.borderRadius = '5px';
-            msgDiv.style.maxWidth = '80%';
-
-            msgDiv.style.backgroundColor = msg.role === 'user' ? 'var(--background-modifier-accent)' : 'var(--background-secondary)';
-            msgDiv.style.color = 'var(--text-normal)';
-            msgDiv.style.alignSelf = msg.role === 'user' ? 'flex-end' : 'flex-start';
 
             const buttonContainer = msgDiv.createDiv({ cls: 'button-container' });
-            buttonContainer.style.display = 'flex';
-            buttonContainer.style.gap = '10px';
-            buttonContainer.style.marginTop = '5px';
 
-            // Copy Button
             const copyBtn = buttonContainer.createEl("button", { text: "Copy" });
             copyBtn.onclick = async () => {
                 try {
@@ -708,18 +672,14 @@ class ChatModal extends Modal {
                 }
             };
 
-            // Insert Button
             const insertBtn = buttonContainer.createEl("button", { text: "Insert" });
             insertBtn.onclick = () => {
                 if (this.editor) {
                     const startPos = this.editor.getCursor();
                     const insertedContent = msg.content;
-                    // Insert the content
                     this.editor.replaceRange(insertedContent, startPos);
-                    // Calculate the end position after insertion
                     const endOffset = this.editor.posToOffset(startPos) + insertedContent.length;
                     const endPos = this.editor.offsetToPos(endOffset);
-                    // Store the positions and original text (assuming original text is empty)
                     this.undoStack.push({ from: startPos, to: endPos, text: '' });
                     new Notice("Message inserted at cursor position!");
                 } else {
@@ -727,7 +687,6 @@ class ChatModal extends Modal {
                 }
             };
 
-            // Undo Button
             const undoBtn = buttonContainer.createEl("button", { text: "Undo" });
             undoBtn.onclick = () => {
                 if (this.undoStack.length > 0 && this.editor) {
@@ -744,7 +703,6 @@ class ChatModal extends Modal {
     }
 }
 
-// Confirm Modal for selection check
 class ConfirmModal extends Modal {
     message: string;
     onConfirm: () => Promise<void> | void;
@@ -786,7 +744,6 @@ class ConfirmModal extends Modal {
     }
 }
 
-// Settings tab for API key, provider, model, and custom prompts
 class AITextSettingTab extends PluginSettingTab {
     plugin: AIPilot;
 
@@ -860,7 +817,6 @@ class AITextSettingTab extends PluginSettingTab {
                     this.plugin.settings.promptOrganize = value;
                     await this.plugin.saveSettings();
                 })
-                .inputEl.style.height = textAreaHeight
             );
 
         new Setting(containerEl)
@@ -872,7 +828,6 @@ class AITextSettingTab extends PluginSettingTab {
                     this.plugin.settings.promptCheckGrammar = value;
                     await this.plugin.saveSettings();
                 })
-                .inputEl.style.height = textAreaHeight
             );
 
         new Setting(containerEl)
@@ -884,7 +839,6 @@ class AITextSettingTab extends PluginSettingTab {
                     this.plugin.settings.promptGenerateContent = value;
                     await this.plugin.saveSettings();
                 })
-                .inputEl.style.height = textAreaHeight
             );
 
         new Setting(containerEl)
@@ -897,12 +851,7 @@ class AITextSettingTab extends PluginSettingTab {
                     this.plugin.settings.promptDialogue = value;
                     await this.plugin.saveSettings();
                 })
-                .inputEl.style.height = textAreaHeight
             );
-
-        // **优化 Custom Prompt 选项**
-        // 既然 Custom Prompt 是通过模态框动态输入的，设置页面中无需显示或编辑它。
-        // 因此，我们可以保留说明性文本，并保持其不可编辑，以避免用户混淆。
 
         new Setting(containerEl)
             .setName("Custom Prompt")
