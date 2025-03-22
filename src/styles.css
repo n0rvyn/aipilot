@@ -1249,3 +1249,315 @@
     background-color: var(--background-modifier-hover);
     color: var(--text-normal);
 }
+
+/* Enhanced Polish Result Modal Styles */
+.polish-result-modal {
+    padding: 20px;
+    width: 80%;
+    max-width: 700px;
+    max-height: 80vh;
+}
+
+.polish-header {
+    margin-bottom: 16px;
+}
+
+.polish-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.polish-legend {
+    margin-bottom: 16px;
+}
+
+.polish-legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    background-color: var(--background-primary);
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.polish-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.polish-sample {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.polish-description {
+    margin-bottom: 10px;
+    color: var(--text-normal);
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.polish-result-container {
+    position: relative;
+    background-color: var(--background-primary-alt);
+    padding: 16px;
+    border-radius: 6px;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+    font-family: var(--font-text);
+    line-height: 1.5;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.polish-result-container::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(transparent, var(--background-primary-alt));
+    pointer-events: none;
+    opacity: 0.8;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.polish-result-container p {
+    margin: 0 0 16px 0;
+}
+
+.polish-result-container p:last-child {
+    margin-bottom: 0;
+}
+
+/* Style for deleted text */
+.polish-deleted {
+    text-decoration: line-through;
+    color: var(--text-error);
+    background-color: rgba(255, 0, 0, 0.1);
+}
+
+/* Style for added/highlighted text */
+.polish-highlight {
+    background-color: rgba(128, 0, 128, 0.2);
+    color: var(--text-accent-hover);
+    font-weight: 500;
+}
+
+.polish-button-container {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.polish-button-container button {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.polish-button-container button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+}
+
+.polish-button-container button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+}
+
+.polish-button-container button:not(.mod-cta) {
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.polish-button-container button:not(.mod-cta):hover {
+    background-color: var(--background-modifier-hover);
+}
+
+/* Dark theme adjustments */
+.theme-dark .polish-highlight {
+    background-color: rgba(180, 100, 200, 0.25);
+    color: rgb(220, 180, 250);
+}
+
+.theme-dark .polish-deleted {
+    color: rgb(255, 150, 150);
+    background-color: rgba(255, 0, 0, 0.15);
+}
+
+.polish-result-container.diff-rendered .polish-deleted {
+    text-decoration: line-through !important;
+    color: var(--text-error) !important;
+    background-color: rgba(255, 0, 0, 0.1) !important;
+}
+
+.polish-result-container.diff-rendered .polish-highlight {
+    background-color: rgba(128, 0, 128, 0.2) !important;
+    color: var(--text-accent-hover) !important;
+    font-weight: 500 !important;
+}
+
+/* Message Action Buttons - Shared Style */
+.message-action-button {
+    opacity: 0.8;
+    transition: all 0.2s ease;
+    position: relative;
+    border-radius: 4px;
+    padding: 4px;
+    margin: 0 2px;
+    background-color: rgba(var(--text-normal-rgb), 0.05);
+}
+
+.message-action-button:hover {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.message-action-button:active {
+    transform: scale(0.95);
+}
+
+.message-action-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Copy Button */
+.message-action-button.copy-button {
+    position: relative;
+}
+
+.message-action-button.copy-button:hover {
+    background-color: rgba(var(--text-accent-rgb), 0.1);
+}
+
+.message-action-button.copy-button svg {
+    color: var(--text-accent);
+}
+
+.message-action-button.copy-button::before {
+    content: "Copy to clipboard";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+.message-action-button.copy-button:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Insert Button */
+.message-action-button.insert-button {
+    position: relative;
+}
+
+.message-action-button.insert-button:hover {
+    background-color: rgba(var(--text-success-rgb), 0.1);
+}
+
+.message-action-button.insert-button svg {
+    color: var(--text-success);
+}
+
+.message-action-button.insert-button::before {
+    content: "Insert into editor";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+.message-action-button.insert-button:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Apply Button */
+.message-action-button.apply-button {
+    position: relative;
+}
+
+.message-action-button.apply-button:hover {
+    background-color: rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.message-action-button.apply-button svg {
+    color: var(--interactive-accent);
+}
+
+/* Tooltip for apply button */
+.message-action-button.apply-button::before {
+    content: "Compare & apply changes";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+.message-action-button.apply-button:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .message-action-button:hover {
+        transform: none;
+    }
+    .message-action-button:active {
+        transform: none;
+    }
+}

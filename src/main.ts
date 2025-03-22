@@ -2665,13 +2665,31 @@ export class PolishResultModal extends Modal {
         contentEl.addClass("polish-result-modal");
         
         // Title
-        contentEl.createEl("h2", { text: "Polish Result" });
+        const headerContainer = contentEl.createDiv({ cls: "polish-header" });
+        headerContainer.createEl("h2", { text: "Polish Result" });
         
-        // Description
-        contentEl.createEl("p", {
-            text: "Review the changes: deleted text has strikethrough, added text is highlighted in purple.",
+        // Add a legend for the diff indicators
+        const legendContainer = contentEl.createDiv({ cls: "polish-legend" });
+        
+        // Description with legend
+        const descriptionEl = legendContainer.createEl("p", {
             cls: "polish-description"
         });
+        descriptionEl.setText("Review the proposed changes:");
+        
+        const legendItemsContainer = legendContainer.createDiv({ cls: "polish-legend-items" });
+        
+        // Deleted text legend
+        const deletedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
+        const deletedSample = deletedLegend.createSpan({ cls: "polish-deleted polish-sample" });
+        deletedSample.setText("deleted text");
+        deletedLegend.createSpan({ text: " = removed content" });
+        
+        // Added text legend
+        const addedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
+        const addedSample = addedLegend.createSpan({ cls: "polish-highlight polish-sample" });
+        addedSample.setText("highlighted text");
+        addedLegend.createSpan({ text: " = added content" });
         
         // Result container with highlighted changes
         this.resultEl = contentEl.createDiv({ cls: "polish-result-container" });
@@ -2703,12 +2721,30 @@ export class PolishResultModal extends Modal {
     private highlightChanges() {
         // Improved diff implementation to highlight changes
         const diffHtml = this.generateInlineDiff(this.originalText, this.polishedText);
+        
+        // Ensure HTML is properly rendered by setting innerHTML
+        this.resultEl.empty();
         this.resultEl.innerHTML = diffHtml;
+        
+        // Make sure styles are applied by forcing a reflow
+        setTimeout(() => {
+            // Add a small class toggle to force style recalculation
+            this.resultEl.addClass('diff-rendered');
+        }, 10);
     }
     
     // Generate a more accurate inline diff with strikethrough for deletions and highlighting for additions
     private generateInlineDiff(original: string, polished: string): string {
-        // Split texts into words for more granular diff
+        // First try to identify paragraph-level changes
+        const originalParagraphs = original.split('\n\n');
+        const polishedParagraphs = polished.split('\n\n');
+        
+        // Check if we're dealing with a multi-paragraph text
+        if (originalParagraphs.length > 1 || polishedParagraphs.length > 1) {
+            return this.generateParagraphDiff(originalParagraphs, polishedParagraphs);
+        }
+
+        // For single paragraphs, use word-level diff
         const originalWords = this.tokenize(original);
         const polishedWords = this.tokenize(polished);
         
@@ -2753,10 +2789,83 @@ export class PolishResultModal extends Modal {
         return html;
     }
     
-    // Split text into words for diffing
+    // Generate paragraph-level diff
+    private generateParagraphDiff(originalParagraphs: string[], polishedParagraphs: string[]): string {
+        let html = '';
+        const maxParagraphs = Math.max(originalParagraphs.length, polishedParagraphs.length);
+        
+        for (let i = 0; i < maxParagraphs; i++) {
+            const originalPara = i < originalParagraphs.length ? originalParagraphs[i] : '';
+            const polishedPara = i < polishedParagraphs.length ? polishedParagraphs[i] : '';
+            
+            if (originalPara === polishedPara) {
+                // No change in this paragraph
+                html += `<p>${this.escapeHtml(originalPara)}</p>`;
+            } else if (originalPara && !polishedPara) {
+                // Paragraph was deleted
+                html += `<p><span class="polish-deleted">${this.escapeHtml(originalPara)}</span></p>`;
+            } else if (!originalPara && polishedPara) {
+                // Paragraph was added
+                html += `<p><span class="polish-highlight">${this.escapeHtml(polishedPara)}</span></p>`;
+            } else {
+                // Paragraph was modified, show word-level diff
+                const originalWords = this.tokenize(originalPara);
+                const polishedWords = this.tokenize(polishedPara);
+                const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
+                
+                let paraHtml = '<p>';
+                let i = 0, j = 0;
+                
+                for (const common of lcs) {
+                    // Add deleted words
+                    while (i < originalWords.length && originalWords[i] !== common) {
+                        paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
+                        i++;
+                    }
+                    
+                    // Add added words
+                    while (j < polishedWords.length && polishedWords[j] !== common) {
+                        paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
+                        j++;
+                    }
+                    
+                    // Add common word
+                    paraHtml += this.escapeHtml(common) + ' ';
+                    i++;
+                    j++;
+                }
+                
+                // Add remaining deleted words
+                while (i < originalWords.length) {
+                    paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
+                    i++;
+                }
+                
+                // Add remaining added words
+                while (j < polishedWords.length) {
+                    paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
+                    j++;
+                }
+                
+                paraHtml += '</p>';
+                html += paraHtml;
+            }
+        }
+        
+        return html;
+    }
+    
+    // Split text into words for diffing while preserving newlines
     private tokenize(text: string): string[] {
-        // Split by spaces but keep punctuation attached to words
-        return text.split(/\s+/).filter(word => word.length > 0);
+        // First normalize line endings
+        const normalizedText = text.replace(/\r\n/g, '\n');
+        
+        // Process text to preserve important whitespace
+        return normalizedText
+            .replace(/\n/g, ' \n ')  // Add spaces around newlines to preserve them
+            .replace(/\t/g, ' \t ')  // Add spaces around tabs to preserve them
+            .split(/\s+/)            // Split by whitespace
+            .filter(word => word.length > 0);  // Remove empty tokens
     }
     
     // A simple longest common subsequence algorithm

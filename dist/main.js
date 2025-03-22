@@ -844,491 +844,795 @@ var styles_default = `/* styles.css */
     background-color: var(--interactive-accent-hover);
 }
 
-.history-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 60vh;
-    overflow-y: auto;
-    padding-right: 5px;
-}
-
+/* Improve date grouping in history list */
 .history-date-header {
-    font-weight: bold;
-    margin-top: 10px;
-    padding: 5px 0;
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 28px;
+    margin-bottom: 16px;
+    padding: 8px 0;
     border-bottom: 1px solid var(--background-modifier-border);
-    color: var(--text-muted);
+    color: var(--text-normal);
     position: sticky;
     top: 0;
     background-color: var(--background-primary);
     z-index: 1;
+    text-transform: none;
+    clear: both;
+    width: 100%;
+    display: block;
+}
+
+.history-date-header:first-child {
+    margin-top: 0;
+}
+
+/* Ensure proper spacing between date groups */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 60vh;
+    min-height: 200px;
+    overflow-y: auto;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+/* Ensure history items are properly nested under date headers */
+.history-list > .history-item {
+    margin-bottom: 12px;
+}
+
+/* Ensure last item in group doesn't have bottom margin */
+.history-date-header + .history-item:last-of-type {
+    margin-bottom: 0;
+}
+
+/* Dark theme adjustments for date headers */
+.theme-dark .history-date-header {
+    color: var(--text-normal);
+    border-color: var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+/* High contrast mode support for date headers */
+@media (forced-colors: active) {
+    .history-date-header {
+        border-bottom: 1px solid CanvasText;
+        color: CanvasText;
+    }
 }
 
 .history-item {
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
-    background-color: var(--background-secondary);
-    margin-bottom: 8px;
+    background-color: var(--background-primary);
+    margin-bottom: 12px;
     display: flex;
-    transition: transform 0.15s ease;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    min-height: 60px;
 }
 
 .history-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background-color: var(--background-secondary);
 }
 
 .history-item-content {
     flex: 1;
-    padding: 12px 15px;
+    min-width: 0;
+    padding: 0 12px;
     cursor: pointer;
-    border-left: 3px solid var(--interactive-accent);
-}
-
-.history-item-actions {
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
-}
-
-.history-delete-button {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 4px;
-    border-radius: 4px;
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s, color 0.2s, background-color 0.2s;
-}
-
-.history-delete-button:hover {
-    opacity: 1;
-    color: var(--text-error);
-    background-color: rgba(var(--red-rgb), 0.1);
 }
 
 .history-title {
-    font-weight: bold;
-    margin-bottom: 5px;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--text-normal);
-}
-
-.history-meta {
-    font-size: 12px;
-    color: var(--text-muted);
     margin-bottom: 8px;
-}
-
-.history-preview {
-    font-size: 13px;
-    opacity: 0.8;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-normal);
+    line-height: 1.4;
 }
 
-.history-preview-role {
-    font-weight: bold;
-    color: var(--text-accent);
-}
-
-.history-preview-content {
-    color: var(--text-muted);
-}
-
-/* AI Polish Effect */
-.ai-polish-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.ai-polish-effect {
-    background-color: white;
-    padding: 15px 25px;
-    border-radius: 8px;
-    font-size: 1.2em;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    animation: pulsate 1.5s infinite alternate;
-}
-
-.polish-highlight {
-    background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%);
-    padding: 2px 6px;
-    border-radius: 4px;
-    color: #333;
-    font-weight: bold;
-}
-
-@keyframes pulsate {
-    0% {
-        opacity: 0.7;
-        transform: scale(1);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1.05);
-    }
-}
-
-/* Chat History Search */
-.history-search-container {
-    position: relative;
-    margin-bottom: 15px;
-}
-
-.history-search-input {
-    width: 100%;
-    padding: 8px 32px 8px 10px;
-    border-radius: 4px;
-    border: 1px solid var(--background-modifier-border);
-    background-color: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 14px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.history-search-input:focus {
-    border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
-    outline: none;
-}
-
-.history-search-clear {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    border-radius: 50%;
-    transition: background-color 0.2s, color 0.2s;
-}
-
-.history-search-clear:hover {
-    background-color: var(--background-modifier-hover);
-    color: var(--text-error);
-}
-
-.history-search-clear svg {
-    width: 16px;
-    height: 16px;
-}
-
-/* History Rename Feature */
-.history-rename-button {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 4px;
-    border-radius: 4px;
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s, color 0.2s, background-color 0.2s;
-    margin-right: 4px;
-}
-
-.history-rename-button:hover {
-    opacity: 1;
-    color: var(--text-accent);
-    background-color: rgba(var(--interactive-accent-rgb), 0.1);
-}
-
-.history-rename-input {
-    width: 100%;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--interactive-accent);
-    background-color: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 14px;
-    font-weight: bold;
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
-}
-
-.history-rename-input:focus {
-    border-color: var(--interactive-accent);
-}
-
-/* Pinned Conversations */
-.pinned-section {
-    margin-bottom: 20px;
-}
-
-.pinned-header {
-    color: var(--text-accent);
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 10px;
+.history-meta {
     display: flex;
     align-items: center;
     gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.history-meta-count {
+    font-weight: 500;
+}
+
+.history-meta-time {
+    color: var(--text-faint);
+}
+
+.history-meta-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background-color: var(--text-faint);
+    display: inline-block;
+    margin: 0 4px;
+}
+
+.history-preview {
+    display: flex;
+    align-items: baseline;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.history-preview-role {
+    font-weight: 600;
+    margin-right: 4px;
+    color: var(--text-normal);
+}
+
+.history-preview-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Styling for pinned conversations */
+.pinned-conversation {
+    border-left: 3px solid var(--interactive-accent);
+    background-color: var(--background-secondary-alt);
+}
+
+.pinned-header {
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: var(--text-accent);
+    display: flex;
+    align-items: center;
 }
 
 .pinned-header::before {
     content: '';
     display: inline-block;
-    width: 14px;
-    height: 14px;
-    background-color: var(--text-accent);
-    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78-.9A2 2 0 0 0 5 15.24Z"></path></svg>');
+    width: 12px;
+    height: 12px;
+    margin-right: 8px;
+    background-color: var(--interactive-accent);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath d='M22 12l-10 10-10-10h20z'/%3E%3C/svg%3E");
+    mask-size: contain;
     mask-repeat: no-repeat;
     mask-position: center;
-    mask-size: contain;
-    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78-.9A2 2 0 0 0 5 15.24Z"></path></svg>');
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    -webkit-mask-size: contain;
 }
 
-.pinned-conversation .history-item-content {
-    border-left-color: var(--text-accent);
-    background-color: rgba(var(--interactive-accent-rgb), 0.05);
+.pinned-section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--background-modifier-border);
 }
 
-.history-pin-button {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 4px;
+/* Button tooltips */
+.history-button-tooltip {
+    position: absolute;
+    top: -36px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 6px 10px;
     border-radius: 4px;
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s, color 0.2s, background-color 0.2s;
-    margin-right: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.history-item-actions button:hover .history-button-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Specific button styles */
+.history-pin-button.pinned {
+    color: var(--text-accent);
 }
 
 .history-pin-button:hover {
-    opacity: 1;
     color: var(--text-accent);
-    background-color: rgba(var(--interactive-accent-rgb), 0.1);
 }
 
-.history-pin-button.pinned {
+.history-rename-button:hover {
     color: var(--text-accent);
-    opacity: 1;
 }
 
-/* Add loading spinner styles */
-.spinner {
-    width: 70px;
-    text-align: center;
-    margin: 20px auto;
+.history-delete-button:hover {
+    color: white !important;
+    background-color: var(--text-error) !important;
 }
 
-.spinner > div {
-    width: 18px;
-    height: 18px;
-    background-color: var(--text-accent);
-    border-radius: 100%;
-    display: inline-block;
-    animation: sk-bouncedelay 1.4s infinite ease-in-out both;
-    margin: 0 3px;
+.history-delete-button svg {
+    stroke-width: 2.5px;
+    width: 22px;
+    height: 22px;
 }
 
-.spinner .bounce1 {
-    animation-delay: -0.32s;
-}
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .history-item:hover {
+        transform: none;
+    }
 
-.spinner .bounce2 {
-    animation-delay: -0.16s;
-}
+    .history-item-actions button:hover {
+        transform: none;
+    }
 
-@keyframes sk-bouncedelay {
-    0%, 80%, 100% { 
-        transform: scale(0);
-    } 
-    40% { 
-        transform: scale(1.0);
+    .history-empty-state svg {
+        animation: none;
+    }
+
+    * {
+        transition-duration: 0.001ms !important;
     }
 }
 
-.loading-text {
-    text-align: center;
-    margin: 10px 0;
+/* High contrast mode support */
+@media (forced-colors: active) {
+    .history-item {
+        border: 1px solid CanvasText;
+    }
+
+    .history-item-content {
+        border-left: 3px solid CanvasText;
+    }
+
+    .pinned-conversation .history-item-content {
+        border-left: 3px solid Highlight;
+    }
+
+    .history-item-actions button {
+        border: 1px solid CanvasText;
+    }
+
+    .history-search-input {
+        border: 1px solid CanvasText;
+    }
+}
+
+/* Keyboard Navigation */
+.history-item {
+    position: relative;
+}
+
+.history-item:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.history-item[data-selected="true"] {
+    background-color: rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+/* Arrow key navigation */
+.history-item[data-selected="true"] .history-item-content {
+    background-color: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+/* Tab navigation order */
+.history-item-content {
+    tab-index: 0;
+}
+
+.history-item-actions button {
+    tab-index: 0;
+}
+
+/* Focus ring styles */
+.history-item *:focus {
+    outline: none;
+}
+
+.history-item *:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: -2px;
+    border-radius: 4px;
+}
+
+/* Keyboard shortcuts hint */
+.keyboard-shortcuts {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: var(--background-secondary);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
     color: var(--text-muted);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
 }
 
-/* Polish Modal styles */
+.chat-history-modal:focus-within .keyboard-shortcuts {
+    opacity: 1;
+}
+
+.keyboard-shortcut {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 4px;
+}
+
+.keyboard-shortcut kbd {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    min-width: 20px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 2px;
+}
+
+/* Focus trap for modal */
+.chat-history-modal:focus {
+    outline: none;
+}
+
+.chat-history-modal:focus-visible {
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+/* Skip navigation for keyboard users */
+.skip-nav {
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    z-index: 1000;
+    transition: top 0.2s ease;
+}
+
+.skip-nav:focus {
+    top: 8px;
+    outline: none;
+}
+
+/* Improved focus management for search */
+.history-search-container:focus-within {
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.history-search-input:focus {
+    background-color: var(--background-primary);
+}
+
+/* Ensure proper focus order */
+.history-search-clear {
+    tab-index: 0;
+}
+
+.export-button {
+    tab-index: 0;
+}
+
+/* Improved focus visibility in dark themes */
+@media (prefers-color-scheme: dark) {
+    .history-item *:focus-visible {
+        outline-color: rgba(var(--interactive-accent-rgb), 0.8);
+    }
+    
+    .keyboard-shortcuts {
+        background-color: rgba(var(--background-secondary-rgb), 0.95);
+    }
+}
+
+/* Ensure focus visibility in high contrast mode */
+@media (forced-colors: active) {
+    .history-item *:focus-visible {
+        outline: 2px solid SelectedItem;
+    }
+    
+    .keyboard-shortcuts {
+        border: 1px solid CanvasText;
+    }
+    
+    .keyboard-shortcut kbd {
+        border: 1px solid CanvasText;
+    }
+}
+
+.history-date-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.keyboard-help-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-style: italic;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: 10px;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.history-item:hover .history-item-actions {
+    opacity: 1;
+}
+
+.history-item-actions button {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.history-item-actions button svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2px;
+}
+
+.history-item-actions button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+/* Enhanced Polish Result Modal Styles */
 .polish-result-modal {
-    max-width: 800px;
+    padding: 20px;
+    width: 80%;
+    max-width: 700px;
     max-height: 80vh;
-    overflow-y: auto;
 }
 
-.polish-result-container {
+.polish-header {
+    margin-bottom: 16px;
+}
+
+.polish-header h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.polish-legend {
+    margin-bottom: 16px;
+}
+
+.polish-legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    background-color: var(--background-primary);
     padding: 12px;
     border-radius: 6px;
-    background-color: var(--background-primary);
-    margin: 12px 0;
-    font-family: var(--font-text);
-    line-height: 1.5;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
     border: 1px solid var(--background-modifier-border);
-    max-height: 50vh;
-    overflow-y: auto;
+}
+
+.polish-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.polish-sample {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
 }
 
 .polish-description {
-    color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
+    color: var(--text-normal);
+    font-size: 15px;
+    font-weight: 500;
 }
 
-.polish-button-container {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 12px;
+.polish-result-container {
+    position: relative;
+    background-color: var(--background-primary-alt);
+    padding: 16px;
+    border-radius: 6px;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+    font-family: var(--font-text);
+    line-height: 1.5;
+    border: 1px solid var(--background-modifier-border);
 }
 
+.polish-result-container::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(transparent, var(--background-primary-alt));
+    pointer-events: none;
+    opacity: 0.8;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.polish-result-container p {
+    margin: 0 0 16px 0;
+}
+
+.polish-result-container p:last-child {
+    margin-bottom: 0;
+}
+
+/* Style for deleted text */
 .polish-deleted {
     text-decoration: line-through;
     color: var(--text-error);
     background-color: rgba(255, 0, 0, 0.1);
 }
 
+/* Style for added/highlighted text */
 .polish-highlight {
-    color: var(--text-accent);
-    background-color: rgba(128, 0, 255, 0.1);
+    background-color: rgba(128, 0, 128, 0.2);
+    color: var(--text-accent-hover);
     font-weight: 500;
 }
 
-/* For direct editing in the editor */
-.cm-strikethrough {
-    text-decoration: line-through;
-    color: var(--text-error);
-}
-
-/* Tooltip hints for function buttons */
-.function-icon-button:hover::after {
-    content: attr(aria-label);
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--background-secondary);
-    color: var(--text-normal);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    z-index: 100;
-    pointer-events: none;
-    opacity: 0.9;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Progress modal styles */
-.loading-modal h2 {
-    margin-bottom: 15px;
-}
-
-.count-text, .progress-text {
-    text-align: center;
-    margin: 5px 0;
-    color: var(--text-muted);
-}
-
-.progress-text {
-    font-weight: bold;
-    color: var(--text-accent);
-}
-
-.message-actions {
+.polish-button-container {
     display: flex;
-    gap: 8px;
-    margin-top: 4px;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
 }
 
-.message-action-button {
-    background: transparent;
-    border: none;
+.polish-button-container button {
+    padding: 8px 16px;
     border-radius: 4px;
     cursor: pointer;
-    padding: 4px;
-    color: var(--text-muted);
+    font-size: 14px;
     transition: all 0.2s ease;
 }
 
-.message-action-button:hover {
+.polish-button-container button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+}
+
+.polish-button-container button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+}
+
+.polish-button-container button:not(.mod-cta) {
+    background-color: var(--background-secondary);
     color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.polish-button-container button:not(.mod-cta):hover {
     background-color: var(--background-modifier-hover);
 }
 
-.message-action-button.apply-button {
-    color: var(--text-accent);
+/* Dark theme adjustments */
+.theme-dark .polish-highlight {
+    background-color: rgba(180, 100, 200, 0.25);
+    color: rgb(220, 180, 250);
 }
 
-.message-action-button.apply-button:hover {
-    background-color: var(--background-modifier-success-hover);
+.theme-dark .polish-deleted {
+    color: rgb(255, 150, 150);
+    background-color: rgba(255, 0, 0, 0.15);
 }
 
-.hover-only {
-    opacity: 0.3;
-    transition: opacity 0.2s ease;
+.polish-result-container.diff-rendered .polish-deleted {
+    text-decoration: line-through !important;
+    color: var(--text-error) !important;
+    background-color: rgba(255, 0, 0, 0.1) !important;
 }
 
-.message-content:hover .hover-only {
-    opacity: 1;
+.polish-result-container.diff-rendered .polish-highlight {
+    background-color: rgba(128, 0, 128, 0.2) !important;
+    color: var(--text-accent-hover) !important;
+    font-weight: 500 !important;
 }
 
-/* Compact error display for chat view */
-.chat-view-container .error-container {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    gap: 8px;
-    background-color: var(--background-primary);
+/* Message Action Buttons - Shared Style */
+.message-action-button {
+    opacity: 0.8;
+    transition: all 0.2s ease;
+    position: relative;
     border-radius: 4px;
-    border-left: 2px solid var(--text-error);
+    padding: 4px;
+    margin: 0 2px;
+    background-color: rgba(var(--text-normal-rgb), 0.05);
 }
 
-.chat-view-container .error-icon {
-    color: var(--text-error);
-    flex-shrink: 0;
+.message-action-button:hover {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.message-action-button:active {
+    transform: scale(0.95);
+}
+
+.message-action-button svg {
     width: 18px;
     height: 18px;
 }
 
-.chat-view-container .error-text {
-    flex-grow: 1;
-    font-size: 14px;
-    color: var(--text-error-hover);
+/* Copy Button */
+.message-action-button.copy-button {
+    position: relative;
 }
 
-.chat-view-container .compact-retry-button {
-    background-color: var(--interactive-accent);
-    color: var(--text-on-accent);
-    border: none;
-    border-radius: 4px;
+.message-action-button.copy-button:hover {
+    background-color: rgba(var(--text-accent-rgb), 0.1);
+}
+
+.message-action-button.copy-button svg {
+    color: var(--text-accent);
+}
+
+.message-action-button.copy-button::before {
+    content: "Copy to clipboard";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
     padding: 4px 8px;
+    border-radius: 4px;
     font-size: 12px;
-    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
     white-space: nowrap;
-    transition: background-color 0.2s ease;
-    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100;
 }
 
-.chat-view-container .compact-retry-button:hover {
-    background-color: var(--interactive-accent-hover);
+.message-action-button.copy-button:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Insert Button */
+.message-action-button.insert-button {
+    position: relative;
+}
+
+.message-action-button.insert-button:hover {
+    background-color: rgba(var(--text-success-rgb), 0.1);
+}
+
+.message-action-button.insert-button svg {
+    color: var(--text-success);
+}
+
+.message-action-button.insert-button::before {
+    content: "Insert into editor";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+.message-action-button.insert-button:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Apply Button */
+.message-action-button.apply-button {
+    position: relative;
+}
+
+.message-action-button.apply-button:hover {
+    background-color: rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.message-action-button.apply-button svg {
+    color: var(--interactive-accent);
+}
+
+/* Tooltip for apply button */
+.message-action-button.apply-button::before {
+    content: "Compare & apply changes";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+.message-action-button.apply-button:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .message-action-button:hover {
+        transform: none;
+    }
+    .message-action-button:active {
+        transform: none;
+    }
 }
 `;
 
@@ -3566,10 +3870,10 @@ var ChatHistoryModal = class extends import_obsidian2.Modal {
     const historyList = contentEl.createDiv({ cls: "history-list" });
     const pinnedHistories = this.histories.filter((h) => h.pinned);
     if (pinnedHistories.length > 0) {
-      const pinnedHeader = historyList.createDiv({ cls: "pinned-section" });
-      pinnedHeader.createEl("h3", { text: "Pinned Conversations", cls: "pinned-header" });
+      const pinnedSection = historyList.createDiv({ cls: "pinned-section" });
+      const pinnedHeader = pinnedSection.createEl("h3", { text: "Pinned Conversations", cls: "pinned-header" });
       pinnedHistories.forEach((history) => {
-        this.createHistoryItem(historyList, history);
+        this.createHistoryItem(pinnedSection, history);
       });
     }
     const conversationsByDate = /* @__PURE__ */ new Map();
@@ -3594,10 +3898,13 @@ var ChatHistoryModal = class extends import_obsidian2.Modal {
         month: "long",
         day: "numeric"
       }));
+      const dateGroup = historyList.createDiv({ cls: "history-date-group" });
       conversations.forEach((history) => {
-        this.createHistoryItem(historyList, history);
+        this.createHistoryItem(dateGroup, history);
       });
     });
+    const keyboardHelpText = contentEl.createDiv({ cls: "keyboard-help-text" });
+    keyboardHelpText.setText("Tip: Use up/down arrows to navigate, Enter to select, Esc to close");
   }
   onClose() {
     const { contentEl } = this;
@@ -3691,13 +3998,18 @@ ${message.content}
   filterHistoryItems(query) {
     const pinnedSection = this.contentEl.querySelector(".pinned-section");
     const dateHeaders = this.contentEl.querySelectorAll(".history-date-header");
+    const dateGroups = this.contentEl.querySelectorAll(".history-date-group");
     const historyItems = this.contentEl.querySelectorAll(".history-item");
-    if (!query) {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
       if (pinnedSection) {
         pinnedSection.style.display = "block";
       }
       dateHeaders.forEach((header) => {
         header.style.display = "block";
+      });
+      dateGroups.forEach((group) => {
+        group.style.display = "flex";
       });
       historyItems.forEach((item) => {
         item.style.display = "flex";
@@ -3705,6 +4017,7 @@ ${message.content}
       return;
     }
     const headersWithVisibleItems = /* @__PURE__ */ new Set();
+    const groupsWithVisibleItems = /* @__PURE__ */ new Set();
     let hasPinnedVisible = false;
     historyItems.forEach((item) => {
       var _a, _b;
@@ -3712,15 +4025,19 @@ ${message.content}
       const previewEl = item.querySelector(".history-preview-content");
       const title = titleEl ? ((_a = titleEl.textContent) == null ? void 0 : _a.toLowerCase()) || "" : "";
       const preview = previewEl ? ((_b = previewEl.textContent) == null ? void 0 : _b.toLowerCase()) || "" : "";
-      const matches = title.includes(query) || preview.includes(query);
+      const matches = title.includes(normalizedQuery) || preview.includes(normalizedQuery);
       item.style.display = matches ? "flex" : "none";
       if (matches) {
-        if (item.classList.contains("pinned-conversation")) {
+        if (item.classList.contains("pinned-conversation") || item.closest(".pinned-section")) {
           hasPinnedVisible = true;
         } else {
-          const dateHeader = this.findClosestDateHeader(item);
-          if (dateHeader) {
-            headersWithVisibleItems.add(dateHeader.textContent || "");
+          const dateGroup = item.closest(".history-date-group");
+          if (dateGroup) {
+            groupsWithVisibleItems.add(dateGroup);
+            const dateHeader = dateGroup.previousElementSibling;
+            if (dateHeader && dateHeader.classList.contains("history-date-header")) {
+              headersWithVisibleItems.add(dateHeader.textContent || "");
+            }
           }
         }
       }
@@ -3730,7 +4047,12 @@ ${message.content}
     }
     dateHeaders.forEach((header) => {
       const headerText = header.textContent || "";
-      header.style.display = headersWithVisibleItems.has(headerText) ? "block" : "none";
+      const shouldShow = headersWithVisibleItems.has(headerText);
+      header.style.display = shouldShow ? "block" : "none";
+    });
+    dateGroups.forEach((group) => {
+      const shouldShow = groupsWithVisibleItems.has(group);
+      group.style.display = shouldShow ? "flex" : "none";
     });
   }
   // Helper method to find the corresponding date header for an item
@@ -3775,6 +4097,8 @@ ${message.content}
       }
     });
     (0, import_obsidian2.setIcon)(renameBtn, "edit-2");
+    const renameTooltip = renameBtn.createSpan({ cls: "history-button-tooltip" });
+    renameTooltip.setText("Rename");
     renameBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const titleEl = item.querySelector(".history-title");
@@ -3808,17 +4132,18 @@ ${message.content}
           }
         }
       });
-      inputEl.addEventListener("keydown", (e2) => {
-        if (e2.key === "Enter") {
-          e2.preventDefault();
+      inputEl.addEventListener("blur", () => {
+        handleRename();
+      });
+      inputEl.addEventListener("keydown", (evt) => {
+        if (evt.key === "Enter") {
+          evt.preventDefault();
           handleRename();
-        } else if (e2.key === "Escape") {
-          e2.preventDefault();
+        } else if (evt.key === "Escape") {
           titleEl.empty();
           titleEl.setText(currentTitle);
         }
       });
-      inputEl.addEventListener("blur", handleRename);
     });
     return renameBtn;
   }
@@ -3831,6 +4156,8 @@ ${message.content}
       }
     });
     (0, import_obsidian2.setIcon)(pinBtn, history.pinned ? "pin-off" : "pin");
+    const pinTooltip = pinBtn.createSpan({ cls: "history-button-tooltip" });
+    pinTooltip.setText(history.pinned ? "Unpin" : "Pin");
     pinBtn.addEventListener("click", (e) => __async(this, null, function* () {
       e.stopPropagation();
       history.pinned = !history.pinned;
@@ -3839,6 +4166,8 @@ ${message.content}
       pinBtn.setAttribute("title", history.pinned ? "Unpin conversation" : "Pin conversation");
       pinBtn.empty();
       (0, import_obsidian2.setIcon)(pinBtn, history.pinned ? "pin-off" : "pin");
+      const newTooltip = pinBtn.createSpan({ cls: "history-button-tooltip" });
+      newTooltip.setText(history.pinned ? "Unpin" : "Pin");
       if (history.pinned) {
         item.classList.add("pinned-conversation");
       } else {
@@ -3886,15 +4215,22 @@ ${message.content}
     }
   }
   createHistoryItem(container, history) {
+    var _a;
     const item = container.createDiv({
       cls: `history-item ${history.pinned ? "pinned-conversation" : ""}`
     });
     const contentDiv = item.createDiv({ cls: "history-item-content" });
     const titleEl = contentDiv.createDiv({ cls: "history-title" });
-    titleEl.setText(history.title);
-    const date = new Date(history.date);
+    const title = history.title || (((_a = history.messages[0]) == null ? void 0 : _a.content) || "").substring(0, 50) + "...";
+    titleEl.setText(title);
     const metaEl = contentDiv.createDiv({ cls: "history-meta" });
-    metaEl.setText(`${history.messages.length} messages \u2022 ${date.toLocaleTimeString()}`);
+    const countEl = metaEl.createSpan({ cls: "history-meta-count" });
+    countEl.setText(`${history.messages.length} messages`);
+    const dotEl = metaEl.createSpan({ cls: "history-meta-dot" });
+    dotEl.setText("\u2022");
+    const timeEl = metaEl.createSpan({ cls: "history-meta-time" });
+    const date = new Date(history.date);
+    timeEl.setText(date.toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit" }));
     if (history.messages.length > 0) {
       const lastMessage = history.messages[history.messages.length - 1];
       const previewEl = contentDiv.createDiv({ cls: "history-preview" });
@@ -3918,7 +4254,9 @@ ${message.content}
         "title": "Delete conversation"
       }
     });
-    (0, import_obsidian2.setIcon)(deleteBtn, "trash");
+    (0, import_obsidian2.setIcon)(deleteBtn, "trash-2");
+    const deleteTooltip = deleteBtn.createSpan({ cls: "history-button-tooltip" });
+    deleteTooltip.setText("Delete");
     deleteBtn.addEventListener("click", (e) => __async(this, null, function* () {
       e.stopPropagation();
       new ConfirmModal(
@@ -6980,11 +7318,22 @@ var PolishResultModal = class extends import_obsidian3.Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.addClass("polish-result-modal");
-    contentEl.createEl("h2", { text: "Polish Result" });
-    contentEl.createEl("p", {
-      text: "Review the changes: deleted text has strikethrough, added text is highlighted in purple.",
+    const headerContainer = contentEl.createDiv({ cls: "polish-header" });
+    headerContainer.createEl("h2", { text: "Polish Result" });
+    const legendContainer = contentEl.createDiv({ cls: "polish-legend" });
+    const descriptionEl = legendContainer.createEl("p", {
       cls: "polish-description"
     });
+    descriptionEl.setText("Review the proposed changes:");
+    const legendItemsContainer = legendContainer.createDiv({ cls: "polish-legend-items" });
+    const deletedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
+    const deletedSample = deletedLegend.createSpan({ cls: "polish-deleted polish-sample" });
+    deletedSample.setText("deleted text");
+    deletedLegend.createSpan({ text: " = removed content" });
+    const addedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
+    const addedSample = addedLegend.createSpan({ cls: "polish-highlight polish-sample" });
+    addedSample.setText("highlighted text");
+    addedLegend.createSpan({ text: " = added content" });
     this.resultEl = contentEl.createDiv({ cls: "polish-result-container" });
     this.highlightChanges();
     const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
@@ -7006,10 +7355,19 @@ var PolishResultModal = class extends import_obsidian3.Modal {
   // Method to highlight the differences between original and polished text
   highlightChanges() {
     const diffHtml = this.generateInlineDiff(this.originalText, this.polishedText);
+    this.resultEl.empty();
     this.resultEl.innerHTML = diffHtml;
+    setTimeout(() => {
+      this.resultEl.addClass("diff-rendered");
+    }, 10);
   }
   // Generate a more accurate inline diff with strikethrough for deletions and highlighting for additions
   generateInlineDiff(original, polished) {
+    const originalParagraphs = original.split("\n\n");
+    const polishedParagraphs = polished.split("\n\n");
+    if (originalParagraphs.length > 1 || polishedParagraphs.length > 1) {
+      return this.generateParagraphDiff(originalParagraphs, polishedParagraphs);
+    }
     const originalWords = this.tokenize(original);
     const polishedWords = this.tokenize(polished);
     const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
@@ -7038,9 +7396,56 @@ var PolishResultModal = class extends import_obsidian3.Modal {
     }
     return html2;
   }
-  // Split text into words for diffing
+  // Generate paragraph-level diff
+  generateParagraphDiff(originalParagraphs, polishedParagraphs) {
+    let html2 = "";
+    const maxParagraphs = Math.max(originalParagraphs.length, polishedParagraphs.length);
+    for (let i = 0; i < maxParagraphs; i++) {
+      const originalPara = i < originalParagraphs.length ? originalParagraphs[i] : "";
+      const polishedPara = i < polishedParagraphs.length ? polishedParagraphs[i] : "";
+      if (originalPara === polishedPara) {
+        html2 += `<p>${this.escapeHtml(originalPara)}</p>`;
+      } else if (originalPara && !polishedPara) {
+        html2 += `<p><span class="polish-deleted">${this.escapeHtml(originalPara)}</span></p>`;
+      } else if (!originalPara && polishedPara) {
+        html2 += `<p><span class="polish-highlight">${this.escapeHtml(polishedPara)}</span></p>`;
+      } else {
+        const originalWords = this.tokenize(originalPara);
+        const polishedWords = this.tokenize(polishedPara);
+        const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
+        let paraHtml = "<p>";
+        let i2 = 0, j = 0;
+        for (const common of lcs) {
+          while (i2 < originalWords.length && originalWords[i2] !== common) {
+            paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i2])}</span> `;
+            i2++;
+          }
+          while (j < polishedWords.length && polishedWords[j] !== common) {
+            paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
+            j++;
+          }
+          paraHtml += this.escapeHtml(common) + " ";
+          i2++;
+          j++;
+        }
+        while (i2 < originalWords.length) {
+          paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i2])}</span> `;
+          i2++;
+        }
+        while (j < polishedWords.length) {
+          paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
+          j++;
+        }
+        paraHtml += "</p>";
+        html2 += paraHtml;
+      }
+    }
+    return html2;
+  }
+  // Split text into words for diffing while preserving newlines
   tokenize(text) {
-    return text.split(/\s+/).filter((word) => word.length > 0);
+    const normalizedText = text.replace(/\r\n/g, "\n");
+    return normalizedText.replace(/\n/g, " \n ").replace(/\t/g, " 	 ").split(/\s+/).filter((word) => word.length > 0);
   }
   // A simple longest common subsequence algorithm
   findLongestCommonSubsequence(a, b) {
