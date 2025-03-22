@@ -1,0 +1,1251 @@
+/* styles.css */
+/* AI Pilot Plugin Styles - Scoped to prevent conflicts with Obsidian global styles */
+
+/* Custom Prompt Input (Modal specific styles) */
+.aipilot-modal .custom-prompt-input {
+    width: 100%;
+    min-height: 150px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 16px;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 24px;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+}
+
+.aipilot-modal .custom-prompt-input:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+/* Button Container */
+.aipilot-button-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    padding: 0 16px 24px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* Chat Tabs - Reduced Size */
+.chat-view-container .chat-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    padding: 4px;
+}
+
+.chat-view-container .chat-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    margin-right: 4px;
+    transition: all 0.2s ease;
+}
+
+.chat-view-container .chat-tab:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.chat-view-container .chat-tab.active {
+    background-color: var(--background-modifier-active);
+}
+
+.chat-view-container .chat-tab svg {
+    width: 18px;  /* Reduced from default size */
+    height: 18px; /* Reduced from default size */
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+}
+
+.chat-view-container .chat-tab:hover svg {
+    color: var(--text-normal);
+}
+
+/* View Container Transitions */
+.chat-view-container .view-container {
+    transition: opacity 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Add more space between the tabs for better visual separation */
+.chat-view-container .chat-tab + .chat-tab {
+    margin-left: 6px;
+}
+
+/* Subtle shadow for active tab */
+.chat-view-container .chat-tab.active {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Chat Container Elements */
+.chat-view-container .chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+}
+
+.chat-view-container .messages-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 16px 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth; /* Add smooth scrolling */
+    margin-bottom: 4px; /* Add space between messages and input */
+}
+
+/* Input Area - Fixed at bottom */
+.chat-view-container .input-container {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 16px 16px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    position: relative;
+}
+
+.input-wrapper {
+    display: flex;
+    position: relative;
+    width: 100%;
+}
+
+.chat-input {
+    flex: 1;
+    resize: none;
+    padding: 12px;
+    border-radius: 6px;
+    min-height: 80px;
+    max-height: 200px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    font-family: var(--font-text);
+    line-height: 1.5;
+}
+
+/* Remove styles for mode-toggle-button and chat-send-button */
+
+/* Function icons styling */
+.function-icons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Messages */
+.chat-view-container .user-message, 
+.chat-view-container .ai-message {
+    padding: 12px 16px;
+    border-radius: 8px;
+    max-width: 85%;
+    line-height: 1.5;
+    animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-view-container .user-message {
+    margin: 10px 0;
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.chat-view-container .ai-message {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    margin-bottom: 16px;
+    margin-right: auto;
+    margin-left: 0;
+}
+
+.chat-view-container .ai-message .message-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-view-container .ai-message .message-text {
+    flex: 1;
+}
+
+.chat-view-container .ai-message .message-metadata {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Function Buttons & Controls */
+.chat-view-container .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    flex-wrap: nowrap;
+}
+
+/* Buttons */
+.chat-view-container .reference-button,
+.chat-view-container .function-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: var(--background-modifier-hover);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.chat-view-container .reference-button:hover,
+.chat-view-container .function-icon-button:hover {
+    background-color: var(--background-modifier-active);
+}
+
+.chat-view-container .reference-button:focus,
+.chat-view-container .function-icon-button:focus {
+    box-shadow: 0 0 0 2px var(--background-modifier-border);
+    outline: none;
+}
+
+.chat-view-container .function-icon-button {
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    position: relative;
+    transition: background-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-view-container .function-icon-button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.chat-view-container .function-icon-button.built-in {
+    color: var(--text-normal);
+}
+
+.chat-view-container .function-icon-button.custom-function {
+    color: var(--text-accent);
+}
+
+.chat-view-container .function-icon-button svg {
+    width: 20px;
+    height: 20px;
+}
+
+.chat-view-container .ai-message .function-icon-button {
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+}
+
+/* Tooltips */
+.chat-view-container .function-icon-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 100;
+    pointer-events: none;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.chat-view-container .function-icon-button:hover .function-icon-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* States */
+.chat-view-container .loading {
+    opacity: 0.7;
+}
+
+/* Hover-only elements */
+.chat-view-container .hover-only {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.chat-view-container *:hover > .hover-only,
+.chat-view-container *:focus-within > .hover-only {
+    opacity: 1;
+}
+
+/* Keyboard accessibility - show hover elements when using keyboard navigation */
+.chat-view-container .function-icon-button:focus-visible .function-icon-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Search View Styles */
+.chat-view-container .search-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px;
+    gap: 16px;
+    background-color: var(--background-secondary);
+}
+
+.chat-view-container .search-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--background-primary);
+    border-radius: 8px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.chat-view-container .search-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-view-container .search-input {
+    flex: 1;
+    height: 36px;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-view-container .search-input:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+    outline: none;
+}
+
+.chat-view-container .search-button {
+    min-width: 80px;
+    height: 36px;
+    padding: 8px 16px;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.chat-view-container .search-button:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+.chat-view-container .search-results {
+    flex: 1;
+    overflow-y: auto;
+        padding: 16px;
+    background: var(--background-primary);
+    border-radius: 8px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+/* Custom Function Styles */
+.custom-function-item {
+    display: flex;
+    padding: 8px 12px;
+    margin: 8px 0;
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    align-items: center;
+    justify-content: space-between;
+    transition: background-color 0.2s;
+}
+
+.custom-function-item:hover {
+    background-color: var(--background-primary-alt);
+}
+
+.custom-function-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.custom-function-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-accent);
+}
+
+.custom-function-name {
+    font-weight: 500;
+}
+
+.custom-function-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.custom-function-edit, .custom-function-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.custom-function-edit:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+}
+
+.custom-function-delete:hover {
+    color: var(--text-error);
+    background-color: var(--background-modifier-hover);
+}
+
+/* Add tooltip hint for custom function buttons */
+.custom-function-edit:hover::after,
+.custom-function-delete:hover::after {
+    position: absolute;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    font-size: 12px;
+    z-index: 100;
+    white-space: nowrap;
+}
+
+.custom-function-edit:hover::after {
+    content: "Edit function";
+    transform: translateY(-24px);
+}
+
+.custom-function-delete:hover::after {
+    content: "Delete function";
+    transform: translateY(-24px);
+}
+
+/* Prompt settings customization */
+.prompt-setting textarea {
+    min-height: 120px;
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.prompt-setting .setting-item-info {
+    flex: 1;
+}
+
+.prompt-setting .setting-item-control {
+    flex: 2;
+}
+
+.prompt-setting {
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 12px;
+}
+
+/* Custom function modal */
+.custom-function-modal .setting-item {
+    margin-bottom: 16px;
+}
+
+.custom-function-modal .setting-item-name {
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.custom-function-modal .setting-item-description {
+    margin-bottom: 8px;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.custom-function-modal .setting-item-input {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+.custom-function-modal .prompt-input {
+    min-height: 120px;
+    font-family: var(--font-monospace);
+    resize: vertical;
+}
+
+.custom-function-modal .icon-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.custom-function-modal .icon-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+.custom-function-modal .custom-function-button-container {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.functions-container {
+    margin: 16px 0;
+}
+
+.no-functions {
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+/* Keyboard accessibility - show hover elements when using keyboard navigation */
+.chat-view-container .function-icon-button:focus-visible .function-icon-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Settings page function items */
+.function-section {
+    margin-bottom: 20px;
+}
+
+.function-section h3 {
+    margin-bottom: 10px;
+    font-weight: 600;
+    font-size: 1.1em;
+    color: var(--text-normal);
+}
+
+.function-item {
+    display: flex;
+    padding: 8px 12px;
+    margin: 8px 0;
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    align-items: center;
+    justify-content: space-between;
+    transition: background-color 0.2s;
+}
+
+.function-item:hover {
+    background-color: var(--background-primary-alt);
+}
+
+.function-item.built-in {
+    border-left: 3px solid var(--text-normal);
+}
+
+.function-item.custom {
+    border-left: 3px solid var(--text-accent);
+}
+
+.function-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.function-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+}
+
+.function-item.built-in .function-icon {
+    color: var(--text-normal);
+}
+
+.function-item.custom .function-icon {
+    color: var(--text-accent);
+}
+
+.function-name {
+    font-weight: 500;
+}
+
+.function-tooltip {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.function-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.function-edit, .function-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.function-edit:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+}
+
+.function-delete:hover {
+    color: var(--text-error);
+    background-color: var(--background-modifier-hover);
+}
+
+/* Tooltip hints for function buttons */
+.function-edit:hover::after,
+.function-delete:hover::after {
+    position: absolute;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    font-size: 12px;
+    z-index: 100;
+    white-space: nowrap;
+}
+
+.function-edit:hover::after {
+    content: "Edit function";
+    transform: translateY(-24px);
+}
+
+.function-delete:hover::after {
+    content: "Delete function";
+    transform: translateY(-24px);
+}
+
+/* Chat History Button */
+.chat-history-button {
+    position: absolute;
+    top: 15px;
+    right: 50px;
+    width: 28px;
+        height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 10;
+    transition: background-color 0.2s ease;
+}
+
+.chat-history-button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.chat-history-button svg {
+    width: 18px;
+    height: 18px;
+    color: var(--text-normal);
+}
+
+/* New Chat Button */
+.new-chat-button {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 10;
+    transition: background-color 0.2s ease;
+}
+
+.new-chat-button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.new-chat-button svg {
+    width: 18px;
+    height: 18px;
+    color: var(--text-normal);
+}
+
+/* Chat History Modal */
+.chat-history-modal {
+    padding: 20px;
+    max-width: 600px;
+    max-height: 80vh;
+}
+
+.history-header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.chat-history-modal h2 {
+    margin: 0;
+}
+
+.export-button-container {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.export-button {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.export-button:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+/* Improve date grouping in history list */
+.history-date-header {
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 28px;
+    margin-bottom: 16px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    position: sticky;
+    top: 0;
+    background-color: var(--background-primary);
+    z-index: 1;
+    text-transform: none;
+    clear: both;
+    width: 100%;
+    display: block;
+}
+
+.history-date-header:first-child {
+    margin-top: 0;
+}
+
+/* Ensure proper spacing between date groups */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 60vh;
+    min-height: 200px;
+    overflow-y: auto;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+/* Ensure history items are properly nested under date headers */
+.history-list > .history-item {
+    margin-bottom: 12px;
+}
+
+/* Ensure last item in group doesn't have bottom margin */
+.history-date-header + .history-item:last-of-type {
+    margin-bottom: 0;
+}
+
+/* Dark theme adjustments for date headers */
+.theme-dark .history-date-header {
+    color: var(--text-normal);
+    border-color: var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+/* High contrast mode support for date headers */
+@media (forced-colors: active) {
+    .history-date-header {
+        border-bottom: 1px solid CanvasText;
+        color: CanvasText;
+    }
+}
+
+.history-item {
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: var(--background-primary);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    min-height: 60px;
+}
+
+.history-item:hover {
+    background-color: var(--background-secondary);
+}
+
+.history-item-content {
+    flex: 1;
+    min-width: 0;
+    padding: 0 12px;
+    cursor: pointer;
+}
+
+.history-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+}
+
+.history-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.history-meta-count {
+    font-weight: 500;
+}
+
+.history-meta-time {
+    color: var(--text-faint);
+}
+
+.history-meta-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background-color: var(--text-faint);
+    display: inline-block;
+    margin: 0 4px;
+}
+
+.history-preview {
+    display: flex;
+    align-items: baseline;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.history-preview-role {
+    font-weight: 600;
+    margin-right: 4px;
+    color: var(--text-normal);
+}
+
+.history-preview-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Styling for pinned conversations */
+.pinned-conversation {
+    border-left: 3px solid var(--interactive-accent);
+    background-color: var(--background-secondary-alt);
+}
+
+.pinned-header {
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: var(--text-accent);
+    display: flex;
+    align-items: center;
+}
+
+.pinned-header::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 8px;
+    background-color: var(--interactive-accent);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath d='M22 12l-10 10-10-10h20z'/%3E%3C/svg%3E");
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+}
+
+.pinned-section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--background-modifier-border);
+}
+
+/* Button tooltips */
+.history-button-tooltip {
+    position: absolute;
+    top: -36px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.history-item-actions button:hover .history-button-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Specific button styles */
+.history-pin-button.pinned {
+    color: var(--text-accent);
+}
+
+.history-pin-button:hover {
+    color: var(--text-accent);
+}
+
+.history-rename-button:hover {
+    color: var(--text-accent);
+}
+
+.history-delete-button:hover {
+    color: white !important;
+    background-color: var(--text-error) !important;
+}
+
+.history-delete-button svg {
+    stroke-width: 2.5px;
+    width: 22px;
+    height: 22px;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .history-item:hover {
+        transform: none;
+    }
+
+    .history-item-actions button:hover {
+        transform: none;
+    }
+
+    .history-empty-state svg {
+        animation: none;
+    }
+
+    * {
+        transition-duration: 0.001ms !important;
+    }
+}
+
+/* High contrast mode support */
+@media (forced-colors: active) {
+    .history-item {
+        border: 1px solid CanvasText;
+    }
+
+    .history-item-content {
+        border-left: 3px solid CanvasText;
+    }
+
+    .pinned-conversation .history-item-content {
+        border-left: 3px solid Highlight;
+    }
+
+    .history-item-actions button {
+        border: 1px solid CanvasText;
+    }
+
+    .history-search-input {
+        border: 1px solid CanvasText;
+    }
+}
+
+/* Keyboard Navigation */
+.history-item {
+    position: relative;
+}
+
+.history-item:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.history-item[data-selected="true"] {
+    background-color: rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+/* Arrow key navigation */
+.history-item[data-selected="true"] .history-item-content {
+    background-color: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+/* Tab navigation order */
+.history-item-content {
+    tab-index: 0;
+}
+
+.history-item-actions button {
+    tab-index: 0;
+}
+
+/* Focus ring styles */
+.history-item *:focus {
+    outline: none;
+}
+
+.history-item *:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: -2px;
+    border-radius: 4px;
+}
+
+/* Keyboard shortcuts hint */
+.keyboard-shortcuts {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: var(--background-secondary);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.chat-history-modal:focus-within .keyboard-shortcuts {
+    opacity: 1;
+}
+
+.keyboard-shortcut {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 4px;
+}
+
+.keyboard-shortcut kbd {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    min-width: 20px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 2px;
+}
+
+/* Focus trap for modal */
+.chat-history-modal:focus {
+    outline: none;
+}
+
+.chat-history-modal:focus-visible {
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+/* Skip navigation for keyboard users */
+.skip-nav {
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    z-index: 1000;
+    transition: top 0.2s ease;
+}
+
+.skip-nav:focus {
+    top: 8px;
+    outline: none;
+}
+
+/* Improved focus management for search */
+.history-search-container:focus-within {
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.history-search-input:focus {
+    background-color: var(--background-primary);
+}
+
+/* Ensure proper focus order */
+.history-search-clear {
+    tab-index: 0;
+}
+
+.export-button {
+    tab-index: 0;
+}
+
+/* Improved focus visibility in dark themes */
+@media (prefers-color-scheme: dark) {
+    .history-item *:focus-visible {
+        outline-color: rgba(var(--interactive-accent-rgb), 0.8);
+    }
+    
+    .keyboard-shortcuts {
+        background-color: rgba(var(--background-secondary-rgb), 0.95);
+    }
+}
+
+/* Ensure focus visibility in high contrast mode */
+@media (forced-colors: active) {
+    .history-item *:focus-visible {
+        outline: 2px solid SelectedItem;
+    }
+    
+    .keyboard-shortcuts {
+        border: 1px solid CanvasText;
+    }
+    
+    .keyboard-shortcut kbd {
+        border: 1px solid CanvasText;
+    }
+}
+
+.history-date-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.keyboard-help-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-style: italic;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: 10px;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.history-item:hover .history-item-actions {
+    opacity: 1;
+}
+
+.history-item-actions button {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.history-item-actions button svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2px;
+}
+
+.history-item-actions button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
