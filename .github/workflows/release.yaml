@@ -104,3 +104,7 @@ jobs:
         asset_path: ./dist/manifest.json
         asset_name: manifest.json
         asset_content_type: application/json
+
+permissions:
+  contents: write    # For creating releases and pushing changes
+  pull-requests: write  # If you want the action to comment on PRs
