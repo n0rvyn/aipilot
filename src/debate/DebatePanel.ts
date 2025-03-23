@@ -334,15 +334,10 @@ export class DebatePanel extends ItemView {
     // Add streaming indicator if message is still streaming
     if (message.streaming) {
       const indicatorEl = messageEl.createDiv({ cls: 'streaming-indicator' });
-      const indicator = indicatorEl.createSpan({ text: 'Typing' });
+      indicatorEl.createSpan({ text: 'Typing', cls: 'typing-text' });
       
-      // Create typing animation dots
-      for (let i = 0; i < 3; i++) {
-        indicatorEl.createSpan({ 
-          cls: 'typing-dot',
-          text: '.' 
-        });
-      }
+      // Create a container for the dots with the CSS animation
+      const dotsContainer = indicatorEl.createDiv({ cls: 'typing-dots-container' });
     }
   }
   
@@ -367,15 +362,10 @@ export class DebatePanel extends ItemView {
       // Add streaming indicator if it doesn't exist
       if (!messageEl.querySelector('.streaming-indicator')) {
         const indicatorEl = messageEl.createDiv({ cls: 'streaming-indicator' });
-        const indicator = indicatorEl.createSpan({ text: 'Typing' });
+        indicatorEl.createSpan({ text: 'Typing', cls: 'typing-text' });
         
-        // Create typing animation dots
-        for (let i = 0; i < 3; i++) {
-          indicatorEl.createSpan({ 
-            cls: 'typing-dot',
-            text: '.' 
-          });
-        }
+        // Create a container for the dots with the CSS animation
+        const dotsContainer = indicatorEl.createDiv({ cls: 'typing-dots-container' });
       }
     } else {
       messageEl.removeClass('streaming-message');
@@ -390,8 +380,9 @@ export class DebatePanel extends ItemView {
   
   // Simple markdown formatter - replaced with a safer implementation
   private formatMarkdown(text: string): HTMLElement {
-    // Create a container element
+    // Create a container element with the markdown container class
     const container = document.createElement('div');
+    container.className = 'debate-markdown-container';
     
     // Split the text by lines to handle headings
     const lines = text.split('\n');
@@ -406,22 +397,27 @@ export class DebatePanel extends ItemView {
       if (h1Match) {
         const h1 = document.createElement('h1');
         h1.textContent = h1Match[1];
+        h1.className = 'debate-markdown-heading debate-markdown-h1';
         container.appendChild(h1);
       } else if (h2Match) {
         const h2 = document.createElement('h2');
         h2.textContent = h2Match[1];
+        h2.className = 'debate-markdown-heading debate-markdown-h2';
         container.appendChild(h2);
       } else if (h3Match) {
         const h3 = document.createElement('h3');
         h3.textContent = h3Match[1];
+        h3.className = 'debate-markdown-heading debate-markdown-h3';
         container.appendChild(h3);
       } else if (h4Match) {
         const h4 = document.createElement('h4');
         h4.textContent = h4Match[1];
+        h4.className = 'debate-markdown-heading debate-markdown-h4';
         container.appendChild(h4);
       } else {
         // Process inline formatting for normal paragraphs
         const paragraph = document.createElement('p');
+        paragraph.className = 'debate-markdown-paragraph';
         let content = line;
         
         // Process the content to handle inline markdown
@@ -454,9 +450,10 @@ export class DebatePanel extends ItemView {
           fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos, pos)));
         }
         
-        // Add the bold text
+        // Add the bold text with class
         const bold = document.createElement('strong');
         bold.textContent = text.substring(pos + 2, endPos);
+        bold.className = 'debate-markdown-bold';
         fragment.appendChild(bold);
         
         lastProcessedPos = endPos + 2;
@@ -485,9 +482,10 @@ export class DebatePanel extends ItemView {
           fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos, pos)));
         }
         
-        // Add the italic text
+        // Add the italic text with class
         const italic = document.createElement('em');
         italic.textContent = text.substring(pos + 1, endPos);
+        italic.className = 'debate-markdown-italic';
         fragment.appendChild(italic);
         
         lastProcessedPos = endPos + 1;
@@ -507,9 +505,10 @@ export class DebatePanel extends ItemView {
           fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos, pos)));
         }
         
-        // Add the code
+        // Add the code with class
         const code = document.createElement('code');
         code.textContent = text.substring(pos + 1, endPos);
+        code.className = 'debate-markdown-code';
         fragment.appendChild(code);
         
         lastProcessedPos = endPos + 1;

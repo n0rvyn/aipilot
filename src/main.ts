@@ -37,7 +37,8 @@ import {
     addIcon
 } from "obsidian";
 
-import styles from './styles.css';
+// Import styles for type-checking but actual CSS will be loaded via manifest.json
+import './styles.css';
 import { ChatView, VIEW_TYPE_CHAT } from './ChatView';
 import { MarkdownRenderer as NewMarkdownRenderer } from './MarkdownRenderer';
 import { ModelManager, ModelConfig as LLMModelConfig, ProxyConfig } from './models/ModelManager';
@@ -313,8 +314,7 @@ export default class AIPilotPlugin extends Plugin {
             callback: () => this.activateDebateView()
         });
         
-        // Load styles properly
-        this.loadStyles();
+        // Styles are now loaded via manifest.json
         
         this.addSettingTab(new AIPilotSettingTab(this.app, this));
 
@@ -374,18 +374,8 @@ export default class AIPilotPlugin extends Plugin {
         );
     }
 
-    private loadStyles() {
-        // Add styles to the document
-        const styleEl = document.createElement('style');
-        styleEl.id = 'aipilot-styles';
-        styleEl.textContent = styles;
-        document.head.appendChild(styleEl);
-    }
-
     onunload() {
-        // Remove the style element
-        const styleEl = document.getElementById('aipilot-styles');
-        if (styleEl) styleEl.remove();
+        // Clean up resources when plugin is unloaded
     }
 
     async saveSettings() {

@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import fs from "fs";
+import path from "path";
 
 const banner =
 `/*
@@ -10,6 +12,37 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === 'production');
+
+// Plugin to extract CSS to a separate file
+const extractCssPlugin = {
+    name: 'extract-css',
+    setup(build) {
+        // Store all CSS content
+        let cssContent = '';
+        
+        // Intercept CSS imports
+        build.onLoad({ filter: /\.css$/ }, async (args) => {
+            const css = await fs.promises.readFile(args.path, 'utf8');
+            cssContent += css + '\n';
+            
+            // Return empty JS - using export {} instead of export default
+            // This allows import './styles.css' to work without errors
+            return {
+                contents: 'export {};',
+                loader: 'js',
+            };
+        });
+        
+        // Write the CSS file at the end of the build
+        build.onEnd(async () => {
+            await fs.promises.writeFile(
+                path.join(process.cwd(), 'dist', 'styles.css'),
+                cssContent
+            );
+            console.log('CSS extracted to dist/styles.css');
+        });
+    },
+};
 
 try {
     await esbuild.build({
@@ -33,6 +66,7 @@ try {
         sourcemap: prod ? false : 'inline',
         treeShaking: true,
         outfile: 'dist/main.js',
+        plugins: [extractCssPlugin],
         loader: {
             '.css': 'text'
         }
