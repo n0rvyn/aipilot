@@ -65,10 +65,10 @@ __export(main_exports, {
   DEFAULT_SETTINGS: () => DEFAULT_SETTINGS,
   LoadingModal: () => LoadingModal2,
   PolishResultModal: () => PolishResultModal,
-  default: () => AIPilot
+  default: () => AIPilotPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/styles.css
 var styles_default = `/* styles.css */
@@ -1633,6 +1633,476 @@ var styles_default = `/* styles.css */
     .message-action-button:active {
         transform: none;
     }
+}
+
+/* Debate Panel Styles */
+.debate-view-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  overflow: hidden;
+}
+
+.debate-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary);
+}
+
+.debate-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.debate-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.debate-config-panel {
+  padding: 16px;
+  background-color: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.config-item {
+  margin-bottom: 16px;
+}
+
+.config-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.config-row {
+  display: flex;
+  gap: 16px;
+}
+
+.config-input-wrapper {
+  flex: 1;
+}
+
+.debate-topic-input {
+  width: 100%;
+  min-height: 80px;
+  max-height: 120px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  font-family: var(--font-text);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.debate-mode-select,
+.debate-rounds-input {
+  width: 100%;
+  height: 36px;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.debate-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.debate-start-button,
+.debate-export-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.debate-start-button {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.debate-start-button:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+.debate-start-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.debate-export-button {
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.debate-export-button:hover:not([disabled]) {
+  background-color: var(--background-modifier-hover);
+}
+
+.debate-export-button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.debate-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.debate-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 32px;
+  color: var(--text-muted);
+}
+
+.debate-empty-icon {
+  margin-bottom: 16px;
+  width: 64px;
+  height: 64px;
+  opacity: 0.6;
+}
+
+.debate-empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.debate-empty-state p {
+  margin: 0;
+  font-size: 14px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.debate-message {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  animation: fade-in 0.3s ease-out;
+  max-width: 90%;
+}
+
+.debate-message.host-message {
+  border-left: 4px solid var(--text-normal);
+}
+
+/* Different agent role colors */
+.debate-message.agent-role-positive {
+  border-left: 4px solid #4caf50;
+}
+
+.debate-message.agent-role-negative {
+  border-left: 4px solid #f44336;
+}
+
+.debate-message.agent-role-blue {
+  border-left: 4px solid #2196f3;
+}
+
+.debate-message.agent-role-red {
+  border-left: 4px solid #e91e63;
+}
+
+.debate-message.agent-role-yellow {
+  border-left: 4px solid #ffc107;
+}
+
+.debate-message.agent-role-green {
+  border-left: 4px solid #4caf50;
+}
+
+.debate-message.agent-role-white {
+  border-left: 4px solid #e0e0e0;
+}
+
+.debate-message.agent-role-black {
+  border-left: 4px solid #212121;
+}
+
+.debate-message.agent-role-custom {
+  border-left: 4px solid #9c27b0;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.agent-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.message-round {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  background-color: var(--background-modifier-hover);
+  border-radius: 4px;
+}
+
+.message-content {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.message-content p {
+  margin: 0 0 12px 0;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.debate-status-bar {
+  padding: 8px 16px;
+  background-color: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Model Selector Styles */
+.model-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.model-selector-container label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.model-selector {
+  flex: 1;
+  height: 32px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+/* Model Settings Styles */
+.models-container {
+  margin: 16px 0 24px;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background-color: var(--background-secondary);
+}
+
+.no-models-message {
+  padding: 16px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.model-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background-color 0.2s;
+}
+
+.model-item:last-child {
+  border-bottom: none;
+}
+
+.model-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.model-default {
+  border-left: 3px solid var(--interactive-accent);
+  background-color: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+.model-default-tag {
+  color: var(--interactive-accent);
+  font-weight: 600;
+  margin-left: 6px;
+  font-size: 90%;
+}
+
+.model-info {
+  flex: 1;
+}
+
+.model-info h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.model-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.model-active-indicator {
+  color: var(--text-accent);
+}
+
+.model-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.model-edit,
+.model-delete,
+.model-default-btn {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.model-default-btn {
+  color: var(--interactive-accent);
+  border: 1px solid var(--interactive-accent);
+}
+
+.model-default-btn:hover {
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+.model-edit {
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.model-edit:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.model-delete {
+  color: var(--text-error);
+  border: 1px solid var(--text-error-border);
+}
+
+.model-delete:hover {
+  background-color: rgba(var(--text-error-rgb), 0.1);
+}
+
+.model-migration-notice {
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+  border-left: 4px solid var(--interactive-accent);
+  padding: 12px 16px;
+  margin: 12px 0 20px;
+  border-radius: 4px;
+  font-weight: 500;
+  color: var(--text-normal);
+  line-height: 1.5;
+}
+
+/* Debate streaming message styles */
+.streaming-message {
+  position: relative;
+}
+
+.streaming-indicator {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-top: 5px;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+}
+
+.typing-dot {
+  display: inline-block;
+  animation: typingDot 1.4s infinite;
+  margin-left: 2px;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingDot {
+  0%, 20% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Debate config panel improvements */
+.debate-language-select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  margin-bottom: 10px;
+}
+
+.config-input-wrapper {
+  margin-bottom: 12px;
+}
+
+.config-input-wrapper label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
 }
 `;
 
@@ -4287,7 +4757,7 @@ ${message.content}
   }
 };
 var ChatView = class extends import_obsidian2.ItemView {
-  constructor(leaf, plugin) {
+  constructor(leaf, plugin, modelManager) {
     super(leaf);
     this.messages = [];
     this.currentMode = "chat";
@@ -4302,8 +4772,14 @@ var ChatView = class extends import_obsidian2.ItemView {
     this.isEndingConversation = false;
     this.conversationId = null;
     this.lastNoticedFile = null;
+    this.currentModelId = "";
     this.plugin = plugin;
     this.requestId = this.plugin.requestId;
+    this.modelManager = modelManager;
+    const models = this.modelManager.getActiveModels();
+    if (models.length > 0) {
+      this.currentModelId = models[0].id;
+    }
   }
   load() {
   }
@@ -4379,12 +4855,15 @@ var ChatView = class extends import_obsidian2.ItemView {
         attr: { placeholder: "Type your message... (Press Enter to send) \u23CE" }
       });
       const functionIconsContainer = this.inputContainer.createDiv({ cls: "function-icons-container" });
-      if (!this.plugin.settings.functions || this.plugin.settings.functions.length === 0) {
+      if (!this.plugin.settings.functions) {
         console.log("Initializing functions array from defaults");
-        this.plugin.settings.functions = [...DEFAULT_SETTINGS.functions];
+        this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? [...DEFAULT_SETTINGS.functions] : [];
         if (this.plugin.settings.customFunctions && this.plugin.settings.customFunctions.length > 0) {
           this.plugin.settings.functions.push(...this.plugin.settings.customFunctions);
         }
+        this.plugin.saveSettings();
+      } else if (this.plugin.settings.functions.length === 0) {
+        this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? [...DEFAULT_SETTINGS.functions] : [];
         this.plugin.saveSettings();
       }
       console.log("Available functions:", this.plugin.settings.functions.map((f) => f.name).join(", "));
@@ -4642,16 +5121,23 @@ var ChatView = class extends import_obsidian2.ItemView {
           } else {
             originalText = editor.getValue();
           }
-          new PolishResultModal(this.plugin.app, this.plugin, originalText, content, (updatedContent) => {
-            if (editor) {
-              if (isSelection) {
-                editor.replaceSelection(updatedContent);
-              } else {
-                editor.setValue(updatedContent);
+          new PolishResultModal(
+            this.plugin.app,
+            originalText,
+            content,
+            (updatedContent) => {
+              if (editor) {
+                if (isSelection) {
+                  editor.replaceSelection(updatedContent);
+                } else {
+                  editor.setValue(updatedContent);
+                }
+                new import_obsidian2.Notice("AI polish applied successfully");
               }
-              new import_obsidian2.Notice("Changes applied to text!", 2e3);
-            }
-          }).open();
+            },
+            this.plugin
+            // Pass the plugin instance
+          ).open();
         };
       }
       this.messagesContainer.scrollTo({
@@ -4959,16 +5445,23 @@ var ChatView = class extends import_obsidian2.ItemView {
               } else {
                 originalText = editor.getValue();
               }
-              new PolishResultModal(this.plugin.app, this.plugin, originalText, response, (updatedContent) => {
-                if (editor) {
-                  if (isSelection) {
-                    editor.replaceSelection(updatedContent);
-                  } else {
-                    editor.setValue(updatedContent);
+              new PolishResultModal(
+                this.plugin.app,
+                originalText,
+                response,
+                (updatedContent) => {
+                  if (editor) {
+                    if (isSelection) {
+                      editor.replaceSelection(updatedContent);
+                    } else {
+                      editor.setValue(updatedContent);
+                    }
+                    new import_obsidian2.Notice("AI polish applied successfully");
                   }
-                  new import_obsidian2.Notice("Changes applied to text!", 2e3);
-                }
-              }).open();
+                },
+                this.plugin
+                // Pass the plugin instance
+              ).open();
             };
             break;
           } catch (error) {
@@ -5292,16 +5785,23 @@ ${content}`;
           } else {
             originalText = editor.getValue();
           }
-          new PolishResultModal(this.plugin.app, this.plugin, originalText, message.content, (updatedContent) => {
-            if (editor) {
-              if (isSelection) {
-                editor.replaceSelection(updatedContent);
-              } else {
-                editor.setValue(updatedContent);
+          new PolishResultModal(
+            this.plugin.app,
+            originalText,
+            message.content,
+            (updatedContent) => {
+              if (editor) {
+                if (isSelection) {
+                  editor.replaceSelection(updatedContent);
+                } else {
+                  editor.setValue(updatedContent);
+                }
+                new import_obsidian2.Notice("AI polish applied successfully");
               }
-              new import_obsidian2.Notice("Changes applied to text!", 2e3);
-            }
-          }).open();
+            },
+            this.plugin
+            // Pass the plugin instance
+          ).open();
         };
       } else {
         contentDiv.setText(message.content);
@@ -5366,13 +5866,1574 @@ ${content}`;
         return false;
     }
   }
+  createInputContainer() {
+    this.createModelSelector();
+  }
+  createModelSelector() {
+    const modelSelectorContainer = this.inputContainer.createDiv({ cls: "model-selector-container" });
+    modelSelectorContainer.createEl("label", {
+      text: "AI Model:",
+      attr: { for: "model-selector" }
+    });
+    this.modelSelectEl = modelSelectorContainer.createEl("select", {
+      cls: "model-selector",
+      attr: { id: "model-selector" }
+    });
+    this.updateModelSelector();
+    this.modelSelectEl.addEventListener("change", () => {
+      this.currentModelId = this.modelSelectEl.value;
+    });
+  }
+  updateModelSelector() {
+    this.modelSelectEl.empty();
+    const models = this.modelManager.getActiveModels();
+    models.forEach((model) => {
+      const option = this.modelSelectEl.createEl("option", {
+        text: model.isDefault ? `${model.name} (Default)` : model.name,
+        attr: { value: model.id }
+      });
+      if (model.isDefault) {
+        option.style.fontWeight = "bold";
+      }
+    });
+    const defaultModel = this.modelManager.getDefaultModel();
+    if (!this.currentModelId || !models.find((m) => m.id === this.currentModelId)) {
+      this.currentModelId = (defaultModel == null ? void 0 : defaultModel.id) || (models.length > 0 ? models[0].id : "");
+    }
+    this.modelSelectEl.value = this.currentModelId;
+  }
+  onSendMessage() {
+    return __async(this, null, function* () {
+      const userInput = this.currentInput.value.trim();
+      if (!userInput) {
+        return;
+      }
+      yield this.addMessage("user", userInput);
+      this.currentInput.value = "";
+      try {
+        let response;
+        if (this.modelManager && this.currentModelId) {
+          response = yield this.modelManager.callModel(this.currentModelId, userInput);
+        } else {
+          response = yield this.plugin.callAI(userInput);
+        }
+        yield this.addMessage("assistant", response);
+        yield this.saveChatHistory();
+      } catch (error) {
+        console.error("Error sending message to model:", error);
+        yield this.addMessage("assistant", `Error: ${error.message}`);
+      }
+    });
+  }
+};
+
+// src/models/ModelManager.ts
+var ModelManager = class {
+  constructor(plugin, initialModels = [], initialProxyConfig = {
+    enabled: false,
+    address: "",
+    port: "",
+    type: "http",
+    requiresAuth: false
+  }, saveCallback) {
+    this.plugin = plugin;
+    this.models = [];
+    this.models = initialModels;
+    this.proxyConfig = initialProxyConfig;
+    this.saveSettingsCallback = saveCallback;
+  }
+  loadConfigs(models, proxyConfig) {
+    this.models = models || [];
+    this.proxyConfig = proxyConfig || {
+      enabled: false,
+      address: "",
+      port: "",
+      type: "http",
+      requiresAuth: false
+    };
+  }
+  getModels() {
+    return [...this.models];
+  }
+  getActiveModels() {
+    return this.models.filter((model) => model.active);
+  }
+  getModelById(id) {
+    return this.models.find((m) => m.id === id);
+  }
+  addModel(model) {
+    if (model.isDefault) {
+      this.models.forEach((m) => {
+        if (m.id !== model.id) {
+          m.isDefault = false;
+        }
+      });
+    }
+    const existingIndex = this.models.findIndex((m) => m.id === model.id);
+    if (existingIndex >= 0) {
+      this.models[existingIndex] = model;
+    } else {
+      this.models.push(model);
+    }
+    this.saveModels();
+  }
+  updateModel(id, updates) {
+    const modelIndex = this.models.findIndex((m) => m.id === id);
+    if (modelIndex >= 0) {
+      this.models[modelIndex] = __spreadValues(__spreadValues({}, this.models[modelIndex]), updates);
+      this.saveModels();
+    }
+  }
+  removeModel(id) {
+    this.models = this.models.filter((model) => model.id !== id);
+    this.saveModels();
+  }
+  getProxyConfig() {
+    return this.proxyConfig;
+  }
+  updateProxyConfig(config) {
+    this.proxyConfig = __spreadValues(__spreadValues({}, this.proxyConfig), config);
+    this.saveProxyConfig();
+  }
+  saveModels() {
+    this.saveSettingsCallback();
+  }
+  saveProxyConfig() {
+    this.saveSettingsCallback();
+  }
+  callModel(_0, _1) {
+    return __async(this, arguments, function* (modelId, prompt, options2 = {}) {
+      const model = this.getModelById(modelId);
+      if (!model) throw new Error(`Model ${modelId} not found`);
+      const useProxy = model.useProxy !== void 0 ? model.useProxy : this.proxyConfig.enabled;
+      let result = "";
+      try {
+        console.log(`Calling model: ${model.name} (${model.type}) with prompt: ${prompt.substring(0, 50)}...`);
+        switch (model.type) {
+          case "openai":
+            result = yield this.callOpenAI(model, prompt, useProxy, options2);
+            break;
+          case "ollama":
+            result = yield this.callOllama(model, prompt, useProxy, options2);
+            break;
+          case "claude":
+            result = yield this.callClaude(model, prompt, useProxy, options2);
+            break;
+          case "zhipu":
+          case "zhipuai":
+            result = yield this.callZhipu(model, prompt, useProxy, options2);
+            break;
+          case "baidu":
+            result = yield this.callBaidu(model, prompt, useProxy, options2);
+            break;
+          case "custom":
+            result = yield this.callCustomAPI(model, prompt, useProxy, options2);
+            break;
+          default:
+            throw new Error(`Model type ${model.type} not supported`);
+        }
+        return result;
+      } catch (error) {
+        console.error(`Error calling model ${model.name} (${model.type}):`, error);
+        throw error;
+      }
+    });
+  }
+  callOpenAI(model, prompt, useProxy, options2) {
+    return __async(this, null, function* () {
+      const url = model.baseUrl || "https://api.openai.com/v1/chat/completions";
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${model.apiKey}`
+      };
+      const payload = {
+        model: model.modelName || options2.modelName || "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ],
+        temperature: options2.temperature || 0.7,
+        max_tokens: options2.maxTokens || 2048
+      };
+      const response = yield this.fetchWithProxy(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      return data.choices[0].message.content;
+    });
+  }
+  callOllama(model, prompt, useProxy, options2) {
+    return __async(this, null, function* () {
+      const url = model.baseUrl || "http://localhost:11434/api/generate";
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      const payload = {
+        model: model.modelName || options2.modelName || "llama2",
+        prompt,
+        system: model.systemPrompt || "You are a helpful assistant.",
+        options: {
+          temperature: options2.temperature || 0.7,
+          num_predict: options2.maxTokens || 2048
+        }
+      };
+      const response = yield this.fetchWithProxy(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      return data.response;
+    });
+  }
+  callClaude(model, prompt, useProxy, options2) {
+    return __async(this, null, function* () {
+      const url = model.baseUrl || "https://api.anthropic.com/v1/messages";
+      const headers = {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      };
+      if (model.apiKey) {
+        headers["x-api-key"] = model.apiKey;
+      }
+      const payload = {
+        model: model.modelName || options2.modelName || "claude-3-opus-20240229",
+        messages: [
+          { role: "user", content: prompt }
+        ],
+        system: model.systemPrompt || "You are Claude, a helpful AI assistant.",
+        max_tokens: options2.maxTokens || 2048
+      };
+      const response = yield this.fetchWithProxy(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      return data.content[0].text;
+    });
+  }
+  callZhipu(model, prompt, useProxy, options2) {
+    return __async(this, null, function* () {
+      var _a, _b, _c, _d, _e, _f, _g;
+      const isZhipuAI = model.type === "zhipuai";
+      let baseUrl = "";
+      if (model.baseUrl) {
+        baseUrl = model.baseUrl;
+        if (baseUrl.endsWith("/v4") || baseUrl.endsWith("/v3")) {
+          baseUrl += "/chat/completions";
+        }
+      } else {
+        baseUrl = isZhipuAI ? "https://open.bigmodel.cn/api/paas/v4/chat/completions" : "https://open.bigmodel.cn/api/paas/v3/chat/completions";
+      }
+      console.log(`ZhipuAI: Using endpoint ${baseUrl} for model type ${model.type}`);
+      let headers = {
+        "Content-Type": "application/json"
+      };
+      if (model.apiKey) {
+        headers["Authorization"] = `Bearer ${model.apiKey}`;
+      }
+      const modelName = model.modelName || options2.modelName || (isZhipuAI ? "glm-4" : "glm-4");
+      const streaming = !!options2.streaming;
+      const onChunk = options2.onChunk;
+      const payload = {
+        model: modelName,
+        messages: options2.conversation || [
+          { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ],
+        temperature: options2.temperature || 0.7,
+        max_tokens: options2.maxTokens || 2048,
+        stream: streaming
+        // Enable streaming if requested
+      };
+      try {
+        console.log(`ZhipuAI: Sending request to ${baseUrl} with model ${modelName}, streaming: ${streaming}`);
+        if (streaming && typeof onChunk === "function") {
+          let fullResponse = "";
+          const response2 = yield this.fetchWithProxy(baseUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload)
+          }, useProxy);
+          if (!response2.ok) {
+            const errorData = yield response2.text();
+            console.error(`ZhipuAI API error (${response2.status}): ${errorData}`);
+            throw new Error(`ZhipuAI API error: ${response2.status} ${response2.statusText}`);
+          }
+          const reader = (_a = response2.body) == null ? void 0 : _a.getReader();
+          if (!reader) {
+            throw new Error("Failed to get response reader for streaming");
+          }
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (true) {
+            const { done, value } = yield reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let newlineIndex;
+            while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+              const line = buffer.slice(0, newlineIndex).trim();
+              buffer = buffer.slice(newlineIndex + 1);
+              if (line.startsWith("data:")) {
+                const jsonData = line.slice(5).trim();
+                if (jsonData === "" || jsonData === "[DONE]") continue;
+                try {
+                  const parsedData = JSON.parse(jsonData);
+                  if ((_d = (_c = (_b = parsedData.choices) == null ? void 0 : _b[0]) == null ? void 0 : _c.delta) == null ? void 0 : _d.content) {
+                    const content = parsedData.choices[0].delta.content;
+                    fullResponse += content;
+                    onChunk(content);
+                  }
+                } catch (e) {
+                  console.error("Error parsing streaming data:", e, jsonData);
+                }
+              }
+            }
+          }
+          return fullResponse;
+        }
+        const response = yield this.fetchWithProxy(baseUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        }, useProxy);
+        if (!response.ok) {
+          const errorData = yield response.text();
+          console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
+          if (response.status === 404) {
+            console.error("ZhipuAI API endpoint not found. Please verify the correct endpoint URL.");
+            throw new Error(`ZhipuAI API endpoint not found. Please check your model configuration and API documentation for the correct URL. Status: ${response.status}`);
+          }
+          throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
+        }
+        const data = yield response.json();
+        console.log("ZhipuAI response:", JSON.stringify(data).substring(0, 200) + "...");
+        if (data.choices && ((_f = (_e = data.choices[0]) == null ? void 0 : _e.message) == null ? void 0 : _f.content)) {
+          return data.choices[0].message.content;
+        } else if (data.data && data.data.choices && ((_g = data.data.choices[0]) == null ? void 0 : _g.content)) {
+          return data.data.choices[0].content;
+        } else if (data.response) {
+          return data.response;
+        } else {
+          console.warn("Unexpected ZhipuAI response format:", data);
+          return JSON.stringify(data);
+        }
+      } catch (error) {
+        console.error("Error calling ZhipuAI:", error);
+        throw error;
+      }
+    });
+  }
+  callBaidu(model, prompt, useProxy, options2) {
+    return __async(this, null, function* () {
+      const url = model.baseUrl || "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/";
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${model.apiKey}`
+      };
+      const payload = {
+        messages: [
+          { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ],
+        temperature: options2.temperature || 0.7,
+        max_tokens: options2.maxTokens || 2048
+      };
+      const response = yield this.fetchWithProxy(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      return data.result;
+    });
+  }
+  callCustomAPI(model, prompt, useProxy, options2) {
+    return __async(this, null, function* () {
+      if (!model.baseUrl) throw new Error("Base URL is required for custom API model");
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (model.apiKey) {
+        headers["Authorization"] = `Bearer ${model.apiKey}`;
+      }
+      const payload = {
+        prompt,
+        system_prompt: model.systemPrompt || "You are a helpful assistant.",
+        temperature: options2.temperature || 0.7,
+        max_tokens: options2.maxTokens || 2048
+      };
+      const response = yield this.fetchWithProxy(model.baseUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      return data.response || data.result || data.text || JSON.stringify(data);
+    });
+  }
+  fetchWithProxy(url, options2, useProxy) {
+    return __async(this, null, function* () {
+      try {
+        console.log(`Making request to: ${url}`);
+        if (!useProxy || !this.proxyConfig.enabled) {
+          return fetch(url, options2);
+        }
+        console.log(`Using proxy: ${this.proxyConfig.type}://${this.proxyConfig.address}:${this.proxyConfig.port}`);
+        return fetch(url, options2);
+      } catch (error) {
+        console.error(`Fetch error for ${url}:`, error);
+        throw error;
+      }
+    });
+  }
+  callMultipleModels(_0, _1) {
+    return __async(this, arguments, function* (modelIds, prompt, options2 = {}) {
+      const results = {};
+      yield Promise.all(modelIds.map((modelId) => __async(this, null, function* () {
+        try {
+          const result = yield this.callModel(modelId, prompt, options2);
+          results[modelId] = result;
+        } catch (error) {
+          console.error(`Error calling model ${modelId}:`, error);
+          results[modelId] = `Error: ${error.message}`;
+        }
+      })));
+      return results;
+    });
+  }
+  getDefaultModel() {
+    const defaultModel = this.models.find((m) => m.isDefault && m.active);
+    if (defaultModel) {
+      return defaultModel;
+    }
+    const firstActive = this.models.find((m) => m.active);
+    return firstActive || null;
+  }
+  // Add new methods for embedding functionality
+  getEmbedding(text, modelId) {
+    return __async(this, null, function* () {
+      const model = modelId ? this.getModelById(modelId) : this.getDefaultModel();
+      if (!model) {
+        throw new Error("No model found for embedding generation");
+      }
+      const embeddingModel = model.embeddingModel || "embedding-3";
+      try {
+        console.log(`Getting embedding using model: ${model.name}, embedding model: ${embeddingModel}`);
+        const useProxy = model.useProxy !== void 0 ? model.useProxy : this.proxyConfig.enabled;
+        switch (model.type) {
+          case "openai":
+            return yield this.getOpenAIEmbedding(model, text, embeddingModel, useProxy);
+          case "zhipu":
+          case "zhipuai":
+            return yield this.getZhipuEmbedding(model, text, embeddingModel, useProxy);
+          case "custom":
+            return yield this.getCustomEmbedding(model, text, embeddingModel, useProxy);
+          default:
+            throw new Error(`Embedding not supported for model type: ${model.type}`);
+        }
+      } catch (error) {
+        console.error(`Error getting embedding using model ${model.name}:`, error);
+        throw error;
+      }
+    });
+  }
+  getOpenAIEmbedding(model, text, embeddingModel, useProxy) {
+    return __async(this, null, function* () {
+      var _a, _b;
+      const url = "https://api.openai.com/v1/embeddings";
+      const headers = {
+        "Authorization": `Bearer ${model.apiKey}`,
+        "Content-Type": "application/json"
+      };
+      const payload = {
+        model: embeddingModel,
+        input: text
+      };
+      const response = yield this.fetchWithProxy(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
+        throw new Error("Invalid embedding response from OpenAI");
+      }
+      return data.data[0].embedding;
+    });
+  }
+  getZhipuEmbedding(model, text, embeddingModel, useProxy) {
+    return __async(this, null, function* () {
+      var _a, _b;
+      const url = model.baseUrl || "https://open.bigmodel.cn/api/paas/v4/embeddings";
+      const headers = {
+        "Authorization": `Bearer ${model.apiKey}`,
+        "Content-Type": "application/json"
+      };
+      const MAX_CHARS = 3e3;
+      if (text.length > MAX_CHARS) {
+        const truncated = text.substring(0, MAX_CHARS);
+        const lastPeriod = truncated.lastIndexOf(".");
+        const lastNewline = truncated.lastIndexOf("\n");
+        const breakPoint = Math.max(lastPeriod, lastNewline);
+        text = breakPoint > 0 ? truncated.substring(0, breakPoint + 1) : truncated;
+      }
+      const payload = {
+        model: embeddingModel,
+        input: text,
+        dimensions: embeddingModel === "embedding-3" ? 1024 : void 0
+      };
+      console.log(`ZhipuAI Embedding: Sending request to ${url} with model ${embeddingModel}`);
+      const response = yield this.fetchWithProxy(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      if (!response.ok) {
+        const errorData = yield response.text();
+        console.error(`ZhipuAI Embedding API error (${response.status}): ${errorData}`);
+        if (response.status === 404) {
+          throw new Error(`ZhipuAI Embedding API endpoint not found. Please check your model configuration and API documentation for the correct URL. Status: ${response.status}`);
+        }
+        throw new Error(`ZhipuAI Embedding API error: ${response.status} ${response.statusText}`);
+      }
+      const data = yield response.json();
+      if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
+        console.error("Invalid embedding response from ZhipuAI:", data);
+        throw new Error("Invalid embedding response from ZhipuAI");
+      }
+      return data.data[0].embedding;
+    });
+  }
+  getCustomEmbedding(model, text, embeddingModel, useProxy) {
+    return __async(this, null, function* () {
+      var _a, _b;
+      if (!model.baseUrl) {
+        throw new Error("Base URL is required for custom embedding API");
+      }
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (model.apiKey) {
+        headers["Authorization"] = `Bearer ${model.apiKey}`;
+      }
+      const payload = {
+        model: embeddingModel,
+        input: text
+      };
+      const response = yield this.fetchWithProxy(model.baseUrl + "/embeddings", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+      const data = yield response.json();
+      if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
+        throw new Error("Invalid embedding response from custom API");
+      }
+      return data.data[0].embedding;
+    });
+  }
+};
+
+// src/debate/DebatePanel.ts
+var import_obsidian3 = require("obsidian");
+
+// src/debate/AgentDebateEngine.ts
+var Agent = class {
+  constructor(id, name, rolePrompt, modelId, modelManager) {
+    this.id = id;
+    this.name = name;
+    this.rolePrompt = rolePrompt;
+    this.modelId = modelId;
+    this.modelManager = modelManager;
+  }
+  think(message, context = "", onChunk) {
+    return __async(this, null, function* () {
+      const fullPrompt = `${context}
+
+${this.rolePrompt}
+
+${message}`;
+      try {
+        return yield this.modelManager.callModel(
+          this.modelId,
+          fullPrompt,
+          {
+            streaming: !!onChunk,
+            onChunk
+          }
+        );
+      } catch (error) {
+        console.error(`Error in agent ${this.name} thinking:`, error);
+        return `[Agent ${this.name} encountered an error: ${error.message}]`;
+      }
+    });
+  }
+};
+var AgentDebateEngine = class _AgentDebateEngine {
+  // Default language
+  constructor(agents, hostAgent, maxRounds = 3, language = "English") {
+    this.round = 0;
+    this.agents = [];
+    this.messages = [];
+    this.currentAgentIndex = 0;
+    this.isRunning = false;
+    this.isComplete = false;
+    this.onMessageCallback = null;
+    this.onCompleteCallback = null;
+    this.onMessageUpdateCallback = null;
+    this.language = "English";
+    this.agents = agents;
+    this.hostAgent = hostAgent;
+    this.maxRounds = maxRounds;
+    this.language = language;
+  }
+  getMessages() {
+    return [...this.messages];
+  }
+  getStatus() {
+    return {
+      currentRound: this.round,
+      currentAgentIndex: this.currentAgentIndex,
+      isComplete: this.isComplete,
+      messages: [...this.messages]
+    };
+  }
+  onMessage(callback) {
+    this.onMessageCallback = callback;
+  }
+  onComplete(callback) {
+    this.onCompleteCallback = callback;
+  }
+  onMessageUpdate(callback) {
+    this.onMessageUpdateCallback = callback;
+  }
+  resetDebate() {
+    this.round = 0;
+    this.messages = [];
+    this.currentAgentIndex = 0;
+    this.isRunning = false;
+    this.isComplete = false;
+  }
+  startDebate(topic) {
+    return __async(this, null, function* () {
+      if (this.isRunning) {
+        throw new Error("Debate is already running");
+      }
+      this.resetDebate();
+      this.isRunning = true;
+      try {
+        const config = this.getConfig();
+        const language = (config == null ? void 0 : config.language) || "English";
+        const hostPrompt = `You are the host of a debate or discussion. Your role is to introduce the topic, establish the key points to be discussed, and guide the conversation.
+      
+      First, provide a thoughtful introduction to this topic: "${topic}"
+      
+      Then, outline the key aspects that should be discussed by our participants. What are the main points to consider?
+      
+      Please respond in ${language}.`;
+        const hostMessageId = `msg_${Date.now()}`;
+        const hostMessage = {
+          id: hostMessageId,
+          agentId: this.hostAgent.id,
+          content: "",
+          timestamp: Date.now(),
+          round: 0,
+          streaming: true
+        };
+        this.messages.push(hostMessage);
+        if (this.onMessageCallback) {
+          this.onMessageCallback(hostMessage);
+        }
+        const hostIntro = yield this.hostAgent.think(hostPrompt, "", (chunk) => {
+          const messageIndex = this.messages.findIndex((m) => m.id === hostMessageId);
+          if (messageIndex >= 0) {
+            this.messages[messageIndex].content += chunk;
+            if (this.onMessageUpdateCallback) {
+              this.onMessageUpdateCallback(this.messages[messageIndex]);
+            }
+          }
+        });
+        const finalMessageIndex = this.messages.findIndex((m) => m.id === hostMessageId);
+        if (finalMessageIndex >= 0) {
+          this.messages[finalMessageIndex].streaming = false;
+          if (this.onMessageUpdateCallback) {
+            this.onMessageUpdateCallback(this.messages[finalMessageIndex]);
+          }
+        }
+        yield this.runDebateRounds(topic);
+        yield this.generateConclusion(topic);
+        this.isComplete = true;
+        this.isRunning = false;
+        if (this.onCompleteCallback) {
+          this.onCompleteCallback();
+        }
+      } catch (error) {
+        console.error("Error running debate:", error);
+        this.isRunning = false;
+        throw error;
+      }
+    });
+  }
+  runDebateRounds(topic) {
+    return __async(this, null, function* () {
+      const context = this.buildDebateContext();
+      const config = this.getConfig();
+      const language = (config == null ? void 0 : config.language) || "English";
+      for (this.round = 1; this.round <= this.maxRounds; this.round++) {
+        for (let i = 0; i < this.agents.length; i++) {
+          this.currentAgentIndex = i;
+          const agent = this.agents[i];
+          const updatedContext = this.buildDebateContext();
+          const agentPrompt = `We are in round ${this.round} of the debate on: "${topic}"
+
+Previous messages:
+${updatedContext}
+
+Based on the previous discussion, provide your perspective as ${agent.name}. 
+Address points made by other participants if relevant, and further develop your own arguments.
+
+Please respond in ${language}.`;
+          const messageId = `msg_${Date.now()}_${agent.id}_${this.round}`;
+          const message = {
+            id: messageId,
+            agentId: agent.id,
+            content: "",
+            timestamp: Date.now(),
+            round: this.round,
+            streaming: true
+          };
+          this.messages.push(message);
+          if (this.onMessageCallback) {
+            this.onMessageCallback(message);
+          }
+          yield agent.think(agentPrompt, "", (chunk) => {
+            const messageIndex = this.messages.findIndex((m) => m.id === messageId);
+            if (messageIndex >= 0) {
+              this.messages[messageIndex].content += chunk;
+              if (this.onMessageUpdateCallback) {
+                this.onMessageUpdateCallback(this.messages[messageIndex]);
+              }
+            }
+          });
+          const finalMessageIndex = this.messages.findIndex((m) => m.id === messageId);
+          if (finalMessageIndex >= 0) {
+            this.messages[finalMessageIndex].streaming = false;
+            if (this.onMessageUpdateCallback) {
+              this.onMessageUpdateCallback(this.messages[finalMessageIndex]);
+            }
+          }
+        }
+      }
+    });
+  }
+  generateConclusion(topic) {
+    return __async(this, null, function* () {
+      const context = this.buildDebateContext();
+      const config = this.getConfig();
+      const language = (config == null ? void 0 : config.language) || "English";
+      const conclusionPrompt = `Now that we've completed ${this.maxRounds} rounds of our debate on "${topic}", please provide a thoughtful conclusion.
+
+Summarize the key points made by each participant, identify areas of agreement and disagreement, and provide your own synthesis of the discussion.
+
+The full debate transcript:
+${context}
+
+Please respond in ${language}.`;
+      const conclusionId = `msg_conclusion_${Date.now()}`;
+      const conclusionMessage = {
+        id: conclusionId,
+        agentId: this.hostAgent.id,
+        content: "",
+        timestamp: Date.now(),
+        round: this.maxRounds + 1,
+        streaming: true
+      };
+      this.messages.push(conclusionMessage);
+      if (this.onMessageCallback) {
+        this.onMessageCallback(conclusionMessage);
+      }
+      yield this.hostAgent.think(conclusionPrompt, "", (chunk) => {
+        const messageIndex = this.messages.findIndex((m) => m.id === conclusionId);
+        if (messageIndex >= 0) {
+          this.messages[messageIndex].content += chunk;
+          if (this.onMessageUpdateCallback) {
+            this.onMessageUpdateCallback(this.messages[messageIndex]);
+          }
+        }
+      });
+      const finalMessageIndex = this.messages.findIndex((m) => m.id === conclusionId);
+      if (finalMessageIndex >= 0) {
+        this.messages[finalMessageIndex].streaming = false;
+        if (this.onMessageUpdateCallback) {
+          this.onMessageUpdateCallback(this.messages[finalMessageIndex]);
+        }
+      }
+    });
+  }
+  buildDebateContext() {
+    return this.messages.map((msg) => {
+      const agent = this.agents.find((a) => a.id === msg.agentId) || this.hostAgent;
+      return `[Round ${msg.round}] ${agent.name}: ${msg.content}`;
+    }).join("\n\n");
+  }
+  static createFromConfig(config, modelManager) {
+    const agents = config.agents.filter((a) => a.active).map((agentConfig) => new Agent(
+      agentConfig.id,
+      agentConfig.name,
+      agentConfig.rolePrompt,
+      agentConfig.modelId,
+      modelManager
+    ));
+    const hostAgent = new Agent(
+      config.hostAgent.id,
+      config.hostAgent.name,
+      config.hostAgent.rolePrompt,
+      config.hostAgent.modelId,
+      modelManager
+    );
+    return new _AgentDebateEngine(
+      agents,
+      hostAgent,
+      config.maxRounds,
+      config.language
+    );
+  }
+  static generateDebatePrompts(mode) {
+    const prompts = {
+      host: "You are the host and moderator of this discussion. Your role is to introduce the topic, guide the conversation, ask probing questions, and ensure all perspectives are heard. At the end, you'll summarize the key points and provide a balanced conclusion.",
+      positive: "You are advocating for the positive or affirmative position on this topic. Present the strongest arguments in favor, backed by reasoning and evidence where possible. Address counterarguments in a respectful way.",
+      negative: "You are advocating for the negative or critical position on this topic. Present the strongest arguments against, backed by reasoning and evidence where possible. Address counterarguments in a respectful way.",
+      blue: "Blue Hat (Process): You focus on managing the thinking process and ensuring productive discussion. You think about how to approach the problem, what thinking tools to use, and how to organize the conversation.",
+      red: "Red Hat (Emotions): You focus on intuition, feelings, and emotional reactions. Express how the topic makes you feel, and consider the emotional aspects and impacts on people.",
+      yellow: "Yellow Hat (Benefits): You focus on positivity, optimism, and benefits. Identify advantages, opportunities, and potential gains related to the topic.",
+      green: "Green Hat (Creativity): You focus on creativity, alternatives, and new ideas. Propose innovative solutions, possibilities, and 'what if' scenarios related to the topic.",
+      white: "White Hat (Facts): You focus on data, information, and objective facts. Provide relevant statistics, research findings, and verified information about the topic.",
+      black: "Black Hat (Caution): You focus on critical judgment and potential problems. Identify risks, difficulties, and challenges related to the topic.",
+      custom: "You are a participant in this discussion. Share your unique perspective on the topic based on your expertise and viewpoint."
+    };
+    return prompts;
+  }
+  static generateDefaultConfig(topic, mode, defaultModelId, language = "English") {
+    const prompts = _AgentDebateEngine.generateDebatePrompts(mode);
+    const timestamp = Date.now();
+    let agents = [];
+    switch (mode) {
+      case "debate":
+        agents = [
+          {
+            id: `agent_positive_${timestamp}`,
+            name: "Proponent",
+            role: "positive",
+            rolePrompt: prompts.positive,
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_negative_${timestamp}`,
+            name: "Opponent",
+            role: "negative",
+            rolePrompt: prompts.negative,
+            modelId: defaultModelId,
+            active: true
+          }
+        ];
+        break;
+      case "sixHats":
+        agents = [
+          {
+            id: `agent_white_${timestamp}`,
+            name: "White Hat (Facts)",
+            role: "white",
+            rolePrompt: prompts.white,
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_red_${timestamp}`,
+            name: "Red Hat (Emotions)",
+            role: "red",
+            rolePrompt: prompts.red,
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_black_${timestamp}`,
+            name: "Black Hat (Caution)",
+            role: "black",
+            rolePrompt: prompts.black,
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_yellow_${timestamp}`,
+            name: "Yellow Hat (Benefits)",
+            role: "yellow",
+            rolePrompt: prompts.yellow,
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_green_${timestamp}`,
+            name: "Green Hat (Creativity)",
+            role: "green",
+            rolePrompt: prompts.green,
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_blue_${timestamp}`,
+            name: "Blue Hat (Process)",
+            role: "blue",
+            rolePrompt: prompts.blue,
+            modelId: defaultModelId,
+            active: true
+          }
+        ];
+        break;
+      case "roundtable":
+        agents = [
+          {
+            id: `agent_expert1_${timestamp}`,
+            name: "Subject Matter Expert",
+            role: "custom",
+            rolePrompt: "You are a subject matter expert with deep knowledge of this topic. Provide factual information, historical context, and technical details that help illuminate the discussion.",
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_critic_${timestamp}`,
+            name: "Critical Analyst",
+            role: "custom",
+            rolePrompt: "You analyze the topic critically, looking for logical flaws, inconsistencies, and areas that deserve more scrutiny. Your goal is to strengthen the discussion through thoughtful criticism.",
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_innovator_${timestamp}`,
+            name: "Innovator",
+            role: "custom",
+            rolePrompt: "You specialize in finding new approaches and creative solutions. Consider how the topic could be reimagined or what novel perspectives might add value to the discussion.",
+            modelId: defaultModelId,
+            active: true
+          },
+          {
+            id: `agent_custom_${timestamp}`,
+            name: "Custom",
+            role: "custom",
+            rolePrompt: "You are a custom participant in this discussion. Share your unique perspective on the topic based on your expertise and viewpoint.",
+            modelId: defaultModelId,
+            active: true
+          }
+        ];
+        break;
+    }
+    const hostAgent = {
+      id: `host_${timestamp}`,
+      name: "Host",
+      role: "host",
+      rolePrompt: prompts.host,
+      modelId: defaultModelId,
+      active: true
+    };
+    return {
+      id: `debate_${timestamp}`,
+      title: `Debate on ${topic}`,
+      topic,
+      mode,
+      agents,
+      hostAgent,
+      maxRounds: 3,
+      maxTokensPerResponse: 1e3,
+      createdAt: timestamp,
+      active: true,
+      language
+    };
+  }
+  // Helper method to get config from debate context
+  getConfig() {
+    return {
+      id: "",
+      title: "",
+      topic: "",
+      mode: "debate",
+      agents: [],
+      hostAgent: { id: "", name: "", role: "host", rolePrompt: "", modelId: "", active: true },
+      maxRounds: this.maxRounds,
+      maxTokensPerResponse: 1e3,
+      createdAt: Date.now(),
+      active: true,
+      language: this.language
+    };
+  }
+};
+
+// src/debate/DebatePanel.ts
+var DEBATE_VIEW_TYPE = "aipilot-debate-view";
+var DebatePanel = class extends import_obsidian3.ItemView {
+  constructor(leaf, modelManager) {
+    super(leaf);
+    this.debateEngine = null;
+    this.debateConfig = null;
+    this.modelManager = modelManager;
+  }
+  getViewType() {
+    return DEBATE_VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "Debate & Reasoning";
+  }
+  onOpen() {
+    return __async(this, null, function* () {
+      this.containerEl = this.contentEl.createDiv({ cls: "debate-view-container" });
+      this.createHeader();
+      this.createConfigPanel();
+      this.createMessagesContainer();
+      this.createStatusBar();
+      this.initializeDefaultConfig();
+    });
+  }
+  onClose() {
+    return __async(this, null, function* () {
+    });
+  }
+  createHeader() {
+    const headerEl = this.containerEl.createDiv({ cls: "debate-header" });
+    const titleEl = headerEl.createEl("h2", { text: "AI Agent Debate" });
+    const descriptionEl = headerEl.createEl("p", {
+      text: "Create a multi-agent debate or discussion on any topic. Select a debate mode, configure your settings, and let multiple AI agents discuss the topic from different perspectives."
+    });
+  }
+  createConfigPanel() {
+    const configPanelEl = this.containerEl.createDiv({ cls: "debate-config-panel" });
+    const headerEl = configPanelEl.createEl("h2", { text: "AI Agent Debate" });
+    const topicWrapperEl = configPanelEl.createDiv({ cls: "config-input-wrapper" });
+    topicWrapperEl.createEl("label", { text: "Topic", attr: { for: "debate-topic" } });
+    this.topicInputEl = topicWrapperEl.createEl("input", {
+      cls: "debate-topic-input",
+      attr: {
+        id: "debate-topic",
+        type: "text",
+        placeholder: "Enter debate topic"
+      }
+    });
+    const languageWrapperEl = configPanelEl.createDiv({ cls: "config-input-wrapper" });
+    languageWrapperEl.createEl("label", { text: "Language", attr: { for: "debate-language" } });
+    this.languageSelectEl = languageWrapperEl.createEl("select", {
+      cls: "debate-language-select",
+      attr: { id: "debate-language" }
+    });
+    const languages = [
+      "English",
+      "Spanish",
+      "French",
+      "German",
+      "Chinese",
+      "Japanese",
+      "Russian",
+      "Arabic",
+      "Hindi",
+      "Portuguese",
+      "Italian",
+      "Dutch",
+      "Korean",
+      "Turkish",
+      "Swedish",
+      "Polish",
+      "Vietnamese",
+      "Thai",
+      "Greek",
+      "Hebrew"
+    ];
+    languages.forEach((lang) => {
+      this.languageSelectEl.createEl("option", {
+        text: lang,
+        attr: { value: lang }
+      });
+    });
+    const modeContainerEl = configPanelEl.createDiv({ cls: "config-item config-row" });
+    const modeWrapperEl = modeContainerEl.createDiv({ cls: "config-input-wrapper" });
+    modeWrapperEl.createEl("label", { text: "Debate Mode", attr: { for: "debate-mode" } });
+    this.modeSelectEl = modeWrapperEl.createEl("select", {
+      cls: "debate-mode-select",
+      attr: { id: "debate-mode" }
+    });
+    this.modeSelectEl.createEl("option", { text: "Debate (Pro vs Con)", attr: { value: "debate" } });
+    this.modeSelectEl.createEl("option", { text: "Six Thinking Hats", attr: { value: "sixHats" } });
+    this.modeSelectEl.createEl("option", { text: "Roundtable Discussion", attr: { value: "roundtable" } });
+    this.modeSelectEl.addEventListener("change", () => this.onModeChange());
+    const roundsWrapperEl = modeContainerEl.createDiv({ cls: "config-input-wrapper" });
+    roundsWrapperEl.createEl("label", { text: "Rounds", attr: { for: "debate-rounds" } });
+    this.roundsInputEl = roundsWrapperEl.createEl("input", {
+      cls: "debate-rounds-input",
+      attr: {
+        id: "debate-rounds",
+        type: "number",
+        min: "1",
+        max: "5",
+        value: "3"
+      }
+    });
+    this.controlsEl = configPanelEl.createDiv({ cls: "debate-controls" });
+    this.startButtonEl = this.controlsEl.createEl("button", {
+      cls: "debate-start-button",
+      text: "Start Debate"
+    });
+    this.startButtonEl.addEventListener("click", () => this.startDebate());
+    this.exportButtonEl = this.controlsEl.createEl("button", {
+      cls: "debate-export-button",
+      text: "Export to Note",
+      attr: { disabled: "true" }
+    });
+    this.exportButtonEl.addEventListener("click", () => this.exportToNote());
+  }
+  createMessagesContainer() {
+    this.messagesContainerEl = this.containerEl.createDiv({ cls: "debate-messages-container" });
+    const emptyStateEl = this.messagesContainerEl.createDiv({ cls: "debate-empty-state" });
+    const emptyIconEl = emptyStateEl.createDiv({ cls: "debate-empty-icon" });
+    emptyStateEl.createEl("h3", { text: "No Active Debate" });
+    emptyStateEl.createEl("p", {
+      text: 'Configure your debate settings above and click "Start Debate" to begin a new multi-agent discussion.'
+    });
+  }
+  createStatusBar() {
+    this.statusEl = this.containerEl.createDiv({ cls: "debate-status-bar" });
+    this.statusEl.textContent = "Ready to start";
+  }
+  initializeDefaultConfig() {
+    const models = this.modelManager.getModels();
+    const defaultModelId = models.length > 0 ? models[0].id : "default_model_id";
+    this.debateConfig = AgentDebateEngine.generateDefaultConfig(
+      "",
+      "debate",
+      defaultModelId,
+      this.languageSelectEl.value
+    );
+  }
+  onModeChange() {
+    if (!this.debateConfig) return;
+    const selectedMode = this.modeSelectEl.value;
+    const topic = this.topicInputEl.value.trim();
+    const language = this.languageSelectEl.value;
+    const models = this.modelManager.getModels();
+    const defaultModelId = models.length > 0 ? models[0].id : "default_model_id";
+    this.debateConfig = AgentDebateEngine.generateDefaultConfig(
+      topic,
+      selectedMode,
+      defaultModelId,
+      language
+    );
+  }
+  startDebate() {
+    return __async(this, null, function* () {
+      const topic = this.topicInputEl.value.trim();
+      if (!topic) {
+        new import_obsidian3.Notice("Please enter a topic for the debate");
+        return;
+      }
+      if (!this.debateConfig) {
+        new import_obsidian3.Notice("Debate configuration not initialized");
+        return;
+      }
+      const rounds = parseInt(this.roundsInputEl.value);
+      if (rounds > 0) {
+        this.debateConfig.maxRounds = rounds;
+      }
+      this.debateConfig.topic = topic;
+      this.debateConfig.language = this.languageSelectEl.value;
+      this.messagesContainerEl.empty();
+      this.statusEl.textContent = "Starting debate...";
+      this.startButtonEl.disabled = true;
+      this.startButtonEl.textContent = "Debate in Progress...";
+      try {
+        this.debateEngine = AgentDebateEngine.createFromConfig(
+          this.debateConfig,
+          this.modelManager
+        );
+        this.debateEngine.onMessage((message) => {
+          this.renderMessage(message);
+          this.messagesContainerEl.scrollTo({
+            top: this.messagesContainerEl.scrollHeight,
+            behavior: "smooth"
+          });
+        });
+        this.debateEngine.onMessageUpdate((message) => {
+          this.updateMessage(message);
+          this.messagesContainerEl.scrollTo({
+            top: this.messagesContainerEl.scrollHeight,
+            behavior: "smooth"
+          });
+        });
+        this.debateEngine.onComplete(() => {
+          this.statusEl.textContent = "Debate completed";
+          this.startButtonEl.disabled = false;
+          this.startButtonEl.textContent = "Start New Debate";
+          this.exportButtonEl.removeAttribute("disabled");
+        });
+        yield this.debateEngine.startDebate(topic);
+      } catch (error) {
+        console.error("Error starting debate:", error);
+        new import_obsidian3.Notice(`Error starting debate: ${error.message}`);
+        this.statusEl.textContent = "Error starting debate";
+        this.startButtonEl.disabled = false;
+        this.startButtonEl.textContent = "Start Debate";
+      }
+    });
+  }
+  renderMessage(message) {
+    if (!this.debateEngine || !this.debateConfig) return;
+    const messageEl = this.messagesContainerEl.createDiv({ cls: "debate-message" });
+    messageEl.setAttribute("data-message-id", message.id);
+    const isHost = message.agentId === this.debateConfig.hostAgent.id;
+    const agent = isHost ? this.debateConfig.hostAgent : this.debateConfig.agents.find((a) => a.id === message.agentId);
+    if (!agent) return;
+    messageEl.addClass(`agent-role-${agent.role}`);
+    if (isHost) messageEl.addClass("host-message");
+    if (message.streaming) messageEl.addClass("streaming-message");
+    const headerEl = messageEl.createDiv({ cls: "message-header" });
+    const nameEl = headerEl.createEl("span", {
+      cls: "agent-name",
+      text: agent.name
+    });
+    const roundEl = headerEl.createEl("span", {
+      cls: "message-round",
+      text: message.round === 0 ? "Introduction" : message.round > this.debateConfig.maxRounds ? "Conclusion" : `Round ${message.round}`
+    });
+    const contentEl = messageEl.createDiv({ cls: "message-content" });
+    const formattedContent = this.formatMarkdown(message.content);
+    contentEl.innerHTML = formattedContent;
+    if (message.streaming) {
+      const indicatorEl = messageEl.createDiv({ cls: "streaming-indicator" });
+      const indicator = indicatorEl.createSpan({ text: "Typing" });
+      for (let i = 0; i < 3; i++) {
+        indicatorEl.createSpan({
+          cls: "typing-dot",
+          text: "."
+        });
+      }
+    }
+  }
+  updateMessage(message) {
+    const messageEl = this.messagesContainerEl.querySelector(`[data-message-id="${message.id}"]`);
+    if (!messageEl) return;
+    const contentEl = messageEl.querySelector(".message-content");
+    if (contentEl) {
+      const formattedContent = this.formatMarkdown(message.content);
+      contentEl.innerHTML = formattedContent;
+    }
+    if (message.streaming) {
+      messageEl.addClass("streaming-message");
+      if (!messageEl.querySelector(".streaming-indicator")) {
+        const indicatorEl = messageEl.createDiv({ cls: "streaming-indicator" });
+        const indicator = indicatorEl.createSpan({ text: "Typing" });
+        for (let i = 0; i < 3; i++) {
+          indicatorEl.createSpan({
+            cls: "typing-dot",
+            text: "."
+          });
+        }
+      }
+    } else {
+      messageEl.removeClass("streaming-message");
+      const indicatorEl = messageEl.querySelector(".streaming-indicator");
+      if (indicatorEl) {
+        indicatorEl.remove();
+      }
+    }
+  }
+  // Simple markdown formatter
+  formatMarkdown(text) {
+    return text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/`(.*?)`/g, "<code>$1</code>").replace(/^# (.*?)$/gm, "<h1>$1</h1>").replace(/^## (.*?)$/gm, "<h2>$1</h2>").replace(/^### (.*?)$/gm, "<h3>$1</h3>").replace(/^#### (.*?)$/gm, "<h4>$1</h4>");
+  }
+  exportToNote() {
+    return __async(this, null, function* () {
+      if (!this.debateEngine || !this.debateConfig) {
+        new import_obsidian3.Notice("No debate to export");
+        return;
+      }
+      const messages = this.debateEngine.getMessages();
+      if (messages.length === 0) {
+        new import_obsidian3.Notice("No debate messages to export");
+        return;
+      }
+      try {
+        let markdown = `# Debate: ${this.debateConfig.topic}
+
+`;
+        markdown += `*Mode: ${this.getModeName(this.debateConfig.mode)} | Rounds: ${this.debateConfig.maxRounds} | Date: ${(/* @__PURE__ */ new Date()).toLocaleString()}*
+
+`;
+        for (const message of messages) {
+          const isHost = message.agentId === this.debateConfig.hostAgent.id;
+          const agent = isHost ? this.debateConfig.hostAgent : this.debateConfig.agents.find((a) => a.id === message.agentId);
+          if (!agent) continue;
+          const roundLabel = message.round === 0 ? "Introduction" : message.round > this.debateConfig.maxRounds ? "Conclusion" : `Round ${message.round}`;
+          markdown += `## ${agent.name} (${roundLabel})
+
+`;
+          markdown += `${message.content}
+
+`;
+        }
+        try {
+          const noteName = `Debate - ${this.debateConfig.topic.substring(0, 30)}`;
+          const file = yield this.app.vault.create(`${noteName}.md`, markdown);
+          yield this.app.workspace.openLinkText(file.path, "", true);
+          new import_obsidian3.Notice("Debate exported to new note");
+        } catch (error) {
+          console.error("Error creating note:", error);
+          yield navigator.clipboard.writeText(markdown);
+          new import_obsidian3.Notice("Could not create note. Debate content copied to clipboard.");
+        }
+      } catch (error) {
+        console.error("Error exporting debate:", error);
+        new import_obsidian3.Notice(`Error exporting debate: ${error.message}`);
+      }
+    });
+  }
+  getModeName(mode) {
+    switch (mode) {
+      case "debate":
+        return "Debate (Pro vs Con)";
+      case "sixHats":
+        return "Six Thinking Hats";
+      case "roundtable":
+        return "Roundtable Discussion";
+      default:
+        return mode;
+    }
+  }
+};
+
+// src/models/ModelConfigModal.ts
+var import_obsidian4 = require("obsidian");
+var ModelConfigModal = class extends import_obsidian4.Modal {
+  constructor(app, model, onSubmit) {
+    super(app);
+    this.isNewModel = !model;
+    this.model = model || {
+      id: `model_${Date.now()}`,
+      name: "",
+      type: "openai",
+      apiKey: "",
+      baseUrl: "",
+      systemPrompt: "You are a helpful assistant.",
+      active: true
+    };
+    this.onSubmit = onSubmit;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h2", {
+      text: this.isNewModel ? "Add AI Model" : "Edit AI Model"
+    });
+    new import_obsidian4.Setting(contentEl).setName("Model Name").setDesc("A friendly name to identify this model").addText(
+      (text) => text.setPlaceholder("e.g., GPT-4, Ollama Local, Claude").setValue(this.model.name).onChange((value) => this.model.name = value)
+    );
+    new import_obsidian4.Setting(contentEl).setName("Provider").setDesc("Select the provider for this model").addDropdown(
+      (dropdown) => dropdown.addOption("openai", "OpenAI").addOption("ollama", "Ollama").addOption("claude", "Anthropic Claude").addOption("zhipuai", "Zhipu AI").addOption("baidu", "Baidu").addOption("custom", "Custom API").setValue(this.model.type).onChange((value) => {
+        this.model.type = value;
+        this.model.baseUrl = "";
+        this.model.modelName = "";
+        this.contentEl.empty();
+        this.onOpen();
+      })
+    );
+    if (this.model.type !== "ollama") {
+      new import_obsidian4.Setting(contentEl).setName("API Key").setDesc("Your API key for authenticating with the service").addText(
+        (text) => text.setPlaceholder("sk-...").setValue(this.model.apiKey || "").onChange((value) => this.model.apiKey = value).inputEl.setAttribute("type", "password")
+      );
+    }
+    new import_obsidian4.Setting(contentEl).setName("API Endpoint URL").setDesc(this.getUrlDescription()).addText(
+      (text) => text.setPlaceholder(this.getUrlPlaceholder()).setValue(this.model.baseUrl || "").onChange((value) => this.model.baseUrl = value)
+    );
+    new import_obsidian4.Setting(contentEl).setName("Model Name").setDesc(this.getModelNameDescription()).addText(
+      (text) => text.setPlaceholder(this.getModelNamePlaceholder()).setValue(this.model.modelName || "").onChange((value) => this.model.modelName = value)
+    );
+    new import_obsidian4.Setting(contentEl).setName("System Prompt").setDesc("Instructions that define how the AI responds").addTextArea(
+      (text) => text.setPlaceholder("You are a helpful assistant...").setValue(this.model.systemPrompt || "").onChange((value) => this.model.systemPrompt = value)
+    );
+    new import_obsidian4.Setting(contentEl).setName("Use Proxy").setDesc("Override global proxy settings for this model").addToggle(
+      (toggle) => toggle.setValue(this.model.useProxy || false).onChange((value) => this.model.useProxy = value)
+    );
+    if (["openai", "zhipuai", "custom"].includes(this.model.type)) {
+      contentEl.createEl("h3", { text: "Embedding Settings" });
+      new import_obsidian4.Setting(contentEl).setName("Embedding Model").setDesc("The model to use for generating embeddings").addText((text) => {
+        const placeholder = this.model.type === "openai" ? "e.g., text-embedding-3-small" : this.model.type === "zhipuai" ? "e.g., embedding-3" : "Embedding model name";
+        text.setPlaceholder(placeholder).setValue(this.model.embeddingModel || "").onChange((value) => this.model.embeddingModel = value);
+      });
+      if (this.model.type === "zhipuai" || this.model.type === "custom") {
+        new import_obsidian4.Setting(contentEl).setName("Embedding Dimensions").setDesc("Number of dimensions for the embedding vectors (leave empty to use default)").addText(
+          (text) => {
+            var _a;
+            return text.setPlaceholder("e.g., 1024").setValue(((_a = this.model.embeddingDimensions) == null ? void 0 : _a.toString()) || "").onChange((value) => {
+              const dimensions = parseInt(value);
+              this.model.embeddingDimensions = isNaN(dimensions) ? void 0 : dimensions;
+            });
+          }
+        );
+      }
+    }
+    new import_obsidian4.Setting(contentEl).setName("Active").setDesc("Enable or disable this model").addToggle(
+      (toggle) => toggle.setValue(this.model.active).onChange((value) => this.model.active = value)
+    );
+    new import_obsidian4.Setting(contentEl).setName("Set as Default").setDesc("Use this model as the default when no specific model is selected").addToggle(
+      (toggle) => toggle.setValue(this.model.isDefault || false).onChange((value) => this.model.isDefault = value)
+    );
+    new import_obsidian4.Setting(contentEl).addButton(
+      (button) => button.setButtonText(this.isNewModel ? "Add Model" : "Save Changes").setCta().onClick(() => {
+        if (this.validateModel()) {
+          this.onSubmit(this.model);
+          this.close();
+        }
+      })
+    ).addButton(
+      (button) => button.setButtonText("Cancel").onClick(() => this.close())
+    );
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+  validateModel() {
+    if (!this.model.name) {
+      new import_obsidian4.Notice("Please provide a name for the model");
+      return false;
+    }
+    if (this.model.type !== "ollama" && !this.model.apiKey) {
+      new import_obsidian4.Notice("API key is required for this model type");
+      return false;
+    }
+    if (this.model.type === "ollama" && !this.model.baseUrl) {
+      this.model.baseUrl = "http://localhost:11434/api/generate";
+    }
+    return true;
+  }
+  getUrlDescription() {
+    switch (this.model.type) {
+      case "openai":
+        return "OpenAI API endpoint (leave blank for default)";
+      case "ollama":
+        return "Local URL for Ollama server";
+      case "claude":
+        return "Anthropic API endpoint (leave blank for default)";
+      case "custom":
+        return "Full URL to your custom API endpoint";
+      default:
+        return "API endpoint URL";
+    }
+  }
+  getUrlPlaceholder() {
+    switch (this.model.type) {
+      case "openai":
+        return "https://api.openai.com/v1/chat/completions";
+      case "ollama":
+        return "http://localhost:11434/api/generate";
+      case "claude":
+        return "https://api.anthropic.com/v1/messages";
+      case "zhipuai":
+        return "https://open.bigmodel.cn/api/paas/v4/chat/completions";
+      case "baidu":
+        return "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/";
+      case "custom":
+        return "https://your-custom-api-endpoint.com/generate";
+      default:
+        return "";
+    }
+  }
+  getModelNameDescription() {
+    switch (this.model.type) {
+      case "openai":
+        return "The specific OpenAI model to use (e.g., gpt-3.5-turbo, gpt-4)";
+      case "ollama":
+        return "The specific Ollama model to use (e.g., llama2, mistral)";
+      case "claude":
+        return "The specific Claude model to use (e.g., claude-3-opus-20240229)";
+      case "zhipuai":
+        return "The specific ZhipuAI model to use (e.g., glm-4)";
+      case "baidu":
+        return "The specific Baidu model to use";
+      case "custom":
+        return "The model identifier for your custom API";
+      default:
+        return "Model name as it appears to the provider";
+    }
+  }
+  getModelNamePlaceholder() {
+    switch (this.model.type) {
+      case "openai":
+        return "gpt-4-turbo";
+      case "ollama":
+        return "llama2";
+      case "claude":
+        return "claude-3-opus-20240229";
+      case "zhipuai":
+        return "glm-4";
+      case "baidu":
+        return "ERNIE-Bot-4";
+      case "custom":
+        return "model-name";
+      default:
+        return "";
+    }
+  }
+};
+
+// src/icons.ts
+var import_obsidian5 = require("obsidian");
+var addDebateIcon = () => {
+  (0, import_obsidian5.addIcon)("brain-cog", `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
+      <path d="M17 4a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2"/>
+      <path d="M19 11h2m-1 -1v2"/>
+      <path d="M15 16.5v.5a2 2 0 0 0 2 2"/>
+      <path d="M8.5 14l-.386 -.51a1 1 0 0 0 -1.628 .476l-.748 2.238a1 1 0 0 0 .606 1.283l.279 .093a1 1 0 0 0 1.283 -.606l.558 -1.674a1 1 0 0 0 -.606 -1.283l-.121 -.04a1 1 0 0 0 -.221 -.025z"/>
+      <path d="M14.5 17c0 .828 -.672 1.5 -1.5 1.5s-1.5 -.672 -1.5 -1.5s.672 -1.5 1.5 -1.5"/>
+    </svg>
+  `);
+};
+var addModelIcon = () => {
+  (0, import_obsidian5.addIcon)("ai-model", `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2c1.109 0 2.01 .9 2.01 2s-.901 2 -2.01 2c-1.109 0 -2.01 -.9 -2.01 -2s.901 -2 2.01 -2z"/>
+      <path d="M12 8c4.097 0 7.61 2.462 9 6h-18c1.39 -3.538 4.903 -6 9 -6z"/>
+      <path d="M5.5 15l-1.5 6l3 -4l3 4l-1.5 -6"/>
+      <path d="M14.5 15l-1.5 6l3 -4l3 4l-1.5 -6"/>
+    </svg>
+  `);
+};
+var addRoleIcons = () => {
+  (0, import_obsidian5.addIcon)("debate-positive", `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/>
+      <path d="M9 12l2 2l4 -4"/>
+    </svg>
+  `);
+  (0, import_obsidian5.addIcon)("debate-negative", `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/>
+      <path d="M9 12l6 0"/>
+    </svg>
+  `);
+  (0, import_obsidian5.addIcon)("debate-host", `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 9l2 3l-2 3"/>
+      <path d="M14 9l-2 3l2 3"/>
+      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/>
+    </svg>
+  `);
+};
+var addAllIcons = () => {
+  addDebateIcon();
+  addModelIcon();
+  addRoleIcons();
 };
 
 // src/main.ts
-var EMBEDDING_MODELS = {
-  "embedding-2": { maxTokens: 512, dimensions: null },
-  "embedding-3": { maxTokens: 3072, dimensions: 1024 }
-};
 var DEFAULT_SETTINGS = {
   apiKey: "",
   model: "gpt-4",
@@ -5399,6 +7460,10 @@ Guidelines:
 - Use clear hierarchical structure for content presentation
 - Use proper Markdown formatting for better readability`,
   customFunctions: [],
+  models: [],
+  // Add default empty array for models
+  debateConfigs: [],
+  // Add default empty array for debate configs
   functions: [
     {
       name: "Organize",
@@ -5456,17 +7521,14 @@ Guidelines:
     }
   ],
   chatHistoryPath: "AI_ChatHistory",
-  editorModeEnabled: true
-};
-var MODEL_TOKEN_LIMITS = {
-  "gpt-3.5-turbo": 4096,
-  "gpt-4": 8192,
-  "gpt-4-turbo": 8192,
-  "text-davinci-003": 4096,
-  "GLM-3-Turbo": 8192,
-  "GLM-4": 32768,
-  "GLM-4-Air": 8192,
-  "GLM-4-Long": 32768
+  editorModeEnabled: true,
+  proxyConfig: {
+    enabled: false,
+    address: "",
+    port: "",
+    type: "http",
+    requiresAuth: false
+  }
 };
 function encryptString(text, salt) {
   try {
@@ -5490,19 +7552,7 @@ function decryptString(encoded, salt) {
     return encoded;
   }
 }
-var ZHIPUAI_MODELS = {
-  CHAT: {
-    "GLM-3-Turbo": { maxTokens: 32e3, description: "Fast, efficient for general tasks" },
-    "GLM-4": { maxTokens: 128e3, description: "Advanced reasoning and analysis" },
-    "GLM-4-Air": { maxTokens: 128e3, description: "Advanced reasoning and analysis", isAIR: true },
-    "GLM-4-Long": { maxTokens: 128e3, description: "Long context support" }
-  },
-  EMBEDDING: {
-    "embedding-2": { maxTokens: 512, dimensions: null },
-    "embedding-3": { maxTokens: 3072, dimensions: 1024 }
-  }
-};
-var AIPilot = class extends import_obsidian3.Plugin {
+var AIPilotPlugin = class extends import_obsidian6.Plugin {
   constructor(app, manifest) {
     super(app, manifest);
     this.requestId = null;
@@ -5514,16 +7564,38 @@ var AIPilot = class extends import_obsidian3.Plugin {
     this.CACHE_DURATION = 1e3 * 60 * 60;
     // 1 hour
     this.currentInput = null;
+    this.diffMatchPatchLib = null;
     this.app = app;
   }
   onload() {
     return __async(this, null, function* () {
       yield this.loadSettings();
+      this.migrateLegacyAPIKey();
+      this.modelManager = new ModelManager(
+        this,
+        this.settings.models || [],
+        // Ensure we have a default empty array if models is undefined
+        this.settings.proxyConfig,
+        () => __async(this, null, function* () {
+          yield this.saveSettings();
+        })
+      );
+      yield this.loadDiffMatchPatchLibrary();
+      addAllIcons();
+      this.registerView(
+        DEBATE_VIEW_TYPE,
+        (leaf) => new DebatePanel(leaf, this.modelManager)
+      );
+      this.addCommand({
+        id: "open-debate-panel",
+        name: "Open Agent Debate Panel",
+        callback: () => this.activateDebateView()
+      });
       this.loadStyles();
-      this.addSettingTab(new AITextSettingTab(this.app, this));
+      this.addSettingTab(new AIPilotSettingTab(this.app, this));
       this.registerView(
         VIEW_TYPE_CHAT,
-        (leaf) => new ChatView(leaf, this)
+        (leaf) => new ChatView(leaf, this, this.modelManager)
       );
       this.addCommand({
         id: "open-chat-view",
@@ -5536,19 +7608,19 @@ var AIPilot = class extends import_obsidian3.Plugin {
         this.activateView();
       });
       this.addRibbonIcon("bird", "Polish Text", (evt) => {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           this.polishText(mdView.editor);
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
         }
       });
       this.addRibbonIcon("eraser", "Clean Polish Markup", (evt) => {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           this.cleanPolishMarkup(mdView.editor);
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
         }
       });
       this.addCommands();
@@ -5556,6 +7628,12 @@ var AIPilot = class extends import_obsidian3.Plugin {
       this.addRibbonIcon("search", "Search Knowledge Base", () => {
         this.searchKnowledgeBase();
       });
+      const debateRibbonIcon = this.addRibbonIcon(
+        "brain-cog",
+        // Replace with your actual icon
+        "AI Agent Debate",
+        () => this.activateDebateView()
+      );
     });
   }
   loadStyles() {
@@ -5568,22 +7646,84 @@ var AIPilot = class extends import_obsidian3.Plugin {
     const styleEl = document.getElementById("aipilot-styles");
     if (styleEl) styleEl.remove();
   }
-  loadSettings() {
-    return __async(this, null, function* () {
-      const data = yield this.loadData();
-      this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
-      if (this.settings.apiKey) {
-        this.settings.apiKey = decryptString(this.settings.apiKey, this.salt);
-      }
-    });
-  }
   saveSettings() {
     return __async(this, null, function* () {
       const dataToSave = __spreadValues({}, this.settings);
       if (dataToSave.apiKey) {
         dataToSave.apiKey = encryptString(dataToSave.apiKey, this.salt);
       }
+      if (dataToSave.models && dataToSave.models.length > 0) {
+        dataToSave.models = dataToSave.models.map((model) => {
+          const modelCopy = __spreadValues({}, model);
+          if (modelCopy.apiKey) {
+            modelCopy.apiKey = encryptString(modelCopy.apiKey, this.salt);
+          }
+          return modelCopy;
+        });
+      }
       yield this.saveData(dataToSave);
+    });
+  }
+  loadSettings() {
+    return __async(this, null, function* () {
+      this.settings = Object.assign({}, DEFAULT_SETTINGS, yield this.loadData());
+      if (!this.settings.models) this.settings.models = [];
+      if (!this.settings.functions) this.settings.functions = [];
+      if (!this.settings.customFunctions) this.settings.customFunctions = [];
+      if (!this.settings.debateConfigs) this.settings.debateConfigs = [];
+      if (!this.settings.proxyConfig) {
+        this.settings.proxyConfig = {
+          enabled: false,
+          address: "",
+          port: "",
+          type: "http",
+          requiresAuth: false
+        };
+      }
+      if (this.settings.apiKey) {
+        try {
+          const decrypted = decryptString(this.settings.apiKey, this.salt);
+          const isValidFormat = decrypted.startsWith("sk-") && /^[a-zA-Z0-9_-]+$/.test(decrypted) || // For other providers, just make sure it's alphanumeric
+          /^[a-zA-Z0-9_-]+$/.test(decrypted);
+          this.settings.apiKey = isValidFormat ? decrypted : "";
+          if (!isValidFormat) {
+            console.log("Invalid API key format detected, resetting key");
+          }
+        } catch (e) {
+          console.error("Error decrypting API key, resetting it", e);
+          this.settings.apiKey = "";
+        }
+      }
+      if (this.settings.models && this.settings.models.length > 0) {
+        this.settings.models = this.settings.models.map((model) => {
+          const modelCopy = __spreadValues({}, model);
+          if (modelCopy.apiKey) {
+            try {
+              const decrypted = decryptString(modelCopy.apiKey, this.salt);
+              if (decrypted && /^[a-zA-Z0-9_\-\.]+$/.test(decrypted)) {
+                modelCopy.apiKey = decrypted;
+              } else {
+                modelCopy.apiKey = "";
+                console.log(`Invalid API key format detected for model ${model.name}, resetting key`);
+              }
+            } catch (e) {
+              console.error(`Error decrypting API key for model ${model.name}, resetting it`, e);
+              modelCopy.apiKey = "";
+            }
+          }
+          return modelCopy;
+        });
+      }
+      const hasDefaultModel = this.settings.models.some((m) => m.isDefault);
+      if (!hasDefaultModel && this.settings.models.length > 0) {
+        const firstActive = this.settings.models.find((m) => m.active);
+        if (firstActive) {
+          firstActive.isDefault = true;
+        } else if (this.settings.models.length > 0) {
+          this.settings.models[0].isDefault = true;
+          this.settings.models[0].active = true;
+        }
+      }
     });
   }
   initializeRequestId() {
@@ -5661,7 +7801,7 @@ var AIPilot = class extends import_obsidian3.Plugin {
           loadingModal.close();
           new SearchResultsModal(this.app, topResults).open();
         } catch (error) {
-          new import_obsidian3.Notice("Error searching knowledge base: " + error.message);
+          new import_obsidian6.Notice("Error searching knowledge base: " + error.message);
           loadingModal.close();
         }
       })
@@ -5669,14 +7809,16 @@ var AIPilot = class extends import_obsidian3.Plugin {
   }
   // Approximate token estimation function
   estimateTokenCount(text) {
-    const englishLength = text.replace(/[\u4e00-\u9fff]/g, "").length;
-    const chineseLength = text.length - englishLength;
-    return Math.ceil(englishLength / 4 + chineseLength / 2);
+    return Math.ceil(text.length / 4);
   }
   callAI(content, promptPrefix = "") {
     return __async(this, null, function* () {
-      const { model } = this.settings;
-      const maxTokens = MODEL_TOKEN_LIMITS[model] || 4096;
+      const defaultModel = this.modelManager.getDefaultModel();
+      if (!defaultModel) {
+        new import_obsidian6.Notice("No active model found. Please configure a model in settings.");
+        return "Error: No active model configured";
+      }
+      const maxTokens = 4096;
       let maxTokensForContent = maxTokens - this.estimateTokenCount(promptPrefix);
       const MIN_TOKENS_FOR_CONTENT = 500;
       if (maxTokensForContent < MIN_TOKENS_FOR_CONTENT) {
@@ -5686,89 +7828,37 @@ var AIPilot = class extends import_obsidian3.Plugin {
       if (tokenCount > maxTokensForContent) {
         const chunks = this.chunkContent(content, maxTokensForContent);
         const results = [];
-        new import_obsidian3.Notice(`The text is too long and will be processed in ${chunks.length} parts.`);
+        new import_obsidian6.Notice(`The text is too long and will be processed in ${chunks.length} parts.`);
         for (const chunk of chunks) {
-          const result = yield this.callAIChunk(chunk, promptPrefix);
-          results.push(result.trim());
+          try {
+            const prompt = `${promptPrefix}${chunk}
+
+Note: This is part of a larger text. Ensure continuity with the previous sections.`;
+            const result = yield this.modelManager.callModel(
+              defaultModel.id,
+              prompt,
+              { maxTokens }
+            );
+            results.push(result.trim());
+          } catch (error) {
+            console.error("Error processing chunk:", error);
+            new import_obsidian6.Notice(`Error processing chunk: ${error.message || "Unknown error"}`);
+          }
         }
         return results.join("\n\n");
       } else {
-        return yield this.callAIChunk(content, promptPrefix);
-      }
-    });
-  }
-  callAIChunk(content, promptPrefix) {
-    return __async(this, null, function* () {
-      var _a, _b, _c, _d, _e, _f, _g;
-      const { apiKey, model, provider } = this.settings;
-      let url = "";
-      let data = {};
-      const prompt = `${promptPrefix}${content}
-
-Note: This is part of a larger text. Ensure continuity with the previous sections.`;
-      const chatModels = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "GLM-3-Turbo", "GLM-4", "GLM-4-Air", "GLM-4-Long"];
-      if (provider === "openai") {
-        if (chatModels.includes(model)) {
-          url = "https://api.openai.com/v1/chat/completions";
-          data = {
-            model,
-            messages: [{ role: "user", content: prompt }],
-            request_id: this.requestId
-          };
-        } else {
-          url = "https://api.openai.com/v1/completions";
-          data = {
-            model,
+        const prompt = `${promptPrefix}${content}`;
+        try {
+          return yield this.modelManager.callModel(
+            defaultModel.id,
             prompt,
-            max_tokens: 1e3,
-            request_id: this.requestId
-          };
+            { maxTokens }
+          );
+        } catch (error) {
+          console.error("Error calling AI:", error);
+          new import_obsidian6.Notice(`Error calling AI: ${error.message || "Unknown error"}`);
+          return "Error fetching AI response";
         }
-      } else if (provider === "zhipuai") {
-        url = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-        data = {
-          model,
-          messages: [{ role: "user", content: prompt }],
-          stream: false,
-          request_id: this.requestId
-        };
-      } else if (provider === "groq") {
-        url = "https://api.groq.com/openai/v1/chat/completions";
-        data = {
-          model,
-          messages: [{ role: "user", content: prompt }],
-          request_id: this.requestId
-        };
-      }
-      try {
-        const response = yield (0, import_obsidian3.requestUrl)({
-          url,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify(data),
-          contentType: "application/json"
-        });
-        const responseData = response.json;
-        if (provider === "openai" && chatModels.includes(model)) {
-          return ((_b = (_a = responseData.choices[0]) == null ? void 0 : _a.message) == null ? void 0 : _b.content) || "No response";
-        } else if (provider === "openai") {
-          return ((_c = responseData.choices[0]) == null ? void 0 : _c.text) || "No response";
-        } else {
-          return ((_e = (_d = responseData.choices[0]) == null ? void 0 : _d.message) == null ? void 0 : _e.content) || "No response";
-        }
-      } catch (error) {
-        console.error("Error calling AI:", error);
-        if (((_f = error.response) == null ? void 0 : _f.status) === 401) {
-          new import_obsidian3.Notice("Invalid API key. Please check your settings.");
-        } else if (((_g = error.response) == null ? void 0 : _g.status) === 429) {
-          new import_obsidian3.Notice("Rate limit exceeded. Please try again later.");
-        } else {
-          new import_obsidian3.Notice("Error: " + (error.message || "Unknown error occurred"));
-        }
-        return "Error fetching AI response";
       }
     });
   }
@@ -5797,191 +7887,68 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   }
   callAIChat(messages, onUpdate) {
     return __async(this, null, function* () {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
-      const { apiKey, model, provider } = this.settings;
-      const maxTokens = MODEL_TOKEN_LIMITS[model] || 4096;
-      const MAX_RETRIES = 3;
-      const RETRY_DELAY = 1e3;
+      const defaultModel = this.modelManager.getDefaultModel();
+      if (!defaultModel) {
+        new import_obsidian6.Notice("No active model found. Please configure a model in settings.");
+        return "Error: No active model configured";
+      }
       let totalTokens = 0;
       for (const msg of messages) {
         totalTokens += this.estimateTokenCount(msg.content);
       }
-      if (totalTokens > maxTokens) {
-        messages = this.trimMessages(messages, maxTokens);
+      const lastMessage = messages[messages.length - 1];
+      let systemPrompt = defaultModel.systemPrompt || "You are a helpful assistant.";
+      try {
+        return yield this.modelManager.callModel(
+          defaultModel.id,
+          lastMessage.content,
+          {
+            maxTokens: 4096,
+            // Safe default 
+            conversation: messages,
+            streaming: !!onUpdate,
+            onChunk: onUpdate
+          }
+        );
+      } catch (error) {
+        console.error("Error calling AI chat:", error);
+        new import_obsidian6.Notice(`Error calling AI chat: ${error.message || "Unknown error"}`);
+        return "Error fetching AI response";
       }
-      let url = "";
-      let data = {};
-      if (provider === "openai") {
-        url = "https://api.openai.com/v1/chat/completions";
-        data = {
-          model,
-          messages,
-          request_id: this.requestId,
-          stream: true
-        };
-      } else if (provider === "zhipuai") {
-        url = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-        data = {
-          model,
-          messages,
-          stream: true,
-          request_id: this.requestId
-        };
-      } else if (provider === "groq") {
-        url = "https://api.groq.com/openai/v1/chat/completions";
-        data = {
-          model,
-          messages,
-          request_id: this.requestId,
-          stream: true
-        };
-      }
-      let retryCount = 0;
-      while (retryCount < MAX_RETRIES) {
-        try {
-          const response = yield fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(data)
-          });
-          if (!response.ok) {
-            const errorDetails = yield response.text().catch(() => "");
-            const errorStatus = response.status;
-            if (errorStatus === 400) {
-              const hasImageContent = messages.some((msg) => {
-                const content = msg.content || "";
-                return content.includes("![") || content.includes("<img") || content.includes("data:image/") || content.includes("http://") && (content.includes(".png") || content.includes(".jpg") || content.includes(".jpeg") || content.includes(".gif"));
-              });
-              if (hasImageContent) {
-                throw new Error(`The request contains images or unsupported content. Please remove images and try again.`);
-              }
-            }
-            throw new Error(`HTTP error! status: ${errorStatus} ${errorDetails ? "- " + errorDetails.substring(0, 100) : ""}`);
-          }
-          if (!response.body) {
-            throw new Error("Response body is null");
-          }
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let fullContent = "";
-          let buffer = "";
-          let lastChunkTime = Date.now();
-          const TIMEOUT = 3e4;
-          try {
-            while (true) {
-              const { value, done } = yield reader.read();
-              if (done) break;
-              const now = Date.now();
-              if (now - lastChunkTime > TIMEOUT) {
-                throw new Error("Stream timeout");
-              }
-              lastChunkTime = now;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || "";
-              for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-                if (trimmedLine.startsWith("data: ")) {
-                  try {
-                    const data2 = trimmedLine.slice(6);
-                    if (data2 === "[DONE]") continue;
-                    const json = JSON.parse(data2);
-                    let content = "";
-                    if (provider === "openai") {
-                      content = ((_c = (_b = (_a = json.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.delta) == null ? void 0 : _c.content) || "";
-                    } else if (provider === "zhipuai") {
-                      content = ((_f = (_e = (_d = json.choices) == null ? void 0 : _d[0]) == null ? void 0 : _e.delta) == null ? void 0 : _f.content) || ((_i = (_h = (_g = json.choices) == null ? void 0 : _g[0]) == null ? void 0 : _h.message) == null ? void 0 : _i.content) || "";
-                    } else if (provider === "groq") {
-                      content = ((_l = (_k = (_j = json.choices) == null ? void 0 : _j[0]) == null ? void 0 : _k.delta) == null ? void 0 : _l.content) || "";
-                    }
-                    if (content) {
-                      fullContent += content;
-                      if (onUpdate) {
-                        try {
-                          yield onUpdate(content);
-                        } catch (e) {
-                          console.warn("Error in onUpdate callback:", e);
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    console.warn("Error parsing streaming response:", e, trimmedLine);
-                  }
-                }
-              }
-            }
-            if (buffer) {
-              const trimmedBuffer = buffer.trim();
-              if (trimmedBuffer && trimmedBuffer !== "data: [DONE]" && trimmedBuffer.startsWith("data: ")) {
-                try {
-                  const data2 = trimmedBuffer.slice(6);
-                  if (data2 !== "[DONE]") {
-                    const json = JSON.parse(data2);
-                    let content = "";
-                    if (provider === "openai") {
-                      content = ((_o = (_n = (_m = json.choices) == null ? void 0 : _m[0]) == null ? void 0 : _n.delta) == null ? void 0 : _o.content) || "";
-                    } else if (provider === "zhipuai") {
-                      content = ((_r = (_q = (_p = json.choices) == null ? void 0 : _p[0]) == null ? void 0 : _q.delta) == null ? void 0 : _r.content) || ((_u = (_t = (_s = json.choices) == null ? void 0 : _s[0]) == null ? void 0 : _t.message) == null ? void 0 : _u.content) || "";
-                    } else if (provider === "groq") {
-                      content = ((_x = (_w = (_v = json.choices) == null ? void 0 : _v[0]) == null ? void 0 : _w.delta) == null ? void 0 : _x.content) || "";
-                    }
-                    if (content) {
-                      fullContent += content;
-                      if (onUpdate) {
-                        try {
-                          yield onUpdate(content);
-                        } catch (e) {
-                          console.warn("Error in onUpdate callback:", e);
-                        }
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.warn("Error parsing final buffer:", e);
-                }
-              }
-            }
-            return fullContent || "No response";
-          } finally {
-            reader.releaseLock();
-          }
-        } catch (error) {
-          console.error(`Error calling AI (attempt ${retryCount + 1}/${MAX_RETRIES}):`, error);
-          if (retryCount === MAX_RETRIES - 1) {
-            if (error.status === 401) {
-              new import_obsidian3.Notice("Invalid API key. Please check your settings.");
-            } else if (error.status === 429) {
-              new import_obsidian3.Notice("Rate limit exceeded. Please try again later.");
-            } else {
-              new import_obsidian3.Notice("Error: " + (error.message || "Unknown error occurred"));
-            }
-            throw error;
-          }
-          yield new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
-          retryCount++;
-        }
-      }
-      throw new Error("Max retries exceeded");
     });
   }
-  trimMessages(messages, maxTokens) {
-    while (this.estimateTokenCount(JSON.stringify(messages)) > maxTokens) {
-      messages.shift();
-    }
-    return messages;
+  callAIChunk(content, promptPrefix) {
+    return __async(this, null, function* () {
+      const defaultModel = this.modelManager.getDefaultModel();
+      if (!defaultModel) {
+        new import_obsidian6.Notice("No active model found. Please configure a model in settings.");
+        return "Error: No active model configured";
+      }
+      const prompt = `${promptPrefix}${content}
+
+Note: This is part of a larger text. Ensure continuity with the previous sections.`;
+      try {
+        return yield this.modelManager.callModel(
+          defaultModel.id,
+          prompt,
+          { maxTokens: 4096 }
+          // Safe default
+        );
+      } catch (error) {
+        console.error("Error calling AI:", error);
+        new import_obsidian6.Notice(`Error calling AI: ${error.message || "Unknown error"}`);
+        return "Error fetching AI response";
+      }
+    });
   }
   organizeText(editor) {
     return __async(this, null, function* () {
       if (!editor) {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           editor = mdView.editor;
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
           return;
         }
       }
@@ -6018,11 +7985,11 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   checkGrammar(editor) {
     return __async(this, null, function* () {
       if (!editor) {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           editor = mdView.editor;
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
           return;
         }
       }
@@ -6055,7 +8022,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   }
   generateAIContent(prompt) {
     return __async(this, null, function* () {
-      const activeView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+      const activeView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
       if (!activeView) {
         throw new Error("No active markdown file");
       }
@@ -6085,11 +8052,11 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   engageInDialogue(editor) {
     return __async(this, null, function* () {
       if (!editor) {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           editor = mdView.editor;
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
           return;
         }
       }
@@ -6122,11 +8089,11 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   handleCustomPrompt(editor) {
     return __async(this, null, function* () {
       if (!editor) {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           editor = mdView.editor;
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
           return;
         }
       }
@@ -6135,7 +8102,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
       let contentToProcess;
       new CustomPromptInputModal(this.app, (inputPrompt) => __async(this, null, function* () {
         if (!inputPrompt) {
-          new import_obsidian3.Notice("No prompt entered.", 2e3);
+          new import_obsidian6.Notice("No prompt entered.", 2e3);
           return;
         }
         if (selectedText) {
@@ -6172,9 +8139,9 @@ Note: This is part of a larger text. Ensure continuity with the previous section
       if (!path) {
         const getAllFiles = (folder) => {
           for (const child of folder.children) {
-            if (child instanceof import_obsidian3.TFile && child.extension === "md") {
+            if (child instanceof import_obsidian6.TFile && child.extension === "md") {
               files.push(child);
-            } else if (child instanceof import_obsidian3.TFolder) {
+            } else if (child instanceof import_obsidian6.TFolder) {
               getAllFiles(child);
             }
           }
@@ -6183,15 +8150,15 @@ Note: This is part of a larger text. Ensure continuity with the previous section
         getAllFiles(rootFolder);
       } else {
         const folder = this.app.vault.getAbstractFileByPath(path);
-        if (!folder || !(folder instanceof import_obsidian3.TFolder)) {
+        if (!folder || !(folder instanceof import_obsidian6.TFolder)) {
           console.log("Knowledge base folder not found:", path);
           return [];
         }
         const searchFolder = (folder2) => {
           for (const child of folder2.children) {
-            if (child instanceof import_obsidian3.TFile && child.extension === "md") {
+            if (child instanceof import_obsidian6.TFile && child.extension === "md") {
               files.push(child);
-            } else if (child instanceof import_obsidian3.TFolder) {
+            } else if (child instanceof import_obsidian6.TFolder) {
               searchFolder(child);
             }
           }
@@ -6214,8 +8181,20 @@ Note: This is part of a larger text. Ensure continuity with the previous section
     }
     return matches / Math.max(queryWords.size, 1);
   }
-  // 获取文本向量
+  // Getting text embedding vector
   getEmbedding(text) {
+    return __async(this, null, function* () {
+      try {
+        return yield this.modelManager.getEmbedding(text);
+      } catch (error) {
+        console.error("Error getting embedding:", error);
+        console.log("Falling back to legacy embedding implementation");
+        return this.getLegacyEmbedding(text);
+      }
+    });
+  }
+  // Legacy implementation for backward compatibility
+  getLegacyEmbedding(text) {
     return __async(this, null, function* () {
       var _a, _b, _c, _d, _e, _f, _g, _h, _i;
       const { provider, apiKey, embeddingModel } = this.settings;
@@ -6243,7 +8222,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
             textLength: text.length,
             requestBody
           });
-          const response = yield (0, import_obsidian3.requestUrl)({
+          const response = yield (0, import_obsidian6.requestUrl)({
             url: "https://open.bigmodel.cn/api/paas/v4/embeddings",
             method: "POST",
             headers: {
@@ -6268,7 +8247,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
           return response.json.data[0].embedding;
         } else if (provider === "openai") {
           const response = yield this.rateLimitedRequest(() => __async(this, null, function* () {
-            return yield (0, import_obsidian3.requestUrl)({
+            return yield (0, import_obsidian6.requestUrl)({
               url: "https://api.openai.com/v1/embeddings",
               method: "POST",
               headers: {
@@ -6287,7 +8266,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
           return response.json.data[0].embedding;
         } else if (provider === "groq") {
           const response = yield this.rateLimitedRequest(() => __async(this, null, function* () {
-            return yield (0, import_obsidian3.requestUrl)({
+            return yield (0, import_obsidian6.requestUrl)({
               url: "https://api.groq.com/openai/v1/embeddings",
               method: "POST",
               headers: {
@@ -6307,7 +8286,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
         }
         throw new Error("Unsupported provider for embeddings");
       } catch (error) {
-        console.error("Error getting embedding:", error);
+        console.error("Error getting legacy embedding:", error);
         throw error;
       }
     });
@@ -6376,7 +8355,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
         loadingModal.close();
         new SearchResultsModal(this.app, topResults).open();
       } catch (error) {
-        new import_obsidian3.Notice("Error searching knowledge base: " + error.message);
+        new import_obsidian6.Notice("Error searching knowledge base: " + error.message);
         loadingModal.close();
       }
     });
@@ -6400,7 +8379,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
       for (const match of matches) {
         const filePath = match.slice(3, -2);
         const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (file instanceof import_obsidian3.TFile) {
+        if (file instanceof import_obsidian6.TFile) {
           try {
             const content = yield this.app.vault.read(file);
             processedMessage = processedMessage.replace(match, `
@@ -6412,7 +8391,7 @@ ${content}
 `);
           } catch (error) {
             console.error(`Error reading file ${filePath}:`, error);
-            new import_obsidian3.Notice(`Failed to read file ${filePath}`);
+            new import_obsidian6.Notice(`Failed to read file ${filePath}`);
           }
         }
       }
@@ -6464,17 +8443,17 @@ ${content}
   }
   renderMarkdown(content, container) {
     return __async(this, null, function* () {
-      yield import_obsidian3.MarkdownRenderer.renderMarkdown(content, container, "", this);
+      yield import_obsidian6.MarkdownRenderer.renderMarkdown(content, container, "", this);
     });
   }
   polishText(editor) {
     return __async(this, null, function* () {
       if (!editor) {
-        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        const mdView = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (mdView) {
           editor = mdView.editor;
         } else {
-          new import_obsidian3.Notice("No active editor found.");
+          new import_obsidian6.Notice("No active editor found.");
           return;
         }
       }
@@ -6501,35 +8480,83 @@ ${content}
       if (!editor.somethingSelected()) {
         const diffResult = this.generateDiffHtml(content, polishedText);
         editor.setValue(diffResult);
-        new import_obsidian3.Notice("Polish results applied with diff markers. Use Ctrl+Shift+P (or Cmd+Shift+P) to remove all markup.", 7e3);
+        new import_obsidian6.Notice("Polish results applied with diff markers. Use Ctrl+Shift+P (or Cmd+Shift+P) to remove all markup.", 7e3);
       } else {
-        new PolishResultModal(this.app, this, content, polishedText, (updatedContent) => {
-          editor.replaceSelection(updatedContent);
-        }).open();
+        new PolishResultModal(
+          this.app,
+          content,
+          polishedText,
+          (updatedContent) => {
+            editor.replaceSelection(updatedContent);
+          },
+          this
+        ).open();
       }
     });
   }
-  // Helper method to generate text with diff markers for direct editing
-  generateDiffHtml(original, polished) {
-    const originalLines = original.split("\n");
-    const polishedLines = polished.split("\n");
+  // Method to generate diff HTML with highlighting
+  generateDiffHtml(original, modified) {
+    try {
+      if (this.diffMatchPatchLib) {
+        return this.generateWordLevelDiff(original, modified);
+      }
+    } catch (e) {
+      console.error("Error using diff-match-patch library:", e);
+    }
+    return this.generateParagraphLevelDiff(original, modified);
+  }
+  // Advanced word-level diff implementation
+  generateWordLevelDiff(original, modified) {
+    try {
+      const dmp = new this.diffMatchPatchLib();
+      const diffs = dmp.diff_main(original, modified);
+      dmp.diff_cleanupSemantic(diffs);
+      let html2 = "";
+      for (const [operation, text] of diffs) {
+        const escText = this.escapeHtml(text);
+        if (operation === -1) {
+          html2 += `<span class="polish-deleted">${escText}</span>`;
+        } else if (operation === 1) {
+          html2 += `<span class="polish-highlight">${escText}</span>`;
+        } else {
+          html2 += escText;
+        }
+      }
+      html2 = html2.replace(/\n/g, "<br>");
+      return html2;
+    } catch (e) {
+      console.error("Error in word-level diff:", e);
+      return this.generateParagraphLevelDiff(original, modified);
+    }
+  }
+  // Escape HTML special characters to prevent injection
+  escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  // Basic paragraph-level diff (original implementation, used as fallback)
+  generateParagraphLevelDiff(original, modified) {
+    const originalParagraphs = original.split("\n");
+    const modifiedParagraphs = modified.split("\n");
+    if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
+      return modified;
+    }
     const result = [];
-    const maxLength = Math.max(originalLines.length, polishedLines.length);
+    const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
     for (let i = 0; i < maxLength; i++) {
-      const originalLine = i < originalLines.length ? originalLines[i] : "";
-      const polishedLine = i < polishedLines.length ? polishedLines[i] : "";
-      if (originalLine === polishedLine) {
-        result.push(polishedLine);
-      } else if (originalLine.trim() === "") {
-        result.push(`**${polishedLine}**`);
-      } else if (polishedLine.trim() === "") {
-        result.push(`~~${originalLine}~~`);
+      const origPara = i < originalParagraphs.length ? originalParagraphs[i] : "";
+      const modPara = i < modifiedParagraphs.length ? modifiedParagraphs[i] : "";
+      if (origPara === modPara) {
+        result.push(modPara);
+      } else if (origPara && !modPara) {
+        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+      } else if (!origPara && modPara) {
+        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
       } else {
-        result.push(`~~${originalLine}~~
-**${polishedLine}**`);
+        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
       }
     }
-    return result.join("\n");
+    return result.join("<br>");
   }
   // Add this new method to clean Polish markup
   cleanPolishMarkup(editor) {
@@ -6540,11 +8567,192 @@ ${content}
       cleanedContent = cleanedContent.replace(/\*\*([^*]*?)\*\*/g, "$1");
       cleanedContent = cleanedContent.replace(/\n\n+/g, "\n\n");
       editor.setValue(cleanedContent);
-      new import_obsidian3.Notice("Polish markup removed");
+      new import_obsidian6.Notice("Polish markup removed");
+    });
+  }
+  activateDebateView() {
+    return __async(this, null, function* () {
+      const { workspace } = this.app;
+      let leaf = workspace.getLeavesOfType(DEBATE_VIEW_TYPE)[0];
+      if (!leaf) {
+        const rightLeaf = workspace.getRightLeaf(false);
+        if (!rightLeaf) {
+          new import_obsidian6.Notice("Could not create debate view");
+          return;
+        }
+        leaf = rightLeaf;
+        yield leaf.setViewState({ type: DEBATE_VIEW_TYPE });
+      }
+      workspace.revealLeaf(leaf);
+    });
+  }
+  migrateLegacyAPIKey() {
+    if (this.settings.apiKey && (!this.settings.models || this.settings.models.length === 0)) {
+      console.log("Migrating legacy API key to models system");
+      const newModel = {
+        id: `model_${Date.now()}`,
+        name: `${this.settings.provider || "openai"} (Migrated)`,
+        type: this.settings.provider || "openai",
+        apiKey: this.settings.apiKey,
+        systemPrompt: "You are a helpful assistant.",
+        active: true,
+        isDefault: true,
+        modelName: this.settings.model || this.settings.chatModel || this.getDefaultModelName(this.settings.provider)
+      };
+      if (!this.settings.models) {
+        this.settings.models = [];
+      }
+      this.settings.models.push(newModel);
+      this.settings.apiKey = "";
+      this.saveSettings().catch((e) => {
+        console.error("Failed to save settings after API key migration", e);
+      });
+    }
+  }
+  getDefaultModelName(provider) {
+    switch (provider) {
+      case "openai":
+        return "gpt-3.5-turbo";
+      case "zhipuai":
+        return "glm-4";
+      case "groq":
+        return "llama2-70b-4096";
+      default:
+        return "gpt-3.5-turbo";
+    }
+  }
+  loadDiffMatchPatchLibrary() {
+    return __async(this, null, function* () {
+      try {
+        const diffMatchPatchScript = document.createElement("script");
+        diffMatchPatchScript.src = "https://cdnjs.cloudflare.com/ajax/libs/diff-match-patch/1.0.0/diff-match-patch.min.js";
+        diffMatchPatchScript.onload = () => {
+          this.diffMatchPatchLib = window.diff_match_patch;
+        };
+        document.head.appendChild(diffMatchPatchScript);
+      } catch (error) {
+        console.error("Failed to load diff-match-patch library:", error);
+      }
     });
   }
 };
-var CustomPromptInputModal = class extends import_obsidian3.Modal {
+var PolishResultModal = class extends import_obsidian6.Modal {
+  constructor(app, originalContent, polishedContent, onApply, plugin) {
+    super(app);
+    this.originalContent = originalContent;
+    this.polishedContent = polishedContent;
+    this.onApply = onApply;
+    this.plugin = plugin;
+  }
+  // Method to generate diff HTML with highlighting
+  generateDiffHtml(original, modified) {
+    try {
+      if (this.plugin.diffMatchPatchLib) {
+        return this.generateWordLevelDiff(original, modified);
+      }
+    } catch (e) {
+      console.error("Error using diff-match-patch library:", e);
+    }
+    return this.generateParagraphLevelDiff(original, modified);
+  }
+  // Advanced word-level diff implementation
+  generateWordLevelDiff(original, modified) {
+    try {
+      const dmp = new this.plugin.diffMatchPatchLib();
+      const diffs = dmp.diff_main(original, modified);
+      dmp.diff_cleanupSemantic(diffs);
+      let html2 = "";
+      for (const [operation, text] of diffs) {
+        const escText = this.escapeHtml(text);
+        if (operation === -1) {
+          html2 += `<span class="polish-deleted">${escText}</span>`;
+        } else if (operation === 1) {
+          html2 += `<span class="polish-highlight">${escText}</span>`;
+        } else {
+          html2 += escText;
+        }
+      }
+      html2 = html2.replace(/\n/g, "<br>");
+      return html2;
+    } catch (e) {
+      console.error("Error in word-level diff:", e);
+      return this.generateParagraphLevelDiff(original, modified);
+    }
+  }
+  // Escape HTML special characters to prevent injection
+  escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  // Basic paragraph-level diff (original implementation, used as fallback)
+  generateParagraphLevelDiff(original, modified) {
+    const originalParagraphs = original.split("\n");
+    const modifiedParagraphs = modified.split("\n");
+    if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
+      return modified;
+    }
+    const result = [];
+    const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
+    for (let i = 0; i < maxLength; i++) {
+      const origPara = i < originalParagraphs.length ? originalParagraphs[i] : "";
+      const modPara = i < modifiedParagraphs.length ? modifiedParagraphs[i] : "";
+      if (origPara === modPara) {
+        result.push(modPara);
+      } else if (origPara && !modPara) {
+        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+      } else if (!origPara && modPara) {
+        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+      } else {
+        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+      }
+    }
+    return result.join("<br>");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("polish-result-modal");
+    contentEl.createEl("h2", { text: "Polished Result", cls: "polish-header" });
+    contentEl.createEl("p", {
+      text: "The AI has polished your content. You can apply these changes or dismiss them.",
+      cls: "polish-description"
+    });
+    const legendContainer = contentEl.createDiv({ cls: "polish-legend" });
+    legendContainer.createEl("h3", { text: "Changes Legend:" });
+    const legendItems = legendContainer.createDiv({ cls: "polish-legend-items" });
+    const deletedItem = legendItems.createDiv({ cls: "polish-legend-item" });
+    const deletedSample = deletedItem.createSpan({ cls: "polish-sample polish-deleted", text: "Deleted text" });
+    deletedItem.createSpan({ text: " - Content that has been removed" });
+    const addedItem = legendItems.createDiv({ cls: "polish-legend-item" });
+    const addedSample = addedItem.createSpan({ cls: "polish-sample polish-highlight", text: "Added text" });
+    addedItem.createSpan({ text: " - New or modified content" });
+    const diffHtml = this.generateDiffHtml(this.originalContent, this.polishedContent);
+    const contentContainer = contentEl.createDiv({ cls: "polish-result-container diff-rendered" });
+    contentContainer.innerHTML = diffHtml;
+    const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
+    const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
+    cancelButton.addEventListener("click", () => {
+      this.close();
+    });
+    const applyButton = buttonContainer.createEl("button", {
+      text: "Apply Changes",
+      cls: "mod-cta"
+    });
+    applyButton.addEventListener("click", () => {
+      const cleanContent = this.cleanDiffMarkers(this.polishedContent);
+      this.onApply(cleanContent);
+      this.close();
+    });
+  }
+  // Method to clean diff markers from content
+  cleanDiffMarkers(content) {
+    return content.replace(/<span class="polish-deleted">.*?<\/span>/g, "").replace(/<span class="polish-highlight">(.*?)<\/span>/g, "$1").replace(/\n\n+/g, "\n\n");
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+var CustomPromptInputModal = class extends import_obsidian6.Modal {
   constructor(app, onSubmit) {
     super(app);
     this.onSubmit = onSubmit;
@@ -6567,7 +8775,7 @@ var CustomPromptInputModal = class extends import_obsidian3.Modal {
         this.onSubmit(inputValue);
         this.close();
       } else {
-        new import_obsidian3.Notice("Please enter a prompt.");
+        new import_obsidian6.Notice("Please enter a prompt.");
       }
     };
     cancelBtn.onclick = () => {
@@ -6579,7 +8787,7 @@ var CustomPromptInputModal = class extends import_obsidian3.Modal {
     contentEl.empty();
   }
 };
-var FeatureSelectionModal = class extends import_obsidian3.Modal {
+var FeatureSelectionModal = class extends import_obsidian6.Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -6614,7 +8822,7 @@ var FeatureSelectionModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
-var LoadingModal2 = class extends import_obsidian3.Modal {
+var LoadingModal2 = class extends import_obsidian6.Modal {
   constructor(app, isProgress = false) {
     super(app);
     this.isProgress = isProgress;
@@ -6652,7 +8860,7 @@ var LoadingModal2 = class extends import_obsidian3.Modal {
     contentEl.empty();
   }
 };
-var AIContentModal = class extends import_obsidian3.Modal {
+var AIContentModal = class extends import_obsidian6.Modal {
   constructor(app, plugin, content, editor, onApply) {
     super(app);
     this.undoStack = [];
@@ -6675,21 +8883,21 @@ var AIContentModal = class extends import_obsidian3.Modal {
         cls: "message-action-button copy-button",
         attr: { "aria-label": "Copy content" }
       });
-      (0, import_obsidian3.setIcon)(copyBtn, "copy");
+      (0, import_obsidian6.setIcon)(copyBtn, "copy");
       copyBtn.onclick = () => __async(this, null, function* () {
         try {
           yield navigator.clipboard.writeText(this.content);
-          new import_obsidian3.Notice("Content copied to clipboard!", 2e3);
+          new import_obsidian6.Notice("Content copied to clipboard!", 2e3);
         } catch (err) {
           console.error("Failed to copy content:", err);
-          new import_obsidian3.Notice("Failed to copy content");
+          new import_obsidian6.Notice("Failed to copy content");
         }
       });
       const insertBtn = actionContainer.createEl("button", {
         cls: "message-action-button insert-button",
         attr: { "aria-label": "Insert content" }
       });
-      (0, import_obsidian3.setIcon)(insertBtn, "plus");
+      (0, import_obsidian6.setIcon)(insertBtn, "plus");
       insertBtn.onclick = () => {
         if (this.editor) {
           const startPos = this.editor.getCursor();
@@ -6698,9 +8906,9 @@ var AIContentModal = class extends import_obsidian3.Modal {
           const endOffset = this.editor.posToOffset(startPos) + insertedContent.length;
           const endPos = this.editor.offsetToPos(endOffset);
           this.undoStack.push({ from: startPos, to: endPos, text: "" });
-          new import_obsidian3.Notice("Content inserted at cursor position!", 2e3);
+          new import_obsidian6.Notice("Content inserted at cursor position!", 2e3);
         } else {
-          new import_obsidian3.Notice("No active editor found.", 2e3);
+          new import_obsidian6.Notice("No active editor found.", 2e3);
         }
       };
     });
@@ -6718,7 +8926,7 @@ var AIContentModal = class extends import_obsidian3.Modal {
     }).join("\n");
   }
 };
-var ChatModal = class extends import_obsidian3.Modal {
+var ChatModal = class extends import_obsidian6.Modal {
   constructor(app, plugin, initialHistory = [], editor = null) {
     super(app);
     this.messageContainer = null;
@@ -6742,7 +8950,7 @@ var ChatModal = class extends import_obsidian3.Modal {
     });
     this.currentInput = textarea;
     const sendButton = inputContainer.createEl("button", { cls: "send-button" });
-    (0, import_obsidian3.setIcon)(sendButton, "paper-plane");
+    (0, import_obsidian6.setIcon)(sendButton, "paper-plane");
     sendButton.onclick = () => this.handleSend();
   }
   handleSend() {
@@ -6776,42 +8984,42 @@ var ChatModal = class extends import_obsidian3.Modal {
           cls: "message-action-button copy-button",
           attr: { "aria-label": "Copy message" }
         });
-        (0, import_obsidian3.setIcon)(copyButton, "copy");
+        (0, import_obsidian6.setIcon)(copyButton, "copy");
         copyButton.onclick = () => __async(this, null, function* () {
           try {
             yield navigator.clipboard.writeText(response);
-            new import_obsidian3.Notice("Copied to clipboard", 2e3);
+            new import_obsidian6.Notice("Copied to clipboard", 2e3);
           } catch (err) {
             console.error("Failed to copy content:", err);
-            new import_obsidian3.Notice("Failed to copy content", 2e3);
+            new import_obsidian6.Notice("Failed to copy content", 2e3);
           }
         });
         const insertButton = actionContainer.createEl("button", {
           cls: "message-action-button insert-button",
           attr: { "aria-label": "Insert into editor" }
         });
-        (0, import_obsidian3.setIcon)(insertButton, "plus");
+        (0, import_obsidian6.setIcon)(insertButton, "plus");
         insertButton.onclick = () => {
           const activeLeaf = this.app.workspace.activeLeaf;
           if (!activeLeaf) {
-            new import_obsidian3.Notice("Please open a markdown file first", 2e3);
+            new import_obsidian6.Notice("Please open a markdown file first", 2e3);
             return;
           }
           const view = activeLeaf.view;
-          if (!(view instanceof import_obsidian3.MarkdownView)) {
-            new import_obsidian3.Notice("Please open a markdown file first", 2e3);
+          if (!(view instanceof import_obsidian6.MarkdownView)) {
+            new import_obsidian6.Notice("Please open a markdown file first", 2e3);
             return;
           }
           const editor = view.editor;
           const cursor = editor.getCursor();
           editor.replaceRange(response + "\n", cursor);
           editor.focus();
-          new import_obsidian3.Notice("Content inserted into editor", 2e3);
+          new import_obsidian6.Notice("Content inserted into editor", 2e3);
         };
         this.history.push({ role: "assistant", content: response });
       } catch (error) {
         console.error("Error in chat:", error);
-        new import_obsidian3.Notice("Error getting AI response: " + error.message, 2e3);
+        new import_obsidian6.Notice("Error getting AI response: " + error.message, 2e3);
       }
     });
   }
@@ -6824,36 +9032,36 @@ var ChatModal = class extends import_obsidian3.Modal {
         yield MarkdownRenderer.renderMarkdown(content, contentDiv, "", this.plugin);
         const actionContainer = messageEl.createDiv({ cls: "message-actions hover-only" });
         const copyButton = actionContainer.createEl("button", { cls: "message-action-button copy-button" });
-        (0, import_obsidian3.setIcon)(copyButton, "copy");
+        (0, import_obsidian6.setIcon)(copyButton, "copy");
         copyButton.setAttribute("aria-label", "Copy message");
         copyButton.onclick = () => __async(this, null, function* () {
           try {
             yield navigator.clipboard.writeText(content);
-            new import_obsidian3.Notice("Copied to clipboard", 2e3);
+            new import_obsidian6.Notice("Copied to clipboard", 2e3);
           } catch (err) {
             console.error("Failed to copy content:", err);
-            new import_obsidian3.Notice("Failed to copy content", 2e3);
+            new import_obsidian6.Notice("Failed to copy content", 2e3);
           }
         });
         const insertButton = actionContainer.createEl("button", { cls: "message-action-button insert-button" });
-        (0, import_obsidian3.setIcon)(insertButton, "plus");
+        (0, import_obsidian6.setIcon)(insertButton, "plus");
         insertButton.setAttribute("aria-label", "Insert into editor");
         insertButton.onclick = () => {
           const activeLeaf = this.app.workspace.activeLeaf;
           if (!activeLeaf) {
-            new import_obsidian3.Notice("Please open a markdown file first", 2e3);
+            new import_obsidian6.Notice("Please open a markdown file first", 2e3);
             return;
           }
           const view = activeLeaf.view;
-          if (!(view instanceof import_obsidian3.MarkdownView)) {
-            new import_obsidian3.Notice("Please open a markdown file first", 2e3);
+          if (!(view instanceof import_obsidian6.MarkdownView)) {
+            new import_obsidian6.Notice("Please open a markdown file first", 2e3);
             return;
           }
           const editor = view.editor;
           const cursor = editor.getCursor();
           editor.replaceRange(content + "\n", cursor);
           editor.focus();
-          new import_obsidian3.Notice("Content inserted into editor", 2e3);
+          new import_obsidian6.Notice("Content inserted into editor", 2e3);
         };
       } else {
         contentDiv.setText(content);
@@ -6877,7 +9085,7 @@ var ChatModal = class extends import_obsidian3.Modal {
     });
   }
 };
-var SearchPromptModal = class extends import_obsidian3.Modal {
+var SearchPromptModal = class extends import_obsidian6.Modal {
   constructor(app) {
     super(app);
     this.result = null;
@@ -6935,7 +9143,7 @@ var SearchPromptModal = class extends import_obsidian3.Modal {
     });
   }
 };
-var ConfirmModal2 = class extends import_obsidian3.Modal {
+var ConfirmModal2 = class extends import_obsidian6.Modal {
   constructor(app, message, onConfirm) {
     super(app);
     this.message = message;
@@ -6962,7 +9170,7 @@ var ConfirmModal2 = class extends import_obsidian3.Modal {
     contentEl.empty();
   }
 };
-var SearchResultsModal = class extends import_obsidian3.Modal {
+var SearchResultsModal = class extends import_obsidian6.Modal {
   constructor(app, results) {
     super(app);
     this.results = results;
@@ -6983,10 +9191,10 @@ var SearchResultsModal = class extends import_obsidian3.Modal {
             yield leaf.openFile(result.file);
           } catch (error) {
             console.error("Error opening file:", error);
-            new import_obsidian3.Notice("Failed to open file", 2e3);
+            new import_obsidian6.Notice("Failed to open file", 2e3);
           }
         } else {
-          new import_obsidian3.Notice("Could not open file", 2e3);
+          new import_obsidian6.Notice("Could not open file", 2e3);
         }
       }));
     });
@@ -6996,7 +9204,7 @@ var SearchResultsModal = class extends import_obsidian3.Modal {
     contentEl.empty();
   }
 };
-var AITextSettingTab = class extends import_obsidian3.PluginSettingTab {
+var AIPilotSettingTab = class extends import_obsidian6.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -7004,56 +9212,22 @@ var AITextSettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "API Settings" });
-    new import_obsidian3.Setting(containerEl).setName("API Key").setDesc("Enter your API key").addText((text) => text.setPlaceholder("Enter your API key").setValue(this.plugin.settings.apiKey).onChange((value) => __async(this, null, function* () {
-      this.plugin.settings.apiKey = value;
-      yield this.plugin.saveSettings();
-    })));
-    new import_obsidian3.Setting(containerEl).setName("API Provider").setDesc("Select your AI provider").addDropdown((dropdown) => dropdown.addOption("openai", "OpenAI").addOption("zhipuai", "ZhipuAI").addOption("groq", "Groq").setValue(this.plugin.settings.provider).onChange((value) => __async(this, null, function* () {
-      this.plugin.settings.provider = value;
-      yield this.plugin.saveSettings();
-      this.display();
-    })));
-    if (this.plugin.settings.provider === "openai") {
-      new import_obsidian3.Setting(containerEl).setName("Model").setDesc("Select OpenAI model").addDropdown((dropdown) => dropdown.addOption("gpt-3.5-turbo", "GPT-3.5 Turbo").addOption("gpt-4", "GPT-4").addOption("gpt-4-turbo", "GPT-4 Turbo").setValue(this.plugin.settings.model).onChange((value) => __async(this, null, function* () {
-        this.plugin.settings.model = value;
-        yield this.plugin.saveSettings();
-      })));
-    } else if (this.plugin.settings.provider === "zhipuai") {
-      new import_obsidian3.Setting(containerEl).setName("Chat Model").setDesc("Select ZhipuAI model").addDropdown((dropdown) => {
-        Object.keys(ZHIPUAI_MODELS.CHAT).forEach((modelName) => {
-          dropdown.addOption(modelName, modelName);
-        });
-        return dropdown.setValue(this.plugin.settings.chatModel).onChange((value) => __async(this, null, function* () {
-          this.plugin.settings.chatModel = value;
-          this.plugin.settings.model = value;
-          yield this.plugin.saveSettings();
-        }));
-      });
-    } else if (this.plugin.settings.provider === "groq") {
-      new import_obsidian3.Setting(containerEl).setName("Model").setDesc("Select Groq model").addDropdown((dropdown) => dropdown.addOption("llama2-70b-4096", "Llama-2 70B").addOption("mixtral-8x7b-32768", "Mixtral 8x7B").setValue(this.plugin.settings.model).onChange((value) => __async(this, null, function* () {
-        this.plugin.settings.model = value;
-        yield this.plugin.saveSettings();
-      })));
-    }
-    new import_obsidian3.Setting(containerEl).setName("Embedding Model").setDesc("Select embedding model").addDropdown((dropdown) => {
-      Object.keys(EMBEDDING_MODELS).forEach((modelName) => {
-        dropdown.addOption(modelName, modelName);
-      });
-      return dropdown.setValue(this.plugin.settings.embeddingModel).onChange((value) => __async(this, null, function* () {
-        this.plugin.settings.embeddingModel = value;
-        const dimensions = EMBEDDING_MODELS[value].dimensions;
-        if (dimensions) {
-          this.plugin.settings.embeddingDimensions = dimensions;
-        }
-        yield this.plugin.saveSettings();
-      }));
+    containerEl.createEl("h2", { text: "AI Model Configuration" });
+    containerEl.createEl("p", {
+      text: "Configure your AI models to use with the plugin. All API keys are now managed here.",
+      cls: "setting-item-description"
     });
-    new import_obsidian3.Setting(containerEl).setName("Knowledge Base Path").setDesc("Enter the path to your knowledge base folder").addText((text) => text.setPlaceholder("AI_KnowledgeBase").setValue(this.plugin.settings.knowledgeBasePath).onChange((value) => __async(this, null, function* () {
-      this.plugin.settings.knowledgeBasePath = value;
-      yield this.plugin.saveSettings();
-    })));
-    new import_obsidian3.Setting(containerEl).setName("Chat History Path").setDesc("Enter the path to store your chat history files").addText((text) => text.setPlaceholder("AI_ChatHistory").setValue(this.plugin.settings.chatHistoryPath).onChange((value) => __async(this, null, function* () {
+    containerEl.createEl("div", {
+      text: "The plugin has migrated to a multi-model system. Add models below to use them with the plugin.",
+      cls: "model-migration-notice"
+    });
+    new import_obsidian6.Setting(containerEl).setName("AI Models").setDesc("Add, edit, or remove AI models").addButton((button) => button.setButtonText("Add Model").setCta().onClick(() => {
+      this.openModelConfigModal();
+    }));
+    const modelsContainer = containerEl.createDiv({ cls: "models-container" });
+    this.renderModelsList(modelsContainer);
+    containerEl.createEl("h2", { text: "Chat History" });
+    new import_obsidian6.Setting(containerEl).setName("Chat History Path").setDesc("Path to store chat history files (relative to vault)").addText((text) => text.setPlaceholder("AI_ChatHistory").setValue(this.plugin.settings.chatHistoryPath).onChange((value) => __async(this, null, function* () {
       this.plugin.settings.chatHistoryPath = value;
       yield this.plugin.saveSettings();
     })));
@@ -7062,7 +9236,10 @@ var AITextSettingTab = class extends import_obsidian3.PluginSettingTab {
       text: "Configure all available functions that appear as icons in the chat view.",
       cls: "setting-item-description"
     });
-    if (!this.plugin.settings.functions || this.plugin.settings.functions.length === 0) {
+    if (!this.plugin.settings.functions) {
+      this.plugin.settings.functions = [];
+    }
+    if (this.plugin.settings.functions.length === 0 && DEFAULT_SETTINGS.functions) {
       this.plugin.settings.functions = [...DEFAULT_SETTINGS.functions];
       if (this.plugin.settings.customFunctions && this.plugin.settings.customFunctions.length > 0) {
         this.plugin.settings.functions.push(...this.plugin.settings.customFunctions);
@@ -7071,8 +9248,15 @@ var AITextSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.migratePromptsToFunctions();
     const functionsContainer = containerEl.createDiv({ cls: "functions-container" });
     this.displayFunctions(functionsContainer);
-    new import_obsidian3.Setting(containerEl).addButton((button) => button.setButtonText("Add New Function").setCta().onClick(() => {
-      new CustomFunctionModal(this.app, null, (customFunc) => __async(this, null, function* () {
+    new import_obsidian6.Setting(containerEl).addButton((button) => button.setButtonText("Add New Function").setCta().onClick(() => {
+      const newCustomFunc = {
+        name: "",
+        icon: "star",
+        prompt: "",
+        tooltip: "",
+        isBuiltIn: false
+      };
+      new CustomFunctionModal(this.app, newCustomFunc, (customFunc) => __async(this, null, function* () {
         this.plugin.settings.functions.push(customFunc);
         if (!this.plugin.settings.customFunctions) {
           this.plugin.settings.customFunctions = [];
@@ -7082,37 +9266,64 @@ var AITextSettingTab = class extends import_obsidian3.PluginSettingTab {
         this.display();
       })).open();
     }));
+    containerEl.createEl("h2", { text: "Network Proxy Configuration" });
+    const proxyConfig = this.plugin.settings.proxyConfig;
+    new import_obsidian6.Setting(containerEl).setName("Enable Proxy").setDesc("Use a proxy for all API requests to LLM providers").addToggle((toggle) => toggle.setValue(proxyConfig.enabled).onChange((value) => __async(this, null, function* () {
+      proxyConfig.enabled = value;
+      yield this.plugin.saveSettings();
+      this.plugin.modelManager.updateProxyConfig(proxyConfig);
+    })));
+    if (proxyConfig.enabled) {
+      new import_obsidian6.Setting(containerEl).setName("Proxy Type").setDesc("Select the type of proxy to use").addDropdown((dropdown) => dropdown.addOption("http", "HTTP").addOption("https", "HTTPS").addOption("socks5", "SOCKS5").setValue(proxyConfig.type).onChange((value) => __async(this, null, function* () {
+        proxyConfig.type = value;
+        yield this.plugin.saveSettings();
+        this.plugin.modelManager.updateProxyConfig(proxyConfig);
+      })));
+      new import_obsidian6.Setting(containerEl).setName("Proxy Address").setDesc("Enter the proxy server address").addText((text) => text.setPlaceholder("127.0.0.1").setValue(proxyConfig.address).onChange((value) => __async(this, null, function* () {
+        proxyConfig.address = value;
+        yield this.plugin.saveSettings();
+        this.plugin.modelManager.updateProxyConfig(proxyConfig);
+      })));
+      new import_obsidian6.Setting(containerEl).setName("Proxy Port").setDesc("Enter the proxy server port").addText((text) => text.setPlaceholder("8080").setValue(proxyConfig.port).onChange((value) => __async(this, null, function* () {
+        proxyConfig.port = value;
+        yield this.plugin.saveSettings();
+        this.plugin.modelManager.updateProxyConfig(proxyConfig);
+      })));
+      new import_obsidian6.Setting(containerEl).setName("Requires Authentication").setDesc("Does your proxy require username/password authentication?").addToggle((toggle) => toggle.setValue(proxyConfig.requiresAuth).onChange((value) => __async(this, null, function* () {
+        proxyConfig.requiresAuth = value;
+        yield this.plugin.saveSettings();
+        this.plugin.modelManager.updateProxyConfig(proxyConfig);
+        this.display();
+      })));
+      if (proxyConfig.requiresAuth) {
+        new import_obsidian6.Setting(containerEl).setName("Proxy Username").addText((text) => text.setValue(proxyConfig.username || "").onChange((value) => __async(this, null, function* () {
+          proxyConfig.username = value;
+          yield this.plugin.saveSettings();
+          this.plugin.modelManager.updateProxyConfig(proxyConfig);
+        })));
+        new import_obsidian6.Setting(containerEl).setName("Proxy Password").addText((text) => {
+          const passwordInput = text.setPlaceholder("password").setValue(proxyConfig.password || "").onChange((value) => __async(this, null, function* () {
+            proxyConfig.password = value;
+            yield this.plugin.saveSettings();
+            this.plugin.modelManager.updateProxyConfig(proxyConfig);
+          }));
+          passwordInput.inputEl.setAttribute("type", "password");
+          return passwordInput;
+        });
+      }
+    }
   }
-  // Migrate old prompt templates to the new functions array for backward compatibility
+  // Add to AIPilotSettingTab class
   migratePromptsToFunctions() {
-    if (this.plugin.settings.functions) {
-      const organizeFunc = this.plugin.settings.functions.find((f) => f.isBuiltIn && f.name === "Organize");
-      if (organizeFunc && this.plugin.settings.promptOrganize) {
-        organizeFunc.prompt = this.plugin.settings.promptOrganize;
-      }
-      const grammarFunc = this.plugin.settings.functions.find((f) => f.isBuiltIn && f.name === "Grammar");
-      if (grammarFunc && this.plugin.settings.promptCheckGrammar) {
-        grammarFunc.prompt = this.plugin.settings.promptCheckGrammar;
-      }
-      const generateFunc = this.plugin.settings.functions.find((f) => f.isBuiltIn && f.name === "Generate");
-      if (generateFunc && this.plugin.settings.promptGenerateContent) {
-        generateFunc.prompt = this.plugin.settings.promptGenerateContent;
-      }
-      const dialogueFunc = this.plugin.settings.functions.find((f) => f.isBuiltIn && f.name === "Dialogue");
-      if (dialogueFunc && this.plugin.settings.promptDialogue) {
-        dialogueFunc.prompt = this.plugin.settings.promptDialogue;
-      }
-      const summaryFunc = this.plugin.settings.functions.find((f) => f.isBuiltIn && f.name === "Summarize");
-      if (summaryFunc && this.plugin.settings.promptSummary) {
-        summaryFunc.prompt = this.plugin.settings.promptSummary;
-      }
+    if (!this.plugin.settings.functions) {
+      this.plugin.settings.functions = [];
     }
   }
   displayFunctions(container) {
     container.empty();
     if (!this.plugin.settings.functions || this.plugin.settings.functions.length === 0) {
       container.createEl("p", {
-        text: "No functions configured yet.",
+        text: 'No functions defined. Click "Add Custom Function" below to create one.',
         cls: "no-functions"
       });
       return;
@@ -7122,363 +9333,267 @@ var AITextSettingTab = class extends import_obsidian3.PluginSettingTab {
     if (builtInFunctions.length > 0) {
       const builtInSection = container.createDiv({ cls: "function-section" });
       builtInSection.createEl("h3", { text: "Built-in Functions" });
-      builtInFunctions.forEach((func, index) => {
-        this.createFunctionItem(builtInSection, func, index, true);
-      });
+      for (const func of builtInFunctions) {
+        this.createFunctionItem(builtInSection, func, true);
+      }
     }
     if (customFunctions.length > 0) {
       const customSection = container.createDiv({ cls: "function-section" });
       customSection.createEl("h3", { text: "Custom Functions" });
-      customFunctions.forEach((func, index) => {
-        this.createFunctionItem(customSection, func, builtInFunctions.length + index, false);
-      });
-    }
-  }
-  createFunctionItem(container, func, index, isBuiltIn) {
-    const funcDiv = container.createDiv({ cls: `function-item ${isBuiltIn ? "built-in" : "custom"}` });
-    const previewDiv = funcDiv.createDiv({ cls: "function-preview" });
-    const iconContainer = previewDiv.createDiv({ cls: "function-icon" });
-    try {
-      (0, import_obsidian3.setIcon)(iconContainer, func.icon);
-    } catch (e) {
-      (0, import_obsidian3.setIcon)(iconContainer, "bot");
-    }
-    previewDiv.createEl("span", { text: func.name, cls: "function-name" });
-    if (func.tooltip) {
-      previewDiv.createEl("span", { text: func.tooltip, cls: "function-tooltip" });
-    }
-    const actionsDiv = funcDiv.createDiv({ cls: "function-actions" });
-    const editButton = actionsDiv.createEl("button", {
-      cls: "function-edit",
-      attr: {
-        "aria-label": "Edit function",
-        "title": "Edit function"
+      for (const func of customFunctions) {
+        this.createFunctionItem(customSection, func, false);
       }
+    }
+    const addButtonContainer = container.createDiv({ cls: "add-function-container" });
+    const addButton = addButtonContainer.createEl("button", {
+      text: "Add Custom Function",
+      cls: "add-function-button"
     });
-    (0, import_obsidian3.setIcon)(editButton, "edit");
-    editButton.addEventListener("click", () => {
-      new CustomFunctionModal(this.app, func, (updatedFunc) => __async(this, null, function* () {
-        updatedFunc.isBuiltIn = isBuiltIn;
-        this.plugin.settings.functions[index] = updatedFunc;
-        if (isBuiltIn) {
-          if (func.name === "Organize") this.plugin.settings.promptOrganize = updatedFunc.prompt;
-          else if (func.name === "Grammar") this.plugin.settings.promptCheckGrammar = updatedFunc.prompt;
-          else if (func.name === "Generate") this.plugin.settings.promptGenerateContent = updatedFunc.prompt;
-          else if (func.name === "Dialogue") this.plugin.settings.promptDialogue = updatedFunc.prompt;
-          else if (func.name === "Summarize") this.plugin.settings.promptSummary = updatedFunc.prompt;
-        } else {
-          const customIndex = this.plugin.settings.customFunctions.findIndex((f) => f.name === func.name && f.icon === func.icon);
-          if (customIndex >= 0) {
-            this.plugin.settings.customFunctions[customIndex] = updatedFunc;
-          }
-        }
+    addButton.addEventListener("click", () => {
+      const newCustomFunc = {
+        name: "",
+        icon: "star",
+        prompt: "",
+        tooltip: "",
+        isBuiltIn: false
+      };
+      new CustomFunctionModal(this.app, newCustomFunc, (updatedFunc) => __async(this, null, function* () {
+        this.plugin.settings.functions.push(updatedFunc);
         yield this.plugin.saveSettings();
-        this.display();
+        this.displayFunctions(container);
       })).open();
     });
-    if (!isBuiltIn) {
-      const deleteButton = actionsDiv.createEl("button", {
-        cls: "function-delete",
-        attr: {
-          "aria-label": "Delete function",
-          "title": "Delete function"
-        }
+  }
+  createFunctionItem(container, func, isBuiltIn) {
+    const funcItem = container.createDiv({
+      cls: `function-item ${isBuiltIn ? "built-in" : "custom"}`
+    });
+    const preview = funcItem.createDiv({ cls: "function-preview" });
+    const iconEl = preview.createDiv({ cls: "function-icon" });
+    (0, import_obsidian6.setIcon)(iconEl, func.icon || "star");
+    preview.createEl("span", {
+      text: func.name,
+      cls: "function-name"
+    });
+    if (func.tooltip) {
+      preview.createEl("span", {
+        text: func.tooltip,
+        cls: "function-tooltip"
       });
-      (0, import_obsidian3.setIcon)(deleteButton, "trash");
-      deleteButton.addEventListener("click", () => __async(this, null, function* () {
-        this.plugin.settings.functions.splice(index, 1);
-        const customIndex = this.plugin.settings.customFunctions.findIndex((f) => f.name === func.name && f.icon === func.icon);
-        if (customIndex >= 0) {
-          this.plugin.settings.customFunctions.splice(customIndex, 1);
+    }
+    const actions = funcItem.createDiv({ cls: "function-actions" });
+    const editBtn = actions.createEl("button", { cls: "function-edit" });
+    (0, import_obsidian6.setIcon)(editBtn, "edit");
+    editBtn.onclick = () => {
+      new CustomFunctionModal(this.app, func, (updatedFunc) => __async(this, null, function* () {
+        const index = this.plugin.settings.functions.findIndex((f) => f.name === func.name && f.isBuiltIn === isBuiltIn);
+        if (index !== -1) {
+          this.plugin.settings.functions[index] = updatedFunc;
+          yield this.plugin.saveSettings();
+          this.displayFunctions(container.parentElement);
         }
-        yield this.plugin.saveSettings();
-        this.display();
-      }));
+      })).open();
+    };
+    if (!isBuiltIn) {
+      const deleteBtn = actions.createEl("button", { cls: "function-delete" });
+      (0, import_obsidian6.setIcon)(deleteBtn, "trash");
+      deleteBtn.onclick = () => __async(this, null, function* () {
+        const confirmModal = new ConfirmModal2(
+          this.app,
+          `Are you sure you want to delete the "${func.name}" function?`,
+          () => __async(this, null, function* () {
+            this.plugin.settings.functions = this.plugin.settings.functions.filter((f) => !(f.name === func.name && !f.isBuiltIn));
+            yield this.plugin.saveSettings();
+            this.displayFunctions(container.parentElement);
+          })
+        );
+        confirmModal.open();
+      });
+    }
+  }
+  openModelConfigModal(existingModel) {
+    const modal = new ModelConfigModal(
+      this.app,
+      existingModel || null,
+      // Use null when existingModel is undefined
+      (updatedModel) => {
+        if (existingModel) {
+          const index = this.plugin.settings.models.findIndex((m) => m.id === existingModel.id);
+          if (index !== -1) {
+            this.plugin.settings.models[index] = updatedModel;
+          }
+        } else {
+          this.plugin.settings.models.push(updatedModel);
+        }
+        this.plugin.saveSettings().then(() => {
+          const container = document.querySelector(".models-container");
+          if (container) {
+            this.renderModelsList(container);
+          }
+        });
+      }
+    );
+    modal.open();
+  }
+  renderModelsList(container) {
+    if (!container) return;
+    const htmlContainer = container;
+    htmlContainer.empty();
+    const models = this.plugin.settings.models || [];
+    if (models.length === 0) {
+      htmlContainer.createEl("div", {
+        text: 'No models configured. Click "Add Model" to configure a new model.',
+        cls: "no-models-message"
+      });
+      return;
+    }
+    for (const model of models) {
+      const modelItem = htmlContainer.createDiv({ cls: "model-item" });
+      const modelInfo = modelItem.createDiv({ cls: "model-info" });
+      const titleEl = modelInfo.createEl("h3");
+      titleEl.createSpan({ text: model.name });
+      if (model.isDefault) {
+        titleEl.createSpan({
+          text: " (Default)",
+          cls: "model-default-tag"
+        });
+        modelItem.addClass("model-default");
+      }
+      const modelMeta = modelInfo.createDiv({ cls: "model-meta" });
+      modelMeta.createSpan({ text: `Type: ${model.type}` });
+      if (model.modelName) {
+        modelMeta.createSpan({ text: ` \u2022 Model: ${model.modelName}` });
+      }
+      if (model.active) {
+        modelMeta.createSpan({
+          text: " \u2022 Active",
+          cls: "model-active-indicator"
+        });
+      }
+      const modelActions = modelItem.createDiv({ cls: "model-actions" });
+      if (!model.isDefault) {
+        const defaultBtn = modelActions.createEl("button", {
+          text: "Set Default",
+          cls: "model-default-btn"
+        });
+        defaultBtn.onclick = () => __async(this, null, function* () {
+          this.plugin.settings.models.forEach((m) => {
+            m.isDefault = m.id === model.id;
+          });
+          yield this.plugin.saveSettings();
+          this.renderModelsList(container);
+        });
+      }
+      const editBtn = modelActions.createEl("button", {
+        text: "Edit",
+        cls: "model-edit"
+      });
+      editBtn.onclick = () => {
+        this.openModelConfigModal(model);
+      };
+      const deleteBtn = modelActions.createEl("button", {
+        text: "Delete",
+        cls: "model-delete"
+      });
+      deleteBtn.onclick = () => __async(this, null, function* () {
+        const confirmModal = new ConfirmModal2(
+          this.app,
+          `Are you sure you want to delete the "${model.name}" model?`,
+          () => __async(this, null, function* () {
+            this.plugin.settings.models = this.plugin.settings.models.filter((m) => m.id !== model.id);
+            yield this.plugin.saveSettings();
+            this.renderModelsList(container);
+          })
+        );
+        confirmModal.open();
+      });
     }
   }
 };
-var CustomFunctionModal = class extends import_obsidian3.Modal {
+var CustomFunctionModal = class extends import_obsidian6.Modal {
   constructor(app, customFunc, onSubmit) {
+    var _a;
     super(app);
-    this.customFunc = customFunc;
-    this.onSubmit = onSubmit;
+    this.plugin = ((_a = app.plugins) == null ? void 0 : _a.getPlugin("ai-pilot")) || null;
+    this.customFunc = customFunc || {
+      name: "",
+      icon: "star",
+      tooltip: "",
+      prompt: "",
+      isBuiltIn: false
+    };
+    this.onSubmit = onSubmit || (() => {
+    });
   }
   onOpen() {
-    var _a, _b, _c, _d, _e;
     const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("custom-function-modal");
-    contentEl.createEl("h2", { text: this.customFunc ? "Edit Custom Function" : "Add Custom Function" });
-    const nameDiv = contentEl.createDiv({ cls: "setting-item" });
-    nameDiv.createEl("label", { text: "Function Name", cls: "setting-item-name" });
-    this.nameInput = nameDiv.createEl("input", {
+    contentEl.createEl("h2", { text: this.customFunc.name ? "Edit Function" : "Create Function" });
+    contentEl.createEl("label", { text: "Function Name (required)", cls: "setting-item-label" });
+    const nameInput = contentEl.createEl("input", {
       type: "text",
-      cls: "setting-item-input",
-      value: ((_a = this.customFunc) == null ? void 0 : _a.name) || "",
-      attr: { placeholder: "Enter function name" }
+      value: this.customFunc.name,
+      cls: "setting-item-input"
     });
-    const iconDiv = contentEl.createDiv({ cls: "setting-item" });
-    const iconLabel = iconDiv.createEl("label", { text: "Icon", cls: "setting-item-name" });
-    const iconHelp = iconDiv.createEl("div", { cls: "setting-item-description" });
-    iconHelp.innerHTML = 'Enter an icon name from <a href="https://lucide.dev/icons/" target="_blank">Lucide Icons</a> (e.g., "book", "pen", "code")';
-    const iconRow = iconDiv.createDiv({ cls: "icon-row" });
-    this.iconInput = iconRow.createEl("input", {
+    contentEl.createEl("label", { text: "Icon", cls: "setting-item-label" });
+    const iconInput = contentEl.createEl("input", {
       type: "text",
+      value: this.customFunc.icon || "star",
       cls: "setting-item-input",
-      value: ((_b = this.customFunc) == null ? void 0 : _b.icon) || "",
-      attr: { placeholder: "Enter icon name" }
+      placeholder: "Obsidian icon name (e.g. star, brain, pencil)"
     });
-    this.iconPreview = iconRow.createDiv({ cls: "icon-preview" });
-    if ((_c = this.customFunc) == null ? void 0 : _c.icon) {
-      try {
-        (0, import_obsidian3.setIcon)(this.iconPreview, this.customFunc.icon);
-      } catch (e) {
-        this.iconPreview.setText("Invalid icon");
-      }
-    }
-    this.iconInput.addEventListener("input", () => {
-      this.iconPreview.empty();
-      if (this.iconInput.value) {
-        try {
-          (0, import_obsidian3.setIcon)(this.iconPreview, this.iconInput.value);
-        } catch (e) {
-          this.iconPreview.setText("Invalid icon");
-        }
-      }
-    });
-    const tooltipDiv = contentEl.createDiv({ cls: "setting-item" });
-    tooltipDiv.createEl("label", { text: "Tooltip (Optional)", cls: "setting-item-name" });
-    this.tooltipInput = tooltipDiv.createEl("input", {
+    const iconPreview = contentEl.createDiv({ cls: "icon-preview" });
+    const updateIconPreview = () => {
+      iconPreview.empty();
+      (0, import_obsidian6.setIcon)(iconPreview, iconInput.value || "star");
+    };
+    updateIconPreview();
+    iconInput.addEventListener("input", updateIconPreview);
+    contentEl.createEl("label", { text: "Tooltip", cls: "setting-item-label" });
+    const tooltipInput = contentEl.createEl("input", {
       type: "text",
+      value: this.customFunc.tooltip || "",
       cls: "setting-item-input",
-      value: ((_d = this.customFunc) == null ? void 0 : _d.tooltip) || "",
-      attr: { placeholder: "Enter tooltip text" }
+      placeholder: "Briefly describe what this function does"
     });
-    const promptDiv = contentEl.createDiv({ cls: "setting-item" });
-    promptDiv.createEl("label", { text: "Prompt Template", cls: "setting-item-name" });
-    promptDiv.createEl("div", {
-      text: "Enter the prompt to send to the AI. The selected text will be appended to this prompt.",
+    contentEl.createEl("label", { text: "Prompt Template (required)", cls: "setting-item-label" });
+    contentEl.createEl("p", {
+      text: "Use {{content}} to reference the selected text.",
       cls: "setting-item-description"
     });
-    const promptValue = ((_e = this.customFunc) == null ? void 0 : _e.prompt) || "";
-    this.promptInput = promptDiv.createEl("textarea", {
-      cls: "setting-item-input prompt-input",
-      value: promptValue,
-      attr: {
-        placeholder: "Enter prompt template...",
-        rows: "6"
-      }
+    const promptInput = contentEl.createEl("textarea", {
+      cls: "setting-item-textarea",
+      value: this.customFunc.prompt || "",
+      placeholder: "Enter your prompt template here. Use {{content}} to reference the selected text."
     });
-    const buttonDiv = contentEl.createDiv({ cls: "custom-function-button-container" });
-    const cancelButton = buttonDiv.createEl("button", { text: "Cancel" });
+    promptInput.style.height = "150px";
+    const buttonContainer = contentEl.createDiv({ cls: "button-container" });
+    const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
     cancelButton.addEventListener("click", () => {
       this.close();
     });
-    const submitButton = buttonDiv.createEl("button", { text: this.customFunc ? "Update" : "Create", cls: "mod-cta" });
-    submitButton.addEventListener("click", () => {
-      const name = this.nameInput.value.trim();
-      const icon = this.iconInput.value.trim();
-      const prompt = this.promptInput.value;
-      if (!name) {
-        new import_obsidian3.Notice("Please enter a function name");
-        return;
-      }
-      if (!icon) {
-        new import_obsidian3.Notice("Please enter an icon name");
-        return;
-      }
-      if (!prompt) {
-        new import_obsidian3.Notice("Please enter a prompt template");
-        return;
-      }
-      const functionData = {
-        name,
-        icon,
-        prompt: String(prompt),
-        // Cast to string to ensure proper storage
-        tooltip: this.tooltipInput.value.trim() || void 0
-      };
-      this.onSubmit(functionData);
-      this.close();
-    });
-  }
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
-  }
-};
-var PolishResultModal = class extends import_obsidian3.Modal {
-  constructor(app, plugin, originalText, polishedText, onApply) {
-    super(app);
-    this.plugin = plugin;
-    this.originalText = originalText;
-    this.polishedText = polishedText;
-    this.onApply = onApply;
-  }
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.addClass("polish-result-modal");
-    const headerContainer = contentEl.createDiv({ cls: "polish-header" });
-    headerContainer.createEl("h2", { text: "Polish Result" });
-    const legendContainer = contentEl.createDiv({ cls: "polish-legend" });
-    const descriptionEl = legendContainer.createEl("p", {
-      cls: "polish-description"
-    });
-    descriptionEl.setText("Review the proposed changes:");
-    const legendItemsContainer = legendContainer.createDiv({ cls: "polish-legend-items" });
-    const deletedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
-    const deletedSample = deletedLegend.createSpan({ cls: "polish-deleted polish-sample" });
-    deletedSample.setText("deleted text");
-    deletedLegend.createSpan({ text: " = removed content" });
-    const addedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
-    const addedSample = addedLegend.createSpan({ cls: "polish-highlight polish-sample" });
-    addedSample.setText("highlighted text");
-    addedLegend.createSpan({ text: " = added content" });
-    this.resultEl = contentEl.createDiv({ cls: "polish-result-container" });
-    this.highlightChanges();
-    const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
-    const applyButton = buttonContainer.createEl("button", {
-      text: "Apply Changes",
+    const submitButton = buttonContainer.createEl("button", {
+      text: this.customFunc.name ? "Save" : "Create",
       cls: "mod-cta"
     });
-    applyButton.addEventListener("click", () => {
-      this.onApply(this.polishedText);
+    submitButton.addEventListener("click", () => {
+      if (!nameInput.value.trim()) {
+        new import_obsidian6.Notice("Function name is required");
+        return;
+      }
+      if (!promptInput.value.trim()) {
+        new import_obsidian6.Notice("Prompt template is required");
+        return;
+      }
+      const updatedFunc = {
+        name: nameInput.value.trim(),
+        icon: iconInput.value.trim() || "star",
+        prompt: promptInput.value.trim(),
+        tooltip: tooltipInput.value.trim(),
+        isBuiltIn: this.customFunc.isBuiltIn || false
+      };
+      this.onSubmit(updatedFunc);
       this.close();
     });
-    const cancelButton = buttonContainer.createEl("button", {
-      text: "Cancel"
-    });
-    cancelButton.addEventListener("click", () => {
-      this.close();
-    });
-  }
-  // Method to highlight the differences between original and polished text
-  highlightChanges() {
-    const diffHtml = this.generateInlineDiff(this.originalText, this.polishedText);
-    this.resultEl.empty();
-    this.resultEl.innerHTML = diffHtml;
-    setTimeout(() => {
-      this.resultEl.addClass("diff-rendered");
-    }, 10);
-  }
-  // Generate a more accurate inline diff with strikethrough for deletions and highlighting for additions
-  generateInlineDiff(original, polished) {
-    const originalParagraphs = original.split("\n\n");
-    const polishedParagraphs = polished.split("\n\n");
-    if (originalParagraphs.length > 1 || polishedParagraphs.length > 1) {
-      return this.generateParagraphDiff(originalParagraphs, polishedParagraphs);
-    }
-    const originalWords = this.tokenize(original);
-    const polishedWords = this.tokenize(polished);
-    const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
-    let html2 = "";
-    let i = 0, j = 0;
-    for (const common of lcs) {
-      while (i < originalWords.length && originalWords[i] !== common) {
-        html2 += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
-        i++;
-      }
-      while (j < polishedWords.length && polishedWords[j] !== common) {
-        html2 += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-        j++;
-      }
-      html2 += this.escapeHtml(common) + " ";
-      i++;
-      j++;
-    }
-    while (i < originalWords.length) {
-      html2 += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
-      i++;
-    }
-    while (j < polishedWords.length) {
-      html2 += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-      j++;
-    }
-    return html2;
-  }
-  // Generate paragraph-level diff
-  generateParagraphDiff(originalParagraphs, polishedParagraphs) {
-    let html2 = "";
-    const maxParagraphs = Math.max(originalParagraphs.length, polishedParagraphs.length);
-    for (let i = 0; i < maxParagraphs; i++) {
-      const originalPara = i < originalParagraphs.length ? originalParagraphs[i] : "";
-      const polishedPara = i < polishedParagraphs.length ? polishedParagraphs[i] : "";
-      if (originalPara === polishedPara) {
-        html2 += `<p>${this.escapeHtml(originalPara)}</p>`;
-      } else if (originalPara && !polishedPara) {
-        html2 += `<p><span class="polish-deleted">${this.escapeHtml(originalPara)}</span></p>`;
-      } else if (!originalPara && polishedPara) {
-        html2 += `<p><span class="polish-highlight">${this.escapeHtml(polishedPara)}</span></p>`;
-      } else {
-        const originalWords = this.tokenize(originalPara);
-        const polishedWords = this.tokenize(polishedPara);
-        const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
-        let paraHtml = "<p>";
-        let i2 = 0, j = 0;
-        for (const common of lcs) {
-          while (i2 < originalWords.length && originalWords[i2] !== common) {
-            paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i2])}</span> `;
-            i2++;
-          }
-          while (j < polishedWords.length && polishedWords[j] !== common) {
-            paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-            j++;
-          }
-          paraHtml += this.escapeHtml(common) + " ";
-          i2++;
-          j++;
-        }
-        while (i2 < originalWords.length) {
-          paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i2])}</span> `;
-          i2++;
-        }
-        while (j < polishedWords.length) {
-          paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-          j++;
-        }
-        paraHtml += "</p>";
-        html2 += paraHtml;
-      }
-    }
-    return html2;
-  }
-  // Split text into words for diffing while preserving newlines
-  tokenize(text) {
-    const normalizedText = text.replace(/\r\n/g, "\n");
-    return normalizedText.replace(/\n/g, " \n ").replace(/\t/g, " 	 ").split(/\s+/).filter((word) => word.length > 0);
-  }
-  // A simple longest common subsequence algorithm
-  findLongestCommonSubsequence(a, b) {
-    const table = Array(a.length + 1).fill(0).map(() => Array(b.length + 1).fill(0));
-    for (let i2 = 1; i2 <= a.length; i2++) {
-      for (let j2 = 1; j2 <= b.length; j2++) {
-        if (a[i2 - 1] === b[j2 - 1]) {
-          table[i2][j2] = table[i2 - 1][j2 - 1] + 1;
-        } else {
-          table[i2][j2] = Math.max(table[i2][j2 - 1], table[i2 - 1][j2]);
-        }
-      }
-    }
-    const result = [];
-    let i = a.length, j = b.length;
-    while (i > 0 && j > 0) {
-      if (a[i - 1] === b[j - 1]) {
-        result.unshift(a[i - 1]);
-        i--;
-        j--;
-      } else if (table[i][j - 1] > table[i - 1][j]) {
-        j--;
-      } else {
-        i--;
-      }
-    }
-    return result;
-  }
-  // Escape HTML special characters to prevent XSS
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
   }
   onClose() {
     const { contentEl } = this;

@@ -3,6 +3,7 @@ import type AIPilot from "./main";
 import { DEFAULT_SETTINGS } from "./main";
 import { MarkdownRenderer as NewMarkdownRenderer } from './MarkdownRenderer';
 import { LoadingModal, PolishResultModal } from './main';
+import { ModelManager, ModelConfig } from './models/ModelManager';
 
 export const VIEW_TYPE_CHAT = "chat-view";
 
@@ -723,11 +724,21 @@ export class ChatView extends ItemView implements Component {
     private isEndingConversation: boolean = false;
     private conversationId: string | null = null;
     private lastNoticedFile: string | null = null;
+    private modelManager: ModelManager;
+    private modelSelectEl: HTMLSelectElement;
+    private currentModelId: string = '';
 
-    constructor(leaf: WorkspaceLeaf, plugin: AIPilot) {
+    constructor(leaf: WorkspaceLeaf, plugin: AIPilot, modelManager: ModelManager) {
         super(leaf);
         this.plugin = plugin;
         this.requestId = this.plugin.requestId;
+        this.modelManager = modelManager;
+        
+        // Initialize with the first available model
+        const models = this.modelManager.getActiveModels();
+        if (models.length > 0) {
+          this.currentModelId = models[0].id;
+        }
     }
 
     load(): void {
@@ -842,10 +853,12 @@ export class ChatView extends ItemView implements Component {
         const functionIconsContainer = this.inputContainer.createDiv({ cls: 'function-icons-container' });
 
         // Initialize the plugin functions array if it doesn't exist
-        if (!this.plugin.settings.functions || this.plugin.settings.functions.length === 0) {
+        if (!this.plugin.settings.functions) {
             console.log("Initializing functions array from defaults");
-            // Use default functions from settings
-            this.plugin.settings.functions = [...DEFAULT_SETTINGS.functions];
+            // Use default functions from settings - ensure it's initialized properly
+            this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
+                [...DEFAULT_SETTINGS.functions] : 
+                [];
             
             // Copy any existing custom functions
             if (this.plugin.settings.customFunctions && this.plugin.settings.customFunctions.length > 0) {
@@ -853,6 +866,12 @@ export class ChatView extends ItemView implements Component {
             }
             
             // Save the updated settings
+            this.plugin.saveSettings();
+        } else if (this.plugin.settings.functions.length === 0) {
+            // If array exists but is empty
+            this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
+                [...DEFAULT_SETTINGS.functions] : 
+                [];
             this.plugin.saveSettings();
         }
         
@@ -1192,16 +1211,22 @@ export class ChatView extends ItemView implements Component {
                 }
                 
                 // Create visual diff and apply using the Polish comparison modal
-                new PolishResultModal(this.plugin.app, this.plugin, originalText, content, (updatedContent: string) => {
-                    if (editor) {
-                        if (isSelection) {
-                            editor.replaceSelection(updatedContent);
-                        } else {
-                            editor.setValue(updatedContent);
+                new PolishResultModal(
+                    this.plugin.app,
+                    originalText,
+                    content,
+                    (updatedContent: string) => {
+                        if (editor) {
+                            if (isSelection) {
+                                editor.replaceSelection(updatedContent);
+                            } else {
+                                editor.setValue(updatedContent);
+                            }
+                            new Notice("AI polish applied successfully");
                         }
-                        new Notice("Changes applied to text!", 2000);
-                    }
-                }).open();
+                    },
+                    this.plugin  // Pass the plugin instance
+                ).open();
             };
         }
 
@@ -1607,16 +1632,22 @@ export class ChatView extends ItemView implements Component {
                         }
                         
                         // Create visual diff and apply using the Polish comparison modal
-                        new PolishResultModal(this.plugin.app, this.plugin, originalText, response, (updatedContent: string) => {
-                            if (editor) {
-                                if (isSelection) {
-                                    editor.replaceSelection(updatedContent);
-                                } else {
-                                    editor.setValue(updatedContent);
+                        new PolishResultModal(
+                            this.plugin.app,
+                            originalText,
+                            response,
+                            (updatedContent: string) => {
+                                if (editor) {
+                                    if (isSelection) {
+                                        editor.replaceSelection(updatedContent);
+                                    } else {
+                                        editor.setValue(updatedContent);
+                                    }
+                                    new Notice("AI polish applied successfully");
                                 }
-                                new Notice("Changes applied to text!", 2000);
-                            }
-                        }).open();
+                            },
+                            this.plugin  // Pass the plugin instance
+                        ).open();
                     };
 
                     break; // Success, exit retry loop
@@ -2039,16 +2070,22 @@ export class ChatView extends ItemView implements Component {
                     }
                     
                     // Create visual diff and apply using the Polish comparison modal
-                    new PolishResultModal(this.plugin.app, this.plugin, originalText, message.content, (updatedContent: string) => {
-                        if (editor) {
-                            if (isSelection) {
-                                editor.replaceSelection(updatedContent);
-                            } else {
-                                editor.setValue(updatedContent);
+                    new PolishResultModal(
+                        this.plugin.app,
+                        originalText,
+                        message.content,
+                        (updatedContent: string) => {
+                            if (editor) {
+                                if (isSelection) {
+                                    editor.replaceSelection(updatedContent);
+                                } else {
+                                    editor.setValue(updatedContent);
+                                }
+                                new Notice("AI polish applied successfully");
                             }
-                            new Notice("Changes applied to text!", 2000);
-                        }
-                    }).open();
+                        },
+                        this.plugin  // Pass the plugin instance
+                    ).open();
                 };
             } else {
                 contentDiv.setText(message.content);
@@ -2139,6 +2176,103 @@ export class ChatView extends ItemView implements Component {
             case 'delete chat history':
             default:
                 return false;
+        }
+    }
+
+    createInputContainer() {
+        // ... existing input container code ...
+        
+        // Add model selection before or after the input
+        this.createModelSelector();
+        
+        // ... rest of existing input container code ...
+    }
+    
+    private createModelSelector() {
+        const modelSelectorContainer = this.inputContainer.createDiv({ cls: 'model-selector-container' });
+        
+        modelSelectorContainer.createEl('label', {
+          text: 'AI Model:',
+          attr: { for: 'model-selector' }
+        });
+        
+        this.modelSelectEl = modelSelectorContainer.createEl('select', {
+          cls: 'model-selector',
+          attr: { id: 'model-selector' }
+        });
+        
+        // Populate the model selector
+        this.updateModelSelector();
+        
+        // Handle model selection changes
+        this.modelSelectEl.addEventListener('change', () => {
+          this.currentModelId = this.modelSelectEl.value;
+        });
+    }
+    
+    updateModelSelector() {
+        // Clear existing options
+        this.modelSelectEl.empty();
+        
+        // Get active models
+        const models = this.modelManager.getActiveModels();
+        
+        // Add options for each model
+        models.forEach(model => {
+          const option = this.modelSelectEl.createEl('option', {
+            text: model.isDefault ? `${model.name} (Default)` : model.name,
+            attr: { value: model.id }
+          });
+          
+          if (model.isDefault) {
+            option.style.fontWeight = 'bold';
+          }
+        });
+        
+        // If no current model is set or it's no longer available, set to default model
+        const defaultModel = this.modelManager.getDefaultModel();
+        if (!this.currentModelId || !models.find(m => m.id === this.currentModelId)) {
+          this.currentModelId = defaultModel?.id || (models.length > 0 ? models[0].id : '');
+        }
+        
+        // Set the current selection
+        this.modelSelectEl.value = this.currentModelId;
+    }
+    
+    async onSendMessage() {
+        // Get the user input
+        const userInput = this.currentInput.value.trim();
+        
+        if (!userInput) {
+          return; // Don't send empty messages
+        }
+        
+        // Add user message to chat
+        await this.addMessage('user', userInput);
+        
+        // Clear input
+        this.currentInput.value = '';
+        
+        // Use the selected model when sending the message
+        try {
+          let response: string;
+          
+          if (this.modelManager && this.currentModelId) {
+            // Use the model manager to call the selected model
+            response = await this.modelManager.callModel(this.currentModelId, userInput);
+          } else {
+            // Fallback to the plugin's existing API call
+            response = await this.plugin.callAI(userInput);
+          }
+          
+          // Add the response to the chat
+          await this.addMessage('assistant', response);
+          
+          // Save chat history
+          await this.saveChatHistory();
+        } catch (error) {
+          console.error('Error sending message to model:', error);
+          await this.addMessage('assistant', `Error: ${error.message}`);
         }
     }
 } 

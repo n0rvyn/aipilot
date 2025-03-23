@@ -1,5 +1,13 @@
 // main.ts
 
+// Add this at the top of the file, after the imports
+// TypeScript declaration for diff_match_patch
+declare global {
+    interface Window {
+        diff_match_patch?: any;
+    }
+}
+
 import {
     App,
     Plugin,
@@ -18,12 +26,18 @@ import {
     ViewCreator,
     setIcon,
     Editor,
-    TextAreaComponent
+    TextAreaComponent,
+    addIcon
 } from "obsidian";
 
 import styles from './styles.css';
 import { ChatView, VIEW_TYPE_CHAT } from './ChatView';
 import { MarkdownRenderer as NewMarkdownRenderer } from './MarkdownRenderer';
+import { ModelManager, ModelConfig as LLMModelConfig, ProxyConfig } from './models/ModelManager';
+import { DebatePanel, DEBATE_VIEW_TYPE } from './debate/DebatePanel';
+import { AgentDebateEngine, DebateConfig } from './debate/AgentDebateEngine';
+import { ModelConfigModal } from './models/ModelConfigModal';
+import { addAllIcons } from './icons';
 
 const EMBEDDING_MODELS = {
     'embedding-2': { maxTokens: 512, dimensions: null as number | null },
@@ -41,7 +55,7 @@ interface CustomFunction {
     isBuiltIn?: boolean;
 }
 
-interface AIPilotSettings {
+interface AIPilotPluginSettings {
     apiKey: string;
     model: string;
     provider: 'zhipuai' | 'openai' | 'groq';
@@ -58,9 +72,12 @@ interface AIPilotSettings {
     functions: CustomFunction[]; // New unified functions array
     chatHistoryPath: string; // Path to store chat history files
     editorModeEnabled: boolean; // Whether functions apply to editor or chat
+    models: LLMModelConfig[];
+    proxyConfig: ProxyConfig;
+    debateConfigs: DebateConfig[];
 }
 
-export const DEFAULT_SETTINGS: AIPilotSettings = {
+export const DEFAULT_SETTINGS: Partial<AIPilotPluginSettings> = {
     apiKey: '',
     model: 'gpt-4',
     provider: 'openai',
@@ -86,6 +103,8 @@ Guidelines:
 - Use clear hierarchical structure for content presentation
 - Use proper Markdown formatting for better readability`,
     customFunctions: [],
+    models: [], // Add default empty array for models
+    debateConfigs: [], // Add default empty array for debate configs
     functions: [
         {
             name: "Organize",
@@ -143,7 +162,14 @@ Guidelines:
         }
     ],
     chatHistoryPath: 'AI_ChatHistory',
-    editorModeEnabled: true
+    editorModeEnabled: true,
+    proxyConfig: {
+        enabled: false,
+        address: "",
+        port: "",
+        type: "http",
+        requiresAuth: false
+    },
 };
 
 const MODEL_TOKEN_LIMITS: { [key: string]: number } = {
@@ -223,9 +249,9 @@ interface SearchResultWithContent {
     content: string;
 }
 
-export default class AIPilot extends Plugin {
+export default class AIPilotPlugin extends Plugin {
     app: App;
-    settings: AIPilotSettings;
+    settings: AIPilotPluginSettings;
     requestId: string | null = null;
     private salt: string = 'AIPilot-v1';
     private lastApiCall: number = 0;
@@ -236,6 +262,8 @@ export default class AIPilot extends Plugin {
     }> = new Map();
     private readonly CACHE_DURATION = 1000 * 60 * 60; // 1 hour
     public currentInput: HTMLTextAreaElement | null = null;
+    modelManager: ModelManager;
+    public diffMatchPatchLib: any = null;
 
     constructor(app: App, manifest: any) {
         super(app, manifest);
@@ -243,17 +271,50 @@ export default class AIPilot extends Plugin {
     }
 
     async onload() {
+        // Load settings first
         await this.loadSettings();
+        
+        // Migrate legacy API key to models system if needed
+        this.migrateLegacyAPIKey();
+        
+        // Now initialize ModelManager with settings that are loaded
+        this.modelManager = new ModelManager(
+            this,
+            this.settings.models || [], // Ensure we have a default empty array if models is undefined
+            this.settings.proxyConfig,
+            async () => {
+                await this.saveSettings();
+            }
+        );
+
+        // Load the diff-match-patch library if needed
+        await this.loadDiffMatchPatchLibrary();
+        
+        // Load icons
+        addAllIcons();
+        
+        // Register the debate view
+        this.registerView(
+            DEBATE_VIEW_TYPE,
+            (leaf: WorkspaceLeaf) => new DebatePanel(leaf, this.modelManager)
+        );
+        
+        // Register a command to open the debate panel
+        this.addCommand({
+            id: 'open-debate-panel',
+            name: 'Open Agent Debate Panel',
+            callback: () => this.activateDebateView()
+        });
         
         // Load styles properly
         this.loadStyles();
         
-        this.addSettingTab(new AITextSettingTab(this.app, this));
+        this.addSettingTab(new AIPilotSettingTab(this.app, this));
 
         // Register Chat View
         this.registerView(
             VIEW_TYPE_CHAT,
-            (leaf: WorkspaceLeaf) => new ChatView(leaf, this)
+            (leaf: WorkspaceLeaf) => new ChatView(leaf, this, this.modelManager)
         );
 
         // Add command to open chat view
@@ -297,6 +358,13 @@ export default class AIPilot extends Plugin {
         this.addRibbonIcon("search", "Search Knowledge Base", () => {
             this.searchKnowledgeBase();
         });
+
+        // Add a ribbon icon for the debate panel
+        const debateRibbonIcon = this.addRibbonIcon(
+            'brain-cog', // Replace with your actual icon
+            'AI Agent Debate',
+            () => this.activateDebateView()
+        );
     }
 
     private loadStyles() {
@@ -313,23 +381,107 @@ export default class AIPilot extends Plugin {
         if (styleEl) styleEl.remove();
     }
 
-    async loadSettings() {
-        const data = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
-        
-        // Decrypt API key if it exists
-        if (this.settings.apiKey) {
-            this.settings.apiKey = decryptString(this.settings.apiKey, this.salt);
-        }
-    }
-
     async saveSettings() {
         // Create a copy of settings and encrypt the API key
         const dataToSave = { ...this.settings };
+        
+        // Encrypt the main API key if it exists
         if (dataToSave.apiKey) {
             dataToSave.apiKey = encryptString(dataToSave.apiKey, this.salt);
         }
+        
+        // Encrypt API keys in models
+        if (dataToSave.models && dataToSave.models.length > 0) {
+            dataToSave.models = dataToSave.models.map(model => {
+                const modelCopy = { ...model };
+                if (modelCopy.apiKey) {
+                    modelCopy.apiKey = encryptString(modelCopy.apiKey, this.salt);
+                }
+                return modelCopy;
+            });
+        }
+        
         await this.saveData(dataToSave);
+    }
+
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        
+        // Ensure essential arrays and objects are initialized
+        if (!this.settings.models) this.settings.models = [];
+        if (!this.settings.functions) this.settings.functions = [];
+        if (!this.settings.customFunctions) this.settings.customFunctions = [];
+        if (!this.settings.debateConfigs) this.settings.debateConfigs = [];
+        if (!this.settings.proxyConfig) {
+            this.settings.proxyConfig = {
+                enabled: false,
+                address: "",
+                port: "",
+                type: "http",
+                requiresAuth: false
+            };
+        }
+        
+        // Decrypt API key if it exists and validate it
+        if (this.settings.apiKey) {
+            try {
+                const decrypted = decryptString(this.settings.apiKey, this.salt);
+                
+                // Basic validation - check if it looks like a valid API key
+                // OpenAI keys start with "sk-" and should only contain alphanumeric chars
+                const isValidFormat = 
+                    (decrypted.startsWith('sk-') && /^[a-zA-Z0-9_-]+$/.test(decrypted)) || 
+                    // For other providers, just make sure it's alphanumeric
+                    /^[a-zA-Z0-9_-]+$/.test(decrypted);
+                
+                this.settings.apiKey = isValidFormat ? decrypted : '';
+                
+                if (!isValidFormat) {
+                    console.log("Invalid API key format detected, resetting key");
+                    // Could show a notice here if wanted
+                }
+            } catch (e) {
+                console.error("Error decrypting API key, resetting it", e);
+                this.settings.apiKey = '';
+            }
+        }
+        
+        // Decrypt API keys in models
+        if (this.settings.models && this.settings.models.length > 0) {
+            this.settings.models = this.settings.models.map(model => {
+                const modelCopy = { ...model };
+                if (modelCopy.apiKey) {
+                    try {
+                        const decrypted = decryptString(modelCopy.apiKey, this.salt);
+                        // Simple validation - non-empty and mostly alphanumeric
+                        if (decrypted && /^[a-zA-Z0-9_\-\.]+$/.test(decrypted)) {
+                            modelCopy.apiKey = decrypted;
+                        } else {
+                            modelCopy.apiKey = ''; // Reset invalid key
+                            console.log(`Invalid API key format detected for model ${model.name}, resetting key`);
+                        }
+                    } catch (e) {
+                        console.error(`Error decrypting API key for model ${model.name}, resetting it`, e);
+                        modelCopy.apiKey = '';
+                    }
+                }
+                return modelCopy;
+            });
+        }
+        
+        // Ensure at least one model has isDefault set
+        const hasDefaultModel = this.settings.models.some(m => m.isDefault);
+        if (!hasDefaultModel && this.settings.models.length > 0) {
+            // Set the first active model as default
+            const firstActive = this.settings.models.find(m => m.active);
+            if (firstActive) {
+                firstActive.isDefault = true;
+            } else if (this.settings.models.length > 0) {
+                // If no active models, set the first one as default and active
+                this.settings.models[0].isDefault = true;
+                this.settings.models[0].active = true;
+            }
+        }
     }
 
     initializeRequestId() {
@@ -433,119 +585,66 @@ export default class AIPilot extends Plugin {
 
     // Approximate token estimation function
     estimateTokenCount(text: string): number {
-        // Rough estimation: 1 token ≈ 4 characters for English, 2 characters for Chinese
-        const englishLength = text.replace(/[\u4e00-\u9fff]/g, '').length;
-        const chineseLength = text.length - englishLength;
-        return Math.ceil(englishLength / 4 + chineseLength / 2);
+        // Rough estimation: ~4 chars per token for English text
+        return Math.ceil(text.length / 4);
     }
 
     async callAI(content: string, promptPrefix: string = ''): Promise<string> {
-        const { model } = this.settings;
-        const maxTokens = MODEL_TOKEN_LIMITS[model] || 4096;
-
+        // Get the default model from the model manager
+        const defaultModel = this.modelManager.getDefaultModel();
+        if (!defaultModel) {
+            new Notice("No active model found. Please configure a model in settings.");
+            return "Error: No active model configured";
+        }
+        
+        // Estimate max tokens based on model name or use a safe default
+        const maxTokens = 4096; // Safe default
+        
         let maxTokensForContent = maxTokens - this.estimateTokenCount(promptPrefix);
         const MIN_TOKENS_FOR_CONTENT = 500; // Adjust based on model capability
-
+        
         if (maxTokensForContent < MIN_TOKENS_FOR_CONTENT) {
             maxTokensForContent = MIN_TOKENS_FOR_CONTENT;
         }
-
+        
         const tokenCount = this.estimateTokenCount(content);
-
-        // if (tokenCount > maxTokens) {
+        
         if (tokenCount > maxTokensForContent) {
             // Split the content into chunks
-            // const chunks = this.chunkContent(content, maxTokens - this.estimateTokenCount(promptPrefix));
             const chunks = this.chunkContent(content, maxTokensForContent);
             const results = [];
-
+            
             new Notice(`The text is too long and will be processed in ${chunks.length} parts.`);
-
+            
             for (const chunk of chunks) {
-                const result = await this.callAIChunk(chunk, promptPrefix);
-                results.push(result.trim());
+                try {
+                    const prompt = `${promptPrefix}${chunk}\n\nNote: This is part of a larger text. Ensure continuity with the previous sections.`;
+                    const result = await this.modelManager.callModel(
+                        defaultModel.id, 
+                        prompt, 
+                        { maxTokens: maxTokens }
+                    );
+                    results.push(result.trim());
+                } catch (error) {
+                    console.error("Error processing chunk:", error);
+                    new Notice(`Error processing chunk: ${error.message || "Unknown error"}`);
+                }
             }
-
+            
             return results.join('\n\n');
         } else {
-            return await this.callAIChunk(content, promptPrefix);
-        }
-    }
-
-    async callAIChunk(content: string, promptPrefix: string): Promise<string> {
-        const { apiKey, model, provider } = this.settings;
-        let url = '';
-        let data: any = {};
-
-        // const prompt = `${promptPrefix}${content}`;
-        const prompt = `${promptPrefix}${content}\n\nNote: This is part of a larger text. Ensure continuity with the previous sections.`;
-        const chatModels = ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'GLM-3-Turbo', 'GLM-4', 'GLM-4-Air', 'GLM-4-Long'];
-
-        if (provider === 'openai') {
-            if (chatModels.includes(model)) {
-                url = 'https://api.openai.com/v1/chat/completions';
-                data = {
-                    model: model,
-                    messages: [{ role: 'user', content: prompt }],
-                    request_id: this.requestId,
-                };
-            } else {
-                url = 'https://api.openai.com/v1/completions';
-                data = {
-                    model: model,
-                    prompt: prompt,
-                    max_tokens: 1000,
-                    request_id: this.requestId,
-                };
+            const prompt = `${promptPrefix}${content}`;
+            try {
+                return await this.modelManager.callModel(
+                    defaultModel.id, 
+                    prompt, 
+                    { maxTokens: maxTokens }
+                );
+            } catch (error) {
+                console.error("Error calling AI:", error);
+                new Notice(`Error calling AI: ${error.message || "Unknown error"}`);
+                return 'Error fetching AI response';
             }
-        } else if (provider === 'zhipuai') {
-            url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-            data = {
-                model: model,
-                messages: [{ role: 'user', content: prompt }],
-                stream: false,
-                request_id: this.requestId,
-            };
-        } else if (provider === 'groq') {
-            url = 'https://api.groq.com/openai/v1/chat/completions';
-            data = {
-                model: model,
-                messages: [{ role: 'user', content: prompt }],
-                request_id: this.requestId,
-            }
-        }
-
-        try {
-            const response = await requestUrl({
-                url: url,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify(data),
-                contentType: 'application/json',
-            });
-
-            const responseData = response.json;
-
-            if (provider === 'openai' && chatModels.includes(model)) {
-                return responseData.choices[0]?.message?.content || 'No response';
-            } else if (provider === 'openai') {
-                return responseData.choices[0]?.text || 'No response';
-            } else {  // TODO add try...catch for groq
-                return responseData.choices[0]?.message?.content || 'No response';
-            }
-        } catch (error) {
-            console.error("Error calling AI:", error);
-            if (error.response?.status === 401) {
-                new Notice("Invalid API key. Please check your settings.");
-            } else if (error.response?.status === 429) {
-                new Notice("Rate limit exceeded. Please try again later.");
-            } else {
-                new Notice("Error: " + (error.message || "Unknown error occurred"));
-            }
-            return 'Error fetching AI response';
         }
     }
 
@@ -580,228 +679,67 @@ export default class AIPilot extends Plugin {
 
     async callAIChat(messages: { role: 'user' | 'assistant', content: string }[], 
                    onUpdate?: (chunk: string) => void): Promise<string> {
-        const { apiKey, model, provider } = this.settings;
-        const maxTokens = MODEL_TOKEN_LIMITS[model] || 4096;
-        const MAX_RETRIES = 3;
-        const RETRY_DELAY = 1000; // 1 second
-
+        // Get the default model from the model manager
+        const defaultModel = this.modelManager.getDefaultModel();
+        if (!defaultModel) {
+            new Notice("No active model found. Please configure a model in settings.");
+            return "Error: No active model configured";
+        }
+        
         // Estimate total tokens in the conversation
         let totalTokens = 0;
         for (const msg of messages) {
             totalTokens += this.estimateTokenCount(msg.content);
         }
-
-        if (totalTokens > maxTokens) {
-            messages = this.trimMessages(messages, maxTokens);
+        
+        // Combine messages into a single prompt
+        // This is a simplified approach - ideally we would structure this based on model type
+        const lastMessage = messages[messages.length - 1];
+        let systemPrompt = defaultModel.systemPrompt || "You are a helpful assistant.";
+        
+        try {
+            // Use the ModelManager for AI calls
+            return await this.modelManager.callModel(
+                defaultModel.id,
+                lastMessage.content,
+                { 
+                    maxTokens: 4096, // Safe default 
+                    conversation: messages,
+                    streaming: !!onUpdate,
+                    onChunk: onUpdate
+                }
+            );
+        } catch (error) {
+            console.error("Error calling AI chat:", error);
+            new Notice(`Error calling AI chat: ${error.message || "Unknown error"}`);
+            return 'Error fetching AI response';
         }
-
-        let url = '';
-        let data: any = {};
-
-        if (provider === 'openai') {
-            url = 'https://api.openai.com/v1/chat/completions';
-            data = {
-                model: model,
-                messages: messages,
-                request_id: this.requestId,
-                stream: true
-            };
-        } else if (provider === 'zhipuai') {
-            url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-            data = {
-                model: model,
-                messages: messages,
-                stream: true,
-                request_id: this.requestId,
-            };
-        } else if (provider === 'groq') {
-            url = 'https://api.groq.com/openai/v1/chat/completions';
-            data = {
-                model: model,
-                messages: messages,
-                request_id: this.requestId,
-                stream: true
-            }
-        }
-
-        let retryCount = 0;
-        while (retryCount < MAX_RETRIES) {
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`,
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                if (!response.ok) {
-                    // Get more information about the error for better diagnostics
-                    const errorDetails = await response.text().catch(() => '');
-                    const errorStatus = response.status;
-                    
-                    // Special case for 400 errors that might be caused by images
-                    if (errorStatus === 400) {
-                        // Check if the message content contains image markers
-                        const hasImageContent = messages.some(msg => {
-                            const content = msg.content || '';
-                            return content.includes('![') || 
-                                   content.includes('<img') || 
-                                   content.includes('data:image/') ||
-                                   content.includes('http://') && (
-                                     content.includes('.png') || 
-                                     content.includes('.jpg') || 
-                                     content.includes('.jpeg') || 
-                                     content.includes('.gif')
-                                   );
-                        });
-                        
-                        if (hasImageContent) {
-                            throw new Error(`The request contains images or unsupported content. Please remove images and try again.`);
-                        }
-                    }
-                    
-                    throw new Error(`HTTP error! status: ${errorStatus} ${errorDetails ? '- ' + errorDetails.substring(0, 100) : ''}`);
-                }
-
-                if (!response.body) {
-                    throw new Error('Response body is null');
-                }
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let fullContent = '';
-                let buffer = '';
-                let lastChunkTime = Date.now();
-                const TIMEOUT = 30000; // 30 seconds timeout
-
-                try {
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) break;
-
-                        // Check for timeout
-                        const now = Date.now();
-                        if (now - lastChunkTime > TIMEOUT) {
-                            throw new Error('Stream timeout');
-                        }
-                        lastChunkTime = now;
-
-                        // Decode the chunk and add it to the buffer
-                        buffer += decoder.decode(value, { stream: true });
-
-                        // Process complete lines from the buffer
-                        const lines = buffer.split('\n');
-                        // Keep the last (potentially incomplete) line in the buffer
-                        buffer = lines.pop() || '';
-
-                        for (const line of lines) {
-                            const trimmedLine = line.trim();
-                            if (!trimmedLine || trimmedLine === 'data: [DONE]') continue;
-
-                            if (trimmedLine.startsWith('data: ')) {
-                                try {
-                                    const data = trimmedLine.slice(6);
-                                    if (data === '[DONE]') continue;
-
-                                    const json = JSON.parse(data);
-                                    let content = '';
-
-                                    if (provider === 'openai') {
-                                        content = json.choices?.[0]?.delta?.content || '';
-                                    } else if (provider === 'zhipuai') {
-                                        content = json.choices?.[0]?.delta?.content || json.choices?.[0]?.message?.content || '';
-                                    } else if (provider === 'groq') {
-                                        content = json.choices?.[0]?.delta?.content || '';
-                                    }
-
-                                    if (content) {
-                                        fullContent += content;
-                                        if (onUpdate) {
-                                            try {
-                                                await onUpdate(content);
-                                            } catch (e) {
-                                                console.warn('Error in onUpdate callback:', e);
-                                            }
-                                        }
-                                    }
-                                } catch (e) {
-                                    console.warn('Error parsing streaming response:', e, trimmedLine);
-                                }
-                            }
-                        }
-                    }
-
-                    // Process any remaining data in the buffer
-                    if (buffer) {
-                        const trimmedBuffer = buffer.trim();
-                        if (trimmedBuffer && trimmedBuffer !== 'data: [DONE]' && trimmedBuffer.startsWith('data: ')) {
-                            try {
-                                const data = trimmedBuffer.slice(6);
-                                if (data !== '[DONE]') {
-                                    const json = JSON.parse(data);
-                                    let content = '';
-
-                                    if (provider === 'openai') {
-                                        content = json.choices?.[0]?.delta?.content || '';
-                                    } else if (provider === 'zhipuai') {
-                                        content = json.choices?.[0]?.delta?.content || json.choices?.[0]?.message?.content || '';
-                                    } else if (provider === 'groq') {
-                                        content = json.choices?.[0]?.delta?.content || '';
-                                    }
-
-                                    if (content) {
-                                        fullContent += content;
-                                        if (onUpdate) {
-                                            try {
-                                                await onUpdate(content);
-                                            } catch (e) {
-                                                console.warn('Error in onUpdate callback:', e);
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (e) {
-                                console.warn('Error parsing final buffer:', e);
-                            }
-                        }
-                    }
-
-                    return fullContent || 'No response';
-                } finally {
-                    reader.releaseLock();
-                }
-            } catch (error) {
-                console.error(`Error calling AI (attempt ${retryCount + 1}/${MAX_RETRIES}):`, error);
-                
-                if (retryCount === MAX_RETRIES - 1) {
-                    // Last retry failed
-                    if (error.status === 401) {
-                        new Notice("Invalid API key. Please check your settings.");
-                    } else if (error.status === 429) {
-                        new Notice("Rate limit exceeded. Please try again later.");
-                    } else {
-                        new Notice("Error: " + (error.message || "Unknown error occurred"));
-                    }
-                    throw error;
-                }
-                
-                // Wait before retrying
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-                retryCount++;
-            }
-        }
-
-        throw new Error('Max retries exceeded');
     }
 
-    trimMessages(messages: { role: 'user' | 'assistant', content: string }[], maxTokens: number) {
-        // Remove messages from the beginning until under the token limit
-        while (this.estimateTokenCount(JSON.stringify(messages)) > maxTokens) {
-            messages.shift();
+    async callAIChunk(content: string, promptPrefix: string): Promise<string> {
+        // This method is kept for backward compatibility
+        // but now uses the ModelManager for actual API calls
+        
+        // Get the default model from the model manager
+        const defaultModel = this.modelManager.getDefaultModel();
+        if (!defaultModel) {
+            new Notice("No active model found. Please configure a model in settings.");
+            return "Error: No active model configured";
         }
-        return messages;
+        
+        const prompt = `${promptPrefix}${content}\n\nNote: This is part of a larger text. Ensure continuity with the previous sections.`;
+        
+        try {
+            return await this.modelManager.callModel(
+                defaultModel.id,
+                prompt,
+                { maxTokens: 4096 } // Safe default
+            );
+        } catch (error) {
+            console.error("Error calling AI:", error);
+            new Notice(`Error calling AI: ${error.message || "Unknown error"}`);
+            return 'Error fetching AI response';
+        }
     }
 
     async organizeText(editor?: any) {
@@ -1075,8 +1013,22 @@ export default class AIPilot extends Plugin {
         return matches / Math.max(queryWords.size, 1);
     }
 
-    // 获取文本向量
+    // Getting text embedding vector
     async getEmbedding(text: string): Promise<number[]> {
+        try {
+            // Use the ModelManager to get embeddings from the default model
+            return await this.modelManager.getEmbedding(text);
+        } catch (error) {
+            console.error("Error getting embedding:", error);
+            
+            // Fallback to legacy implementation if ModelManager fails
+            console.log("Falling back to legacy embedding implementation");
+            return this.getLegacyEmbedding(text);
+        }
+    }
+    
+    // Legacy implementation for backward compatibility
+    private async getLegacyEmbedding(text: string): Promise<number[]> {
         const { provider, apiKey, embeddingModel } = this.settings;
         
         try {
@@ -1177,7 +1129,7 @@ export default class AIPilot extends Plugin {
             }
             throw new Error('Unsupported provider for embeddings');
         } catch (error) {
-            console.error("Error getting embedding:", error);
+            console.error("Error getting legacy embedding:", error);
             throw error;
         }
     }
@@ -1406,49 +1358,116 @@ export default class AIPilot extends Plugin {
             new Notice("Polish results applied with diff markers. Use Ctrl+Shift+P (or Cmd+Shift+P) to remove all markup.", 7000);
         } else {
             // If text is selected, show the modal with the diff
-            new PolishResultModal(this.app, this, content, polishedText, (updatedContent) => {
-                // Handle apply changes
-                editor.replaceSelection(updatedContent);
-            }).open();
+            new PolishResultModal(
+                this.app,
+                content,
+                polishedText,
+                (updatedContent) => {
+                    // Handle apply changes
+                    editor.replaceSelection(updatedContent);
+                },
+                this
+            ).open();
         }
     }
     
-    // Helper method to generate text with diff markers for direct editing
-    private generateDiffHtml(original: string, polished: string): string {
-        // Simple diff implementation that marks deletions and additions
-        // For direct editing in the editor, we'll use markdown-compatible syntax
-        // Deletions will use ~~strikethrough~~ and additions will use **bold**
+    // Method to generate diff HTML with highlighting
+    private generateDiffHtml(original: string, modified: string): string {
+        try {
+            // Use the plugin's diff library if available
+            if (this.diffMatchPatchLib) {
+                return this.generateWordLevelDiff(original, modified);
+            }
+        } catch (e) {
+            console.error("Error using diff-match-patch library:", e);
+        }
+
+        // Fallback to a more basic paragraph-level diff
+        return this.generateParagraphLevelDiff(original, modified);
+    }
+
+    // Advanced word-level diff implementation
+    private generateWordLevelDiff(original: string, modified: string): string {
+        try {
+            // Use the plugin's diff library
+            const dmp = new this.diffMatchPatchLib();
+            const diffs = dmp.diff_main(original, modified);
+            dmp.diff_cleanupSemantic(diffs);
+            
+            let html = '';
+            for (const [operation, text] of diffs) {
+                const escText = this.escapeHtml(text);
+                if (operation === -1) {
+                    // Deletion
+                    html += `<span class="polish-deleted">${escText}</span>`;
+                } else if (operation === 1) {
+                    // Addition
+                    html += `<span class="polish-highlight">${escText}</span>`;
+                } else {
+                    // Unchanged
+                    html += escText;
+                }
+            }
+
+            // Convert newlines to <br> for proper HTML display
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        } catch (e) {
+            console.error("Error in word-level diff:", e);
+            return this.generateParagraphLevelDiff(original, modified);
+        }
+    }
+
+    // Escape HTML special characters to prevent injection
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Basic paragraph-level diff (original implementation, used as fallback)
+    private generateParagraphLevelDiff(original: string, modified: string): string {
+        // Split into paragraphs
+        const originalParagraphs = original.split('\n');
+        const modifiedParagraphs = modified.split('\n');
         
-        // Split into lines for line-by-line comparison
-        const originalLines = original.split('\n');
-        const polishedLines = polished.split('\n');
+        // If extremely different lengths, don't try to diff - just return the modified content
+        if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
+            return modified;
+        }
         
-        // Simple line-by-line diff (can be enhanced with a proper diff algorithm)
+        // For this simple implementation, we'll just check for identical paragraphs
+        // and assume others have been modified
         const result: string[] = [];
         
-        // Find the shorter and longer arrays
-        const maxLength = Math.max(originalLines.length, polishedLines.length);
+        // Use the longer array length to ensure we process all paragraphs
+        const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
         
         for (let i = 0; i < maxLength; i++) {
-            const originalLine = i < originalLines.length ? originalLines[i] : '';
-            const polishedLine = i < polishedLines.length ? polishedLines[i] : '';
+            const origPara = i < originalParagraphs.length ? originalParagraphs[i] : '';
+            const modPara = i < modifiedParagraphs.length ? modifiedParagraphs[i] : '';
             
-            if (originalLine === polishedLine) {
-                // No change
-                result.push(polishedLine);
-            } else if (originalLine.trim() === '') {
-                // Line added
-                result.push(`**${polishedLine}**`);
-            } else if (polishedLine.trim() === '') {
-                // Line deleted
-                result.push(`~~${originalLine}~~`);
+            if (origPara === modPara) {
+                // Identical paragraph
+                result.push(modPara);
+            } else if (origPara && !modPara) {
+                // Paragraph was deleted
+                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+            } else if (!origPara && modPara) {
+                // New paragraph was added
+                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
             } else {
-                // Line changed - show both with markers
-                result.push(`~~${originalLine}~~\n**${polishedLine}**`);
+                // Paragraph was modified
+                // Show both the deleted and added versions
+                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
             }
         }
         
-        return result.join('\n');
+        return result.join('<br>');
     }
 
     // Add this new method to clean Polish markup
@@ -1471,6 +1490,281 @@ export default class AIPilot extends Plugin {
         editor.setValue(cleanedContent);
         
         new Notice("Polish markup removed");
+    }
+
+    async activateDebateView() {
+        const { workspace } = this.app;
+        
+        // Check if view already exists and is open
+        let leaf = workspace.getLeavesOfType(DEBATE_VIEW_TYPE)[0];
+        
+        if (!leaf) {
+            // Create a new leaf in the right sidebar for the debate view
+            const rightLeaf = workspace.getRightLeaf(false);
+            
+            if (!rightLeaf) {
+                new Notice("Could not create debate view");
+                return;
+            }
+            
+            // Set the rightLeaf to leaf (now we know it's not null)
+            leaf = rightLeaf;
+            await leaf.setViewState({ type: DEBATE_VIEW_TYPE });
+        }
+        
+        // Reveal the leaf in the right sidebar
+        workspace.revealLeaf(leaf);
+    }
+
+    private migrateLegacyAPIKey(): void {
+        // Check if we have a legacy API key but no models configured
+        if (this.settings.apiKey && (!this.settings.models || this.settings.models.length === 0)) {
+            console.log('Migrating legacy API key to models system');
+            
+            // Create a new model using the legacy API key
+            const newModel: LLMModelConfig = {
+                id: `model_${Date.now()}`,
+                name: `${this.settings.provider || 'openai'} (Migrated)`,
+                type: (this.settings.provider || 'openai') as LLMModelConfig['type'],
+                apiKey: this.settings.apiKey,
+                systemPrompt: 'You are a helpful assistant.',
+                active: true,
+                isDefault: true,
+                modelName: this.settings.model || this.settings.chatModel || this.getDefaultModelName(this.settings.provider)
+            };
+            
+            // Add the model to the models array
+            if (!this.settings.models) {
+                this.settings.models = [];
+            }
+            this.settings.models.push(newModel);
+            
+            // Clear the legacy API key
+            this.settings.apiKey = '';
+            
+            // Save settings
+            this.saveSettings().catch(e => {
+                console.error('Failed to save settings after API key migration', e);
+            });
+        }
+    }
+    
+    private getDefaultModelName(provider: string | undefined): string {
+        switch (provider) {
+            case 'openai':
+                return 'gpt-3.5-turbo';
+            case 'zhipuai':
+                return 'glm-4';
+            case 'groq':
+                return 'llama2-70b-4096';
+            default:
+                return 'gpt-3.5-turbo';
+        }
+    }
+
+    private async loadDiffMatchPatchLibrary(): Promise<void> {
+        try {
+            // Import the diff-match-patch library
+            const diffMatchPatchScript = document.createElement('script');
+            diffMatchPatchScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/diff-match-patch/1.0.0/diff-match-patch.min.js';
+            diffMatchPatchScript.onload = () => {
+                this.diffMatchPatchLib = window.diff_match_patch;
+            };
+            document.head.appendChild(diffMatchPatchScript);
+        } catch (error) {
+            console.error('Failed to load diff-match-patch library:', error);
+        }
+    }
+}
+
+// Add the PolishResultModal class
+export class PolishResultModal extends Modal {
+    private originalContent: string;
+    private polishedContent: string;
+    private onApply: (content: string) => void;
+    private plugin: AIPilotPlugin;
+
+    constructor(
+        app: App,
+        originalContent: string,
+        polishedContent: string,
+        onApply: (content: string) => void,
+        plugin: AIPilotPlugin
+    ) {
+        super(app);
+        this.originalContent = originalContent;
+        this.polishedContent = polishedContent;
+        this.onApply = onApply;
+        this.plugin = plugin;
+    }
+    
+    // Method to generate diff HTML with highlighting
+    private generateDiffHtml(original: string, modified: string): string {
+        try {
+            // Use the plugin's diff library if available
+            if (this.plugin.diffMatchPatchLib) {
+                return this.generateWordLevelDiff(original, modified);
+            }
+        } catch (e) {
+            console.error("Error using diff-match-patch library:", e);
+        }
+
+        // Fallback to a more basic paragraph-level diff
+        return this.generateParagraphLevelDiff(original, modified);
+    }
+
+    // Advanced word-level diff implementation
+    private generateWordLevelDiff(original: string, modified: string): string {
+        try {
+            // Use the plugin's diff library
+            const dmp = new this.plugin.diffMatchPatchLib();
+            const diffs = dmp.diff_main(original, modified);
+            dmp.diff_cleanupSemantic(diffs);
+            
+            let html = '';
+            for (const [operation, text] of diffs) {
+                const escText = this.escapeHtml(text);
+                if (operation === -1) {
+                    // Deletion
+                    html += `<span class="polish-deleted">${escText}</span>`;
+                } else if (operation === 1) {
+                    // Addition
+                    html += `<span class="polish-highlight">${escText}</span>`;
+                } else {
+                    // Unchanged
+                    html += escText;
+                }
+            }
+
+            // Convert newlines to <br> for proper HTML display
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        } catch (e) {
+            console.error("Error in word-level diff:", e);
+            return this.generateParagraphLevelDiff(original, modified);
+        }
+    }
+
+    // Escape HTML special characters to prevent injection
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    
+    // Basic paragraph-level diff (original implementation, used as fallback)
+    private generateParagraphLevelDiff(original: string, modified: string): string {
+        // Split into paragraphs
+        const originalParagraphs = original.split('\n');
+        const modifiedParagraphs = modified.split('\n');
+        
+        // If extremely different lengths, don't try to diff - just return the modified content
+        if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
+            return modified;
+        }
+        
+        // For this simple implementation, we'll just check for identical paragraphs
+        // and assume others have been modified
+        const result: string[] = [];
+        
+        // Use the longer array length to ensure we process all paragraphs
+        const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
+        
+        for (let i = 0; i < maxLength; i++) {
+            const origPara = i < originalParagraphs.length ? originalParagraphs[i] : '';
+            const modPara = i < modifiedParagraphs.length ? modifiedParagraphs[i] : '';
+            
+            if (origPara === modPara) {
+                // Identical paragraph
+                result.push(modPara);
+            } else if (origPara && !modPara) {
+                // Paragraph was deleted
+                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+            } else if (!origPara && modPara) {
+                // New paragraph was added
+                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+            } else {
+                // Paragraph was modified
+                // Show both the deleted and added versions
+                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+            }
+        }
+        
+        return result.join('<br>');
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        
+        // Add polish-result-modal class for styling
+        contentEl.addClass('polish-result-modal');
+        
+        // Modal title
+        contentEl.createEl("h2", { text: "Polished Result", cls: "polish-header" });
+        
+        // Description
+        contentEl.createEl("p", { 
+            text: "The AI has polished your content. You can apply these changes or dismiss them.",
+            cls: "polish-description"
+        });
+        
+        // Add legend for diff colors
+        const legendContainer = contentEl.createDiv({ cls: "polish-legend" });
+        legendContainer.createEl("h3", { text: "Changes Legend:" });
+        
+        const legendItems = legendContainer.createDiv({ cls: "polish-legend-items" });
+        
+        const deletedItem = legendItems.createDiv({ cls: "polish-legend-item" });
+        const deletedSample = deletedItem.createSpan({ cls: "polish-sample polish-deleted", text: "Deleted text" });
+        deletedItem.createSpan({ text: " - Content that has been removed" });
+        
+        const addedItem = legendItems.createDiv({ cls: "polish-legend-item" });
+        const addedSample = addedItem.createSpan({ cls: "polish-sample polish-highlight", text: "Added text" });
+        addedItem.createSpan({ text: " - New or modified content" });
+        
+        // Generate diff between original and polished content
+        const diffHtml = this.generateDiffHtml(this.originalContent, this.polishedContent);
+        
+        // Content display with diff
+        const contentContainer = contentEl.createDiv({ cls: "polish-result-container diff-rendered" });
+        contentContainer.innerHTML = diffHtml;
+        
+        // Buttons
+        const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
+        
+        const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
+        cancelButton.addEventListener("click", () => {
+            this.close();
+        });
+        
+        const applyButton = buttonContainer.createEl("button", { 
+            text: "Apply Changes",
+            cls: "mod-cta"
+        });
+        applyButton.addEventListener("click", () => {
+            // Clean up the diff markers when applying
+            const cleanContent = this.cleanDiffMarkers(this.polishedContent);
+            this.onApply(cleanContent);
+            this.close();
+        });
+    }
+    
+    // Method to clean diff markers from content
+    private cleanDiffMarkers(content: string): string {
+        // Remove HTML tags from content
+        return content
+            .replace(/<span class="polish-deleted">.*?<\/span>/g, '')
+            .replace(/<span class="polish-highlight">(.*?)<\/span>/g, '$1')
+            .replace(/\n\n+/g, '\n\n');
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }
 
@@ -1521,9 +1815,9 @@ class CustomPromptInputModal extends Modal {
 }
 
 class FeatureSelectionModal extends Modal {
-    plugin: AIPilot;
+    plugin: AIPilotPlugin;
 
-    constructor(app: App, plugin: AIPilot) {
+    constructor(app: App, plugin: AIPilotPlugin) {
         super(app);
         this.plugin = plugin;
     }
@@ -1618,11 +1912,11 @@ export class LoadingModal extends Modal {
 class AIContentModal extends Modal {
     content: string;
     onApply: (content: string) => void;
-    plugin: AIPilot;
+    plugin: AIPilotPlugin;
     editor: Editor;
     undoStack: { from: EditorPosition, to: EditorPosition, text: string }[] = [];
 
-    constructor(app: App, plugin: AIPilot, content: string, editor: Editor, onApply: (content: string) => void) {
+    constructor(app: App, plugin: AIPilotPlugin, content: string, editor: Editor, onApply: (content: string) => void) {
         super(app);
         this.plugin = plugin;
         this.content = content;
@@ -1700,10 +1994,10 @@ class ChatModal extends Modal {
     private messageContainer: HTMLElement | null = null;
     private currentInput: HTMLTextAreaElement | null = null;
     private history: Message[] = [];
-    private plugin: AIPilot;
+    private plugin: AIPilotPlugin;
     private editor: Editor | null;
 
-    constructor(app: App, plugin: AIPilot, initialHistory: Message[] = [], editor: Editor | null = null) {
+    constructor(app: App, plugin: AIPilotPlugin, initialHistory: Message[] = [], editor: Editor | null = null) {
         super(app);
         this.plugin = plugin;
         this.history = initialHistory;
@@ -2166,10 +2460,10 @@ class SearchResultsModal extends Modal {
     }
 }
 
-class AITextSettingTab extends PluginSettingTab {
-    plugin: AIPilot;
+class AIPilotSettingTab extends PluginSettingTab {
+    plugin: AIPilotPlugin;
 
-    constructor(app: App, plugin: AIPilot) {
+    constructor(app: App, plugin: AIPilotPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
@@ -2178,115 +2472,40 @@ class AITextSettingTab extends PluginSettingTab {
         const {containerEl} = this;
         containerEl.empty();
         
-        // API Settings
-        containerEl.createEl('h2', { text: 'API Settings' });
+        // Model Configuration Section - Moved to top since it's now the primary configuration method
+        containerEl.createEl('h2', { text: 'AI Model Configuration' });
+        
+        // Add explanation text
+        containerEl.createEl('p', {
+            text: 'Configure your AI models to use with the plugin. All API keys are now managed here.',
+            cls: 'setting-item-description'
+        });
+        
+        containerEl.createEl('div', {
+            text: 'The plugin has migrated to a multi-model system. Add models below to use them with the plugin.',
+            cls: 'model-migration-notice'
+        });
         
         new Setting(containerEl)
-            .setName('API Key')
-            .setDesc('Enter your API key')
-            .addText(text => text
-                .setPlaceholder('Enter your API key')
-                .setValue(this.plugin.settings.apiKey)
-                .onChange(async (value) => {
-                    this.plugin.settings.apiKey = value;
-                    await this.plugin.saveSettings();
-                }));
-                
-        // Provider Settings
-        new Setting(containerEl)
-            .setName('API Provider')
-            .setDesc('Select your AI provider')
-            .addDropdown(dropdown => dropdown
-                .addOption('openai', 'OpenAI')
-                .addOption('zhipuai', 'ZhipuAI')
-                .addOption('groq', 'Groq')
-                .setValue(this.plugin.settings.provider)
-                .onChange(async (value: 'openai' | 'zhipuai' | 'groq') => {
-                    this.plugin.settings.provider = value;
-                    await this.plugin.saveSettings();
-                    this.display(); // Refresh to update model options
-                }));
+          .setName('AI Models')
+          .setDesc('Add, edit, or remove AI models')
+          .addButton(button => button
+            .setButtonText('Add Model')
+            .setCta()
+            .onClick(() => {
+              this.openModelConfigModal();
+            }));
         
-        // Model Settings
-        if (this.plugin.settings.provider === 'openai') {
-            new Setting(containerEl)
-                .setName('Model')
-                .setDesc('Select OpenAI model')
-                .addDropdown(dropdown => dropdown
-                    .addOption('gpt-3.5-turbo', 'GPT-3.5 Turbo')
-                    .addOption('gpt-4', 'GPT-4')
-                    .addOption('gpt-4-turbo', 'GPT-4 Turbo')
-                    .setValue(this.plugin.settings.model)
-                    .onChange(async (value) => {
-                        this.plugin.settings.model = value;
-                        await this.plugin.saveSettings();
-                    }));
-        } else if (this.plugin.settings.provider === 'zhipuai') {
-            new Setting(containerEl)
-                .setName('Chat Model')
-                .setDesc('Select ZhipuAI model')
-                .addDropdown(dropdown => {
-                    Object.keys(ZHIPUAI_MODELS.CHAT).forEach(modelName => {
-                        dropdown.addOption(modelName, modelName);
-                    });
-                    return dropdown
-                        .setValue(this.plugin.settings.chatModel)
-                        .onChange(async (value) => {
-                            this.plugin.settings.chatModel = value as keyof typeof ZHIPUAI_MODELS.CHAT;
-                            this.plugin.settings.model = value;
-                            await this.plugin.saveSettings();
-                        });
-                });
-        } else if (this.plugin.settings.provider === 'groq') {
-            new Setting(containerEl)
-                .setName('Model')
-                .setDesc('Select Groq model')
-                .addDropdown(dropdown => dropdown
-                    .addOption('llama2-70b-4096', 'Llama-2 70B')
-                    .addOption('mixtral-8x7b-32768', 'Mixtral 8x7B')
-                    .setValue(this.plugin.settings.model)
-                    .onChange(async (value) => {
-                        this.plugin.settings.model = value;
-                    await this.plugin.saveSettings();
-                }));
-    }
+        // Display existing models
+        const modelsContainer = containerEl.createDiv({ cls: 'models-container' });
+        this.renderModelsList(modelsContainer);
         
-        // Embedding Model Settings
-        new Setting(containerEl)
-            .setName('Embedding Model')
-            .setDesc('Select embedding model')
-            .addDropdown(dropdown => {
-                Object.keys(EMBEDDING_MODELS).forEach(modelName => {
-                    dropdown.addOption(modelName, modelName);
-                });
-                return dropdown
-                    .setValue(this.plugin.settings.embeddingModel)
-                    .onChange(async (value) => {
-                        this.plugin.settings.embeddingModel = value as EmbeddingModelKey;
-                        const dimensions = EMBEDDING_MODELS[value as EmbeddingModelKey].dimensions;
-                        if (dimensions) {
-                            this.plugin.settings.embeddingDimensions = dimensions;
-                        }
-                        await this.plugin.saveSettings();
-                    });
-            });
+        // Chat History Section
+        containerEl.createEl('h2', { text: 'Chat History' });
         
-        // Knowledge Base Setting
-        new Setting(containerEl)
-            .setName('Knowledge Base Path')
-            .setDesc('Enter the path to your knowledge base folder')
-            .addText(text => text
-                .setPlaceholder('AI_KnowledgeBase')
-                .setValue(this.plugin.settings.knowledgeBasePath)
-                .onChange(async (value) => {
-                    this.plugin.settings.knowledgeBasePath = value;
-                    await this.plugin.saveSettings();
-                }));
-        
-        // Chat History Path Setting
         new Setting(containerEl)
             .setName('Chat History Path')
-            .setDesc('Enter the path to store your chat history files')
+            .setDesc('Path to store chat history files (relative to vault)')
             .addText(text => text
                 .setPlaceholder('AI_ChatHistory')
                 .setValue(this.plugin.settings.chatHistoryPath)
@@ -2303,7 +2522,12 @@ class AITextSettingTab extends PluginSettingTab {
         });
         
         // Initialize functions array if needed
-        if (!this.plugin.settings.functions || this.plugin.settings.functions.length === 0) {
+        if (!this.plugin.settings.functions) {
+            this.plugin.settings.functions = [];
+        }
+
+        // Add default functions if array is empty
+        if (this.plugin.settings.functions.length === 0 && DEFAULT_SETTINGS.functions) {
             this.plugin.settings.functions = [...DEFAULT_SETTINGS.functions];
             
             // Copy any custom functions
@@ -2312,7 +2536,7 @@ class AITextSettingTab extends PluginSettingTab {
             }
         }
         
-        // Migrate prompts to functions for backward compatibility
+        // Migrate prompts to functions
         this.migratePromptsToFunctions();
         
         // Display all functions
@@ -2325,7 +2549,16 @@ class AITextSettingTab extends PluginSettingTab {
                 .setButtonText('Add New Function')
                 .setCta()
                 .onClick(() => {
-                    new CustomFunctionModal(this.app, null, async (customFunc) => {
+                    // Create a new default CustomFunction object instead of passing null
+                    const newCustomFunc: CustomFunction = {
+                        name: '',
+                        icon: 'star',
+                        prompt: '',
+                        tooltip: '',
+                        isBuiltIn: false
+                    };
+                    
+                    new CustomFunctionModal(this.app, newCustomFunc, async (customFunc) => {
                         // Add to unified functions array
                         this.plugin.settings.functions.push(customFunc);
                         
@@ -2339,579 +2572,487 @@ class AITextSettingTab extends PluginSettingTab {
                         this.display(); // Refresh display
                     }).open();
                 }));
+        
+        // Proxy Configuration Section
+        containerEl.createEl('h2', { text: 'Network Proxy Configuration' });
+        
+        const proxyConfig = this.plugin.settings.proxyConfig;
+        
+        new Setting(containerEl)
+          .setName('Enable Proxy')
+          .setDesc('Use a proxy for all API requests to LLM providers')
+          .addToggle(toggle => toggle
+            .setValue(proxyConfig.enabled)
+            .onChange(async (value) => {
+              proxyConfig.enabled = value;
+              await this.plugin.saveSettings();
+              this.plugin.modelManager.updateProxyConfig(proxyConfig);
+            }));
+        
+        if (proxyConfig.enabled) {
+          new Setting(containerEl)
+            .setName('Proxy Type')
+            .setDesc('Select the type of proxy to use')
+            .addDropdown(dropdown => dropdown
+              .addOption('http', 'HTTP')
+              .addOption('https', 'HTTPS')
+              .addOption('socks5', 'SOCKS5')
+              .setValue(proxyConfig.type)
+              .onChange(async (value: 'http' | 'https' | 'socks5') => {
+                proxyConfig.type = value;
+                await this.plugin.saveSettings();
+                this.plugin.modelManager.updateProxyConfig(proxyConfig);
+              }));
+          
+          new Setting(containerEl)
+            .setName('Proxy Address')
+            .setDesc('Enter the proxy server address')
+            .addText(text => text
+              .setPlaceholder('127.0.0.1')
+              .setValue(proxyConfig.address)
+              .onChange(async (value) => {
+                proxyConfig.address = value;
+                await this.plugin.saveSettings();
+                this.plugin.modelManager.updateProxyConfig(proxyConfig);
+              }));
+          
+          new Setting(containerEl)
+            .setName('Proxy Port')
+            .setDesc('Enter the proxy server port')
+            .addText(text => text
+              .setPlaceholder('8080')
+              .setValue(proxyConfig.port)
+              .onChange(async (value) => {
+                proxyConfig.port = value;
+                await this.plugin.saveSettings();
+                this.plugin.modelManager.updateProxyConfig(proxyConfig);
+              }));
+          
+          new Setting(containerEl)
+            .setName('Requires Authentication')
+            .setDesc('Does your proxy require username/password authentication?')
+            .addToggle(toggle => toggle
+              .setValue(proxyConfig.requiresAuth)
+              .onChange(async (value) => {
+                proxyConfig.requiresAuth = value;
+                await this.plugin.saveSettings();
+                this.plugin.modelManager.updateProxyConfig(proxyConfig);
+                this.display(); // Refresh the display to show/hide auth fields
+              }));
+          
+          if (proxyConfig.requiresAuth) {
+            new Setting(containerEl)
+              .setName('Proxy Username')
+              .addText(text => text
+                .setValue(proxyConfig.username || '')
+                .onChange(async (value) => {
+                  proxyConfig.username = value;
+                  await this.plugin.saveSettings();
+                  this.plugin.modelManager.updateProxyConfig(proxyConfig);
+                }));
+            
+            new Setting(containerEl)
+              .setName('Proxy Password')
+              .addText(text => {
+                const passwordInput = text
+                  .setPlaceholder('password')
+                  .setValue(proxyConfig.password || '')
+                  .onChange(async (value) => {
+                    proxyConfig.password = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.modelManager.updateProxyConfig(proxyConfig);
+                  });
+                
+                // Directly set the type attribute on the input element
+                passwordInput.inputEl.setAttribute('type', 'password');
+                
+                return passwordInput;
+              });
+          }
+        }
+        
+        // ... other settings ...
     }
     
-    // Migrate old prompt templates to the new functions array for backward compatibility
+    // Add to AIPilotSettingTab class
+    
     private migratePromptsToFunctions() {
-        // Handle potential migration from old settings structure
-        // Update built-in functions with values from legacy prompt fields
-        if (this.plugin.settings.functions) {
-            const organizeFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Organize");
-            if (organizeFunc && this.plugin.settings.promptOrganize) {
-                organizeFunc.prompt = this.plugin.settings.promptOrganize;
-            }
-            
-            const grammarFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Grammar");
-            if (grammarFunc && this.plugin.settings.promptCheckGrammar) {
-                grammarFunc.prompt = this.plugin.settings.promptCheckGrammar;
-            }
-            
-            const generateFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Generate");
-            if (generateFunc && this.plugin.settings.promptGenerateContent) {
-                generateFunc.prompt = this.plugin.settings.promptGenerateContent;
-            }
-            
-            const dialogueFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Dialogue");
-            if (dialogueFunc && this.plugin.settings.promptDialogue) {
-                dialogueFunc.prompt = this.plugin.settings.promptDialogue;
-            }
-            
-            const summaryFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Summarize");
-            if (summaryFunc && this.plugin.settings.promptSummary) {
-                summaryFunc.prompt = this.plugin.settings.promptSummary;
-            }
+        // Legacy prompt migration - already handled when missing functions array is detected
+        if (!this.plugin.settings.functions) {
+            this.plugin.settings.functions = [];
         }
     }
     
-    displayFunctions(container: HTMLElement): void {
+    private displayFunctions(container: HTMLElement) {
         container.empty();
         
         if (!this.plugin.settings.functions || this.plugin.settings.functions.length === 0) {
-            container.createEl('p', { 
-                text: 'No functions configured yet.',
+            container.createEl('p', {
+                text: 'No functions defined. Click "Add Custom Function" below to create one.',
                 cls: 'no-functions'
             });
             return;
         }
         
-        // Group functions by type
+        // Display built-in functions first
         const builtInFunctions = this.plugin.settings.functions.filter(f => f.isBuiltIn);
         const customFunctions = this.plugin.settings.functions.filter(f => !f.isBuiltIn);
         
-        // Create section for built-in functions
         if (builtInFunctions.length > 0) {
             const builtInSection = container.createDiv({ cls: 'function-section' });
             builtInSection.createEl('h3', { text: 'Built-in Functions' });
             
-            builtInFunctions.forEach((func, index) => {
-                this.createFunctionItem(builtInSection, func, index, true);
-            });
+            for (const func of builtInFunctions) {
+                this.createFunctionItem(builtInSection, func, true);
+            }
         }
         
-        // Create section for custom functions
         if (customFunctions.length > 0) {
             const customSection = container.createDiv({ cls: 'function-section' });
             customSection.createEl('h3', { text: 'Custom Functions' });
             
-            customFunctions.forEach((func, index) => {
-                this.createFunctionItem(customSection, func, builtInFunctions.length + index, false);
-            });
-        }
-    }
-    
-    createFunctionItem(container: HTMLElement, func: CustomFunction, index: number, isBuiltIn: boolean): void {
-        const funcDiv = container.createDiv({ cls: `function-item ${isBuiltIn ? 'built-in' : 'custom'}` });
-        
-        // Function preview
-        const previewDiv = funcDiv.createDiv({ cls: 'function-preview' });
-        const iconContainer = previewDiv.createDiv({ cls: 'function-icon' });
-        try {
-            setIcon(iconContainer, func.icon);
-        } catch (e) {
-            setIcon(iconContainer, 'bot'); // Fallback icon
-        }
-        
-        previewDiv.createEl('span', { text: func.name, cls: 'function-name' });
-        
-        if (func.tooltip) {
-            previewDiv.createEl('span', { text: func.tooltip, cls: 'function-tooltip' });
-        }
-        
-        // Function actions
-        const actionsDiv = funcDiv.createDiv({ cls: 'function-actions' });
-        
-        const editButton = actionsDiv.createEl('button', { 
-            cls: 'function-edit',
-            attr: {
-                'aria-label': 'Edit function',
-                'title': 'Edit function'
+            for (const func of customFunctions) {
+                this.createFunctionItem(customSection, func, false);
             }
+        }
+        
+        // Add "Add Custom Function" button
+        const addButtonContainer = container.createDiv({ cls: 'add-function-container' });
+        const addButton = addButtonContainer.createEl('button', {
+            text: 'Add Custom Function',
+            cls: 'add-function-button'
         });
-        setIcon(editButton, 'edit');
-        editButton.addEventListener('click', () => {
-            new CustomFunctionModal(this.app, func, async (updatedFunc) => {
-                // Preserve built-in status
-                updatedFunc.isBuiltIn = isBuiltIn;
-                
-                // Update in unified functions array
-                this.plugin.settings.functions[index] = updatedFunc;
-                
-                // Also update legacy fields for backward compatibility
-                if (isBuiltIn) {
-                    if (func.name === "Organize") this.plugin.settings.promptOrganize = updatedFunc.prompt;
-                    else if (func.name === "Grammar") this.plugin.settings.promptCheckGrammar = updatedFunc.prompt;
-                    else if (func.name === "Generate") this.plugin.settings.promptGenerateContent = updatedFunc.prompt;
-                    else if (func.name === "Dialogue") this.plugin.settings.promptDialogue = updatedFunc.prompt;
-                    else if (func.name === "Summarize") this.plugin.settings.promptSummary = updatedFunc.prompt;
-                } else {
-                    // Update in customFunctions array for backward compatibility
-                    // Find the function by name and icon only (not prompt)
-                    const customIndex = this.plugin.settings.customFunctions.findIndex(f => 
-                        f.name === func.name && f.icon === func.icon);
-                    
-                    if (customIndex >= 0) {
-                        this.plugin.settings.customFunctions[customIndex] = updatedFunc;
-                    }
-                }
-                
+        
+        addButton.addEventListener('click', () => {
+            // Create a new function using the modal
+            const newCustomFunc: CustomFunction = {
+                name: '',
+                icon: 'star',
+                prompt: '',
+                tooltip: '',
+                isBuiltIn: false
+            };
+            
+            new CustomFunctionModal(this.app, newCustomFunc, async (updatedFunc) => {
+                // Add the new function
+                this.plugin.settings.functions.push(updatedFunc);
                 await this.plugin.saveSettings();
-                this.display(); // Refresh display
+                this.displayFunctions(container); // Refresh the list
             }).open();
         });
+    }
+    
+    private createFunctionItem(container: HTMLElement, func: CustomFunction, isBuiltIn: boolean) {
+        const funcItem = container.createDiv({ 
+            cls: `function-item ${isBuiltIn ? 'built-in' : 'custom'}`
+        });
+        
+        const preview = funcItem.createDiv({ cls: 'function-preview' });
+        const iconEl = preview.createDiv({ cls: 'function-icon' });
+        setIcon(iconEl, func.icon || 'star');
+        
+        preview.createEl('span', { 
+            text: func.name,
+            cls: 'function-name'
+        });
+        
+        if (func.tooltip) {
+            preview.createEl('span', { 
+                text: func.tooltip,
+                cls: 'function-tooltip'
+            });
+        }
+        
+        const actions = funcItem.createDiv({ cls: 'function-actions' });
+        
+        // Edit button
+        const editBtn = actions.createEl('button', { cls: 'function-edit' });
+        setIcon(editBtn, 'edit');
+        editBtn.onclick = () => {
+            new CustomFunctionModal(this.app, func, async (updatedFunc) => {
+                // Find and update the function
+                const index = this.plugin.settings.functions.findIndex(f => 
+                    f.name === func.name && f.isBuiltIn === isBuiltIn);
+                
+                if (index !== -1) {
+                    this.plugin.settings.functions[index] = updatedFunc;
+                    await this.plugin.saveSettings();
+                    this.displayFunctions(container.parentElement as HTMLElement); // Ensure it's an HTMLElement
+                }
+            }).open();
+        };
         
         // Only allow deleting custom functions
         if (!isBuiltIn) {
-            const deleteButton = actionsDiv.createEl('button', { 
-                cls: 'function-delete',
-                attr: {
-                    'aria-label': 'Delete function',
-                    'title': 'Delete function'
-                }
-            });
-            setIcon(deleteButton, 'trash');
-            deleteButton.addEventListener('click', async () => {
-                // Remove from unified functions array
-                this.plugin.settings.functions.splice(index, 1);
-                
-                // Also remove from customFunctions array for backward compatibility
-                const customIndex = this.plugin.settings.customFunctions.findIndex(f => 
-                    f.name === func.name && f.icon === func.icon);
-                
-                if (customIndex >= 0) {
-                    this.plugin.settings.customFunctions.splice(customIndex, 1);
-                }
-                
-                await this.plugin.saveSettings();
-                this.display(); // Refresh display
-            });
+            const deleteBtn = actions.createEl('button', { cls: 'function-delete' });
+            setIcon(deleteBtn, 'trash');
+            deleteBtn.onclick = async () => {
+                // Confirm deletion
+                const confirmModal = new ConfirmModal(this.app, 
+                    `Are you sure you want to delete the "${func.name}" function?`,
+                    async () => {
+                        // Remove the function
+                        this.plugin.settings.functions = this.plugin.settings.functions
+                            .filter(f => !(f.name === func.name && !f.isBuiltIn));
+                        
+                        await this.plugin.saveSettings();
+                        this.displayFunctions(container.parentElement as HTMLElement); // Ensure it's an HTMLElement
+                    }
+                );
+                confirmModal.open();
+            };
         }
     }
-}
-
-class CustomFunctionModal extends Modal {
-    private customFunc: CustomFunction | null;
-    private onSubmit: (customFunc: CustomFunction) => void;
-    private nameInput: HTMLInputElement;
-    private iconInput: HTMLInputElement;
-    private tooltipInput: HTMLInputElement;
-    private promptInput: HTMLTextAreaElement;
-    private iconPreview: HTMLElement;
-
-    constructor(app: App, customFunc: CustomFunction | null, onSubmit: (customFunc: CustomFunction) => void) {
-        super(app);
-        this.customFunc = customFunc;
-        this.onSubmit = onSubmit;
-    }
-
-    onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
-        contentEl.addClass('custom-function-modal');
-
-        contentEl.createEl('h2', { text: this.customFunc ? 'Edit Custom Function' : 'Add Custom Function' });
-
-        // Name field
-        const nameDiv = contentEl.createDiv({ cls: 'setting-item' });
-        nameDiv.createEl('label', { text: 'Function Name', cls: 'setting-item-name' });
-        this.nameInput = nameDiv.createEl('input', { 
-            type: 'text',
-            cls: 'setting-item-input',
-            value: this.customFunc?.name || '',
-            attr: { placeholder: 'Enter function name' }
-        });
-
-        // Icon field with preview
-        const iconDiv = contentEl.createDiv({ cls: 'setting-item' });
-        const iconLabel = iconDiv.createEl('label', { text: 'Icon', cls: 'setting-item-name' });
-        
-        // Add help text about Lucide icons
-        const iconHelp = iconDiv.createEl('div', { cls: 'setting-item-description' });
-        iconHelp.innerHTML = 'Enter an icon name from <a href="https://lucide.dev/icons/" target="_blank">Lucide Icons</a> (e.g., "book", "pen", "code")';
-        
-        const iconRow = iconDiv.createDiv({ cls: 'icon-row' });
-        this.iconInput = iconRow.createEl('input', {
-            type: 'text',
-            cls: 'setting-item-input',
-            value: this.customFunc?.icon || '',
-            attr: { placeholder: 'Enter icon name' }
-        });
-        
-        this.iconPreview = iconRow.createDiv({ cls: 'icon-preview' });
-        if (this.customFunc?.icon) {
-            try {
-                setIcon(this.iconPreview, this.customFunc.icon);
-            } catch (e) {
-                this.iconPreview.setText('Invalid icon');
+    
+    private openModelConfigModal(existingModel?: LLMModelConfig) {
+        // Create a new ModelConfigModal with correct parameter types
+        const modal = new ModelConfigModal(
+            this.app,
+            existingModel || null, // Use null when existingModel is undefined
+            (updatedModel: LLMModelConfig) => {
+                // Handle the updated model
+                if (existingModel) {
+                    // Find and update the existing model
+                    const index = this.plugin.settings.models.findIndex(m => m.id === existingModel.id);
+                    if (index !== -1) {
+                        this.plugin.settings.models[index] = updatedModel;
+                    }
+                } else {
+                    // Add the new model
+                    this.plugin.settings.models.push(updatedModel);
+                }
+                
+                // Save settings and update the models list
+                this.plugin.saveSettings().then(() => {
+                    const container = document.querySelector('.models-container');
+                    if (container) {
+                        this.renderModelsList(container);
+                    }
+                });
             }
+        );
+        
+        modal.open();
+    }
+    
+    private renderModelsList(container: Element | null) {
+        if (!container) return;
+        
+        // Cast to HTMLElement since we know it's an HTMLElement
+        const htmlContainer = container as HTMLElement;
+        htmlContainer.empty();
+        
+        const models = this.plugin.settings.models || [];
+        
+        if (models.length === 0) {
+            htmlContainer.createEl('div', {
+                text: 'No models configured. Click "Add Model" to configure a new model.',
+                cls: 'no-models-message'
+            });
+            return;
         }
         
-        // Update preview when icon input changes
-        this.iconInput.addEventListener('input', () => {
-            this.iconPreview.empty();
-            if (this.iconInput.value) {
-                try {
-                    setIcon(this.iconPreview, this.iconInput.value);
-                } catch (e) {
-                    this.iconPreview.setText('Invalid icon');
-                }
-            }
-        });
-
-        // Tooltip field
-        const tooltipDiv = contentEl.createDiv({ cls: 'setting-item' });
-        tooltipDiv.createEl('label', { text: 'Tooltip (Optional)', cls: 'setting-item-name' });
-        this.tooltipInput = tooltipDiv.createEl('input', {
-            type: 'text',
-            cls: 'setting-item-input',
-            value: this.customFunc?.tooltip || '',
-            attr: { placeholder: 'Enter tooltip text' }
-        });
-
-        // Prompt field
-        const promptDiv = contentEl.createDiv({ cls: 'setting-item' });
-        promptDiv.createEl('label', { text: 'Prompt Template', cls: 'setting-item-name' });
-        promptDiv.createEl('div', { 
-            text: 'Enter the prompt to send to the AI. The selected text will be appended to this prompt.',
-            cls: 'setting-item-description'
-        });
-        
-        // Ensure the prompt value is properly handled 
-        const promptValue = this.customFunc?.prompt || '';
-        
-        this.promptInput = promptDiv.createEl('textarea', {
-            cls: 'setting-item-input prompt-input',
-            value: promptValue,
-            attr: { 
-                placeholder: 'Enter prompt template...',
-                rows: '6'
-            }
-        });
-
-        // Button container
-        const buttonDiv = contentEl.createDiv({ cls: 'custom-function-button-container' });
-        
-        const cancelButton = buttonDiv.createEl('button', { text: 'Cancel' });
-        cancelButton.addEventListener('click', () => {
-            this.close();
-        });
-        
-        const submitButton = buttonDiv.createEl('button', { text: this.customFunc ? 'Update' : 'Create', cls: 'mod-cta' });
-        submitButton.addEventListener('click', () => {
-            const name = this.nameInput.value.trim();
-            const icon = this.iconInput.value.trim();
-            const prompt = this.promptInput.value; // Preserve whitespace in prompt
+        for (const model of models) {
+            const modelItem = htmlContainer.createDiv({ cls: 'model-item' });
             
-            if (!name) {
-                new Notice('Please enter a function name');
-                return;
+            const modelInfo = modelItem.createDiv({ cls: 'model-info' });
+            const titleEl = modelInfo.createEl('h3');
+            titleEl.createSpan({ text: model.name });
+            
+            if (model.isDefault) {
+                titleEl.createSpan({ 
+                    text: ' (Default)',
+                    cls: 'model-default-tag'
+                });
+                modelItem.addClass('model-default');
             }
             
-            if (!icon) {
-                new Notice('Please enter an icon name');
-                return;
+            const modelMeta = modelInfo.createDiv({ cls: 'model-meta' });
+            modelMeta.createSpan({ text: `Type: ${model.type}` });
+            
+            if (model.modelName) {
+                modelMeta.createSpan({ text: ` • Model: ${model.modelName}` });
             }
             
-            if (!prompt) {
-                new Notice('Please enter a prompt template');
-                return;
+            if (model.active) {
+                modelMeta.createSpan({ 
+                    text: ' • Active',
+                    cls: 'model-active-indicator'
+                });
             }
             
-            // Create a well-formed function object with all required properties
-            const functionData: CustomFunction = {
-                name,
-                icon,
-                prompt: String(prompt), // Cast to string to ensure proper storage
-                tooltip: this.tooltipInput.value.trim() || undefined
+            const modelActions = modelItem.createDiv({ cls: 'model-actions' });
+            
+            // Set as default button (only if not already default)
+            if (!model.isDefault) {
+                const defaultBtn = modelActions.createEl('button', {
+                    text: 'Set Default',
+                    cls: 'model-default-btn'
+                });
+                defaultBtn.onclick = async () => {
+                    // Set this model as default and unset others
+                    this.plugin.settings.models.forEach(m => {
+                        m.isDefault = (m.id === model.id);
+                    });
+                    
+                    await this.plugin.saveSettings();
+                    this.renderModelsList(container); // Refresh the list
+                };
+            }
+            
+            // Edit button
+            const editBtn = modelActions.createEl('button', {
+                text: 'Edit',
+                cls: 'model-edit'
+            });
+            editBtn.onclick = () => {
+                this.openModelConfigModal(model);
             };
             
-            this.onSubmit(functionData);
-            this.close();
-        });
-    }
-
-    onClose() {
-        const { contentEl } = this;
-        contentEl.empty();
+            // Delete button
+            const deleteBtn = modelActions.createEl('button', {
+                text: 'Delete',
+                cls: 'model-delete'
+            });
+            deleteBtn.onclick = async () => {
+                const confirmModal = new ConfirmModal(this.app, 
+                    `Are you sure you want to delete the "${model.name}" model?`,
+                    async () => {
+                        // Remove the model
+                        this.plugin.settings.models = this.plugin.settings.models
+                            .filter(m => m.id !== model.id);
+                        
+                        await this.plugin.saveSettings();
+                        this.renderModelsList(container); // Refresh the list
+                    }
+                );
+                confirmModal.open();
+            };
+        }
     }
 }
 
-export class PolishResultModal extends Modal {
-    private originalText: string;
-    private polishedText: string;
-    private onApply: (text: string) => void;
-    private plugin: AIPilot;
-    private resultEl: HTMLElement;
-
-    constructor(app: App, plugin: AIPilot, originalText: string, polishedText: string, onApply: (text: string) => void) {
+// Add this before the AIPilotSettingTab class definition
+class CustomFunctionModal extends Modal {
+    private plugin: AIPilotPlugin;
+    private customFunc: CustomFunction;
+    private onSubmit: (func: CustomFunction) => void;
+    
+    constructor(
+        app: App,
+        customFunc?: CustomFunction,
+        onSubmit?: (func: CustomFunction) => void
+    ) {
         super(app);
-        this.plugin = plugin;
-        this.originalText = originalText;
-        this.polishedText = polishedText;
-        this.onApply = onApply;
+        // Get plugin from constructor instead of app.plugins
+        this.plugin = (app as any).plugins?.getPlugin("ai-pilot") || null;
+        this.customFunc = customFunc || {
+            name: "",
+            icon: "star",
+            tooltip: "",
+            prompt: "",
+            isBuiltIn: false
+        };
+        this.onSubmit = onSubmit || (() => {});
     }
-
+    
     onOpen() {
         const { contentEl } = this;
-        contentEl.addClass("polish-result-modal");
         
-        // Title
-        const headerContainer = contentEl.createDiv({ cls: "polish-header" });
-        headerContainer.createEl("h2", { text: "Polish Result" });
+        // Modal title
+        contentEl.createEl("h2", { text: this.customFunc.name ? "Edit Function" : "Create Function" });
         
-        // Add a legend for the diff indicators
-        const legendContainer = contentEl.createDiv({ cls: "polish-legend" });
-        
-        // Description with legend
-        const descriptionEl = legendContainer.createEl("p", {
-            cls: "polish-description"
+        // Function name
+        contentEl.createEl("label", { text: "Function Name (required)", cls: "setting-item-label" });
+        const nameInput = contentEl.createEl("input", {
+            type: "text",
+            value: this.customFunc.name,
+            cls: "setting-item-input"
         });
-        descriptionEl.setText("Review the proposed changes:");
         
-        const legendItemsContainer = legendContainer.createDiv({ cls: "polish-legend-items" });
+        // Function icon
+        contentEl.createEl("label", { text: "Icon", cls: "setting-item-label" });
+        const iconInput = contentEl.createEl("input", {
+            type: "text",
+            value: this.customFunc.icon || "star",
+            cls: "setting-item-input",
+            placeholder: "Obsidian icon name (e.g. star, brain, pencil)"
+        });
         
-        // Deleted text legend
-        const deletedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
-        const deletedSample = deletedLegend.createSpan({ cls: "polish-deleted polish-sample" });
-        deletedSample.setText("deleted text");
-        deletedLegend.createSpan({ text: " = removed content" });
+        // Preview icon
+        const iconPreview = contentEl.createDiv({ cls: "icon-preview" });
+        const updateIconPreview = () => {
+            iconPreview.empty();
+            setIcon(iconPreview, iconInput.value || "star");
+        };
+        updateIconPreview();
         
-        // Added text legend
-        const addedLegend = legendItemsContainer.createDiv({ cls: "polish-legend-item" });
-        const addedSample = addedLegend.createSpan({ cls: "polish-highlight polish-sample" });
-        addedSample.setText("highlighted text");
-        addedLegend.createSpan({ text: " = added content" });
+        iconInput.addEventListener("input", updateIconPreview);
         
-        // Result container with highlighted changes
-        this.resultEl = contentEl.createDiv({ cls: "polish-result-container" });
-        this.highlightChanges();
+        // Function tooltip
+        contentEl.createEl("label", { text: "Tooltip", cls: "setting-item-label" });
+        const tooltipInput = contentEl.createEl("input", {
+            type: "text",
+            value: this.customFunc.tooltip || "",
+            cls: "setting-item-input",
+            placeholder: "Briefly describe what this function does"
+        });
+        
+        // Prompt template
+        contentEl.createEl("label", { text: "Prompt Template (required)", cls: "setting-item-label" });
+        contentEl.createEl("p", { 
+            text: "Use {{content}} to reference the selected text.",
+            cls: "setting-item-description"
+        });
+        
+        const promptInput = contentEl.createEl("textarea", {
+            cls: "setting-item-textarea",
+            value: this.customFunc.prompt || "",
+            placeholder: "Enter your prompt template here. Use {{content}} to reference the selected text."
+        });
+        promptInput.style.height = "150px";
         
         // Buttons
-        const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
+        const buttonContainer = contentEl.createDiv({ cls: "button-container" });
         
-        // Apply button
-        const applyButton = buttonContainer.createEl("button", {
-            text: "Apply Changes",
-            cls: "mod-cta"
-        });
-        applyButton.addEventListener("click", () => {
-            this.onApply(this.polishedText);
-            this.close();
-        });
-        
-        // Cancel button
-        const cancelButton = buttonContainer.createEl("button", {
-            text: "Cancel"
-        });
+        const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
         cancelButton.addEventListener("click", () => {
             this.close();
         });
-    }
-    
-    // Method to highlight the differences between original and polished text
-    private highlightChanges() {
-        // Improved diff implementation to highlight changes
-        const diffHtml = this.generateInlineDiff(this.originalText, this.polishedText);
         
-        // Ensure HTML is properly rendered by setting innerHTML
-        this.resultEl.empty();
-        this.resultEl.innerHTML = diffHtml;
-        
-        // Make sure styles are applied by forcing a reflow
-        setTimeout(() => {
-            // Add a small class toggle to force style recalculation
-            this.resultEl.addClass('diff-rendered');
-        }, 10);
-    }
-    
-    // Generate a more accurate inline diff with strikethrough for deletions and highlighting for additions
-    private generateInlineDiff(original: string, polished: string): string {
-        // First try to identify paragraph-level changes
-        const originalParagraphs = original.split('\n\n');
-        const polishedParagraphs = polished.split('\n\n');
-        
-        // Check if we're dealing with a multi-paragraph text
-        if (originalParagraphs.length > 1 || polishedParagraphs.length > 1) {
-            return this.generateParagraphDiff(originalParagraphs, polishedParagraphs);
-        }
-
-        // For single paragraphs, use word-level diff
-        const originalWords = this.tokenize(original);
-        const polishedWords = this.tokenize(polished);
-        
-        // Find the longest common subsequence
-        const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
-        
-        // Generate HTML with diff markup
-        let html = '';
-        let i = 0, j = 0;
-        
-        for (const common of lcs) {
-            // Add deleted words (in original but not in LCS)
-            while (i < originalWords.length && originalWords[i] !== common) {
-                html += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
-                i++;
+        const submitButton = buttonContainer.createEl("button", { 
+            text: this.customFunc.name ? "Save" : "Create",
+            cls: "mod-cta"
+        });
+        submitButton.addEventListener("click", () => {
+            // Validate inputs
+            if (!nameInput.value.trim()) {
+                new Notice("Function name is required");
+                return;
             }
             
-            // Add added words (in polished but not in LCS)
-            while (j < polishedWords.length && polishedWords[j] !== common) {
-                html += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-                j++;
+            if (!promptInput.value.trim()) {
+                new Notice("Prompt template is required");
+                return;
             }
             
-            // Add common word
-            html += this.escapeHtml(common) + ' ';
-            i++;
-            j++;
-        }
-        
-        // Add any remaining deleted words
-        while (i < originalWords.length) {
-            html += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
-            i++;
-        }
-        
-        // Add any remaining added words
-        while (j < polishedWords.length) {
-            html += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-            j++;
-        }
-        
-        return html;
-    }
-    
-    // Generate paragraph-level diff
-    private generateParagraphDiff(originalParagraphs: string[], polishedParagraphs: string[]): string {
-        let html = '';
-        const maxParagraphs = Math.max(originalParagraphs.length, polishedParagraphs.length);
-        
-        for (let i = 0; i < maxParagraphs; i++) {
-            const originalPara = i < originalParagraphs.length ? originalParagraphs[i] : '';
-            const polishedPara = i < polishedParagraphs.length ? polishedParagraphs[i] : '';
+            // Update custom function
+            const updatedFunc: CustomFunction = {
+                name: nameInput.value.trim(),
+                icon: iconInput.value.trim() || "star",
+                prompt: promptInput.value.trim(),
+                tooltip: tooltipInput.value.trim(),
+                isBuiltIn: this.customFunc.isBuiltIn || false
+            };
             
-            if (originalPara === polishedPara) {
-                // No change in this paragraph
-                html += `<p>${this.escapeHtml(originalPara)}</p>`;
-            } else if (originalPara && !polishedPara) {
-                // Paragraph was deleted
-                html += `<p><span class="polish-deleted">${this.escapeHtml(originalPara)}</span></p>`;
-            } else if (!originalPara && polishedPara) {
-                // Paragraph was added
-                html += `<p><span class="polish-highlight">${this.escapeHtml(polishedPara)}</span></p>`;
-            } else {
-                // Paragraph was modified, show word-level diff
-                const originalWords = this.tokenize(originalPara);
-                const polishedWords = this.tokenize(polishedPara);
-                const lcs = this.findLongestCommonSubsequence(originalWords, polishedWords);
-                
-                let paraHtml = '<p>';
-                let i = 0, j = 0;
-                
-                for (const common of lcs) {
-                    // Add deleted words
-                    while (i < originalWords.length && originalWords[i] !== common) {
-                        paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
-                        i++;
-                    }
-                    
-                    // Add added words
-                    while (j < polishedWords.length && polishedWords[j] !== common) {
-                        paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-                        j++;
-                    }
-                    
-                    // Add common word
-                    paraHtml += this.escapeHtml(common) + ' ';
-                    i++;
-                    j++;
-                }
-                
-                // Add remaining deleted words
-                while (i < originalWords.length) {
-                    paraHtml += `<span class="polish-deleted">${this.escapeHtml(originalWords[i])}</span> `;
-                    i++;
-                }
-                
-                // Add remaining added words
-                while (j < polishedWords.length) {
-                    paraHtml += `<span class="polish-highlight">${this.escapeHtml(polishedWords[j])}</span> `;
-                    j++;
-                }
-                
-                paraHtml += '</p>';
-                html += paraHtml;
-            }
-        }
-        
-        return html;
+            this.onSubmit(updatedFunc);
+            this.close();
+        });
     }
     
-    // Split text into words for diffing while preserving newlines
-    private tokenize(text: string): string[] {
-        // First normalize line endings
-        const normalizedText = text.replace(/\r\n/g, '\n');
-        
-        // Process text to preserve important whitespace
-        return normalizedText
-            .replace(/\n/g, ' \n ')  // Add spaces around newlines to preserve them
-            .replace(/\t/g, ' \t ')  // Add spaces around tabs to preserve them
-            .split(/\s+/)            // Split by whitespace
-            .filter(word => word.length > 0);  // Remove empty tokens
-    }
-    
-    // A simple longest common subsequence algorithm
-    private findLongestCommonSubsequence(a: string[], b: string[]): string[] {
-        const table: number[][] = Array(a.length + 1).fill(0).map(() => Array(b.length + 1).fill(0));
-        
-        // Fill the LCS table
-        for (let i = 1; i <= a.length; i++) {
-            for (let j = 1; j <= b.length; j++) {
-                if (a[i-1] === b[j-1]) {
-                    table[i][j] = table[i-1][j-1] + 1;
-                } else {
-                    table[i][j] = Math.max(table[i][j-1], table[i-1][j]);
-                }
-            }
-        }
-        
-        // Reconstruct the LCS
-        const result: string[] = [];
-        let i = a.length, j = b.length;
-        
-        while (i > 0 && j > 0) {
-            if (a[i-1] === b[j-1]) {
-                result.unshift(a[i-1]);
-                i--;
-                j--;
-            } else if (table[i][j-1] > table[i-1][j]) {
-                j--;
-            } else {
-                i--;
-            }
-        }
-        
-        return result;
-    }
-    
-    // Escape HTML special characters to prevent XSS
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
     onClose() {
         const { contentEl } = this;
         contentEl.empty();
     }
 }
-
+    
