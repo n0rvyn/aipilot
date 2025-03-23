@@ -329,7 +329,7 @@ export class DebatePanel extends ItemView {
     
     // Convert markdown-like formatting to basic HTML
     const formattedContent = this.formatMarkdown(message.content);
-    contentEl.innerHTML = formattedContent;
+    contentEl.appendChild(formattedContent);
     
     // Add streaming indicator if message is still streaming
     if (message.streaming) {
@@ -354,8 +354,10 @@ export class DebatePanel extends ItemView {
     // Update the content
     const contentEl = messageEl.querySelector('.message-content') as HTMLElement;
     if (contentEl) {
+      // Clear previous content before adding the updated content
+      contentEl.empty();
       const formattedContent = this.formatMarkdown(message.content);
-      contentEl.innerHTML = formattedContent;
+      contentEl.appendChild(formattedContent);
     }
     
     // Update streaming status
@@ -386,18 +388,146 @@ export class DebatePanel extends ItemView {
     }
   }
   
-  // Simple markdown formatter
-  private formatMarkdown(text: string): string {
-    // Replace basic markdown patterns with HTML
-    return text
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
-      .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
-      .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
-      .replace(/^#### (.*?)$/gm, '<h4>$1</h4>');
+  // Simple markdown formatter - replaced with a safer implementation
+  private formatMarkdown(text: string): HTMLElement {
+    // Create a container element
+    const container = document.createElement('div');
+    
+    // Split the text by lines to handle headings
+    const lines = text.split('\n');
+    
+    lines.forEach(line => {
+      // Check for headings
+      const h1Match = line.match(/^# (.*?)$/);
+      const h2Match = line.match(/^## (.*?)$/);
+      const h3Match = line.match(/^### (.*?)$/);
+      const h4Match = line.match(/^#### (.*?)$/);
+      
+      if (h1Match) {
+        const h1 = document.createElement('h1');
+        h1.textContent = h1Match[1];
+        container.appendChild(h1);
+      } else if (h2Match) {
+        const h2 = document.createElement('h2');
+        h2.textContent = h2Match[1];
+        container.appendChild(h2);
+      } else if (h3Match) {
+        const h3 = document.createElement('h3');
+        h3.textContent = h3Match[1];
+        container.appendChild(h3);
+      } else if (h4Match) {
+        const h4 = document.createElement('h4');
+        h4.textContent = h4Match[1];
+        container.appendChild(h4);
+      } else {
+        // Process inline formatting for normal paragraphs
+        const paragraph = document.createElement('p');
+        let content = line;
+        
+        // Process the content to handle inline markdown
+        const processedContent = this.processInlineMarkdown(content);
+        paragraph.appendChild(processedContent);
+        container.appendChild(paragraph);
+      }
+    });
+    
+    return container;
+  }
+  
+  // Helper method to process inline markdown formatting
+  private processInlineMarkdown(text: string): DocumentFragment {
+    const fragment = document.createDocumentFragment();
+    
+    // Handle different inline patterns
+    let currentPos = 0;
+    let lastProcessedPos = 0;
+    
+    // Process bold text (**text**)
+    const processBold = (text: string, fragment: DocumentFragment) => {
+      let pos = 0;
+      while ((pos = text.indexOf('**', pos)) !== -1) {
+        const endPos = text.indexOf('**', pos + 2);
+        if (endPos === -1) break;
+        
+        // Add text before the bold
+        if (pos > lastProcessedPos) {
+          fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos, pos)));
+        }
+        
+        // Add the bold text
+        const bold = document.createElement('strong');
+        bold.textContent = text.substring(pos + 2, endPos);
+        fragment.appendChild(bold);
+        
+        lastProcessedPos = endPos + 2;
+        pos = endPos + 2;
+      }
+    };
+    
+    // Process italic text (*text*)
+    const processItalic = (text: string, fragment: DocumentFragment) => {
+      let pos = 0;
+      while ((pos = text.indexOf('*', pos)) !== -1) {
+        if (pos > 0 && text[pos-1] === '*') {
+          pos++;
+          continue;
+        }
+        if (pos < text.length - 1 && text[pos+1] === '*') {
+          pos += 2;
+          continue;
+        }
+        
+        const endPos = text.indexOf('*', pos + 1);
+        if (endPos === -1) break;
+        
+        // Add text before the italic
+        if (pos > lastProcessedPos) {
+          fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos, pos)));
+        }
+        
+        // Add the italic text
+        const italic = document.createElement('em');
+        italic.textContent = text.substring(pos + 1, endPos);
+        fragment.appendChild(italic);
+        
+        lastProcessedPos = endPos + 1;
+        pos = endPos + 1;
+      }
+    };
+    
+    // Process code (`text`)
+    const processCode = (text: string, fragment: DocumentFragment) => {
+      let pos = 0;
+      while ((pos = text.indexOf('`', pos)) !== -1) {
+        const endPos = text.indexOf('`', pos + 1);
+        if (endPos === -1) break;
+        
+        // Add text before the code
+        if (pos > lastProcessedPos) {
+          fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos, pos)));
+        }
+        
+        // Add the code
+        const code = document.createElement('code');
+        code.textContent = text.substring(pos + 1, endPos);
+        fragment.appendChild(code);
+        
+        lastProcessedPos = endPos + 1;
+        pos = endPos + 1;
+      }
+    };
+    
+    // Process inline markdown patterns
+    processBold(text, fragment);
+    processItalic(text, fragment);
+    processCode(text, fragment);
+    
+    // Add any remaining text
+    if (lastProcessedPos < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos)));
+    }
+    
+    return fragment;
   }
   
   private async exportToNote(): Promise<void> {

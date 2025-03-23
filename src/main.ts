@@ -4,8 +4,15 @@
 // TypeScript declaration for diff_match_patch
 declare global {
     interface Window {
-        diff_match_patch?: any;
+        diff_match_patch?: DiffMatchPatch;
     }
+}
+
+// Add a proper type definition for DiffMatchPatch
+interface DiffMatchPatch {
+    diff_main(text1: string, text2: string): Array<[number, string]>;
+    diff_cleanupSemantic(diffs: Array<[number, string]>): void;
+    new(): DiffMatchPatch;
 }
 
 import {
@@ -535,7 +542,6 @@ export default class AIPilotPlugin extends Plugin {
             id: "clean-polish-markup",
             name: "Clean Polish Markup",
             editorCallback: (editor, view) => this.cleanPolishMarkup(editor),
-            hotkeys: [{ modifiers: ["Mod", "Shift"], key: "p" }]
         });
 
         this.addCommand({
@@ -1371,77 +1377,72 @@ export default class AIPilotPlugin extends Plugin {
         }
     }
     
-    // Method to generate diff HTML with highlighting
-    private generateDiffHtml(original: string, modified: string): string {
+    // Method to generate diff DOM elements with highlighting
+    private generateDiffElements(original: string, modified: string): DocumentFragment {
         try {
             // Use the plugin's diff library if available
             if (this.diffMatchPatchLib) {
-                return this.generateWordLevelDiff(original, modified);
+                return this.generateWordLevelDiffElements(original, modified);
             }
         } catch (e) {
             console.error("Error using diff-match-patch library:", e);
         }
 
         // Fallback to a more basic paragraph-level diff
-        return this.generateParagraphLevelDiff(original, modified);
+        return this.generateParagraphLevelDiffElements(original, modified);
     }
 
-    // Advanced word-level diff implementation
-    private generateWordLevelDiff(original: string, modified: string): string {
+    // Advanced word-level diff implementation that returns DOM elements
+    private generateWordLevelDiffElements(original: string, modified: string): DocumentFragment {
         try {
             // Use the plugin's diff library
             const dmp = new this.diffMatchPatchLib();
             const diffs = dmp.diff_main(original, modified);
             dmp.diff_cleanupSemantic(diffs);
             
-            let html = '';
+            const fragment = document.createDocumentFragment();
+            
             for (const [operation, text] of diffs) {
                 const escText = this.escapeHtml(text);
+                
                 if (operation === -1) {
                     // Deletion
-                    html += `<span class="polish-deleted">${escText}</span>`;
+                    const deletedSpan = document.createElement('span');
+                    deletedSpan.className = "polish-deleted";
+                    deletedSpan.textContent = text;
+                    fragment.appendChild(deletedSpan);
                 } else if (operation === 1) {
                     // Addition
-                    html += `<span class="polish-highlight">${escText}</span>`;
+                    const addedSpan = document.createElement('span');
+                    addedSpan.className = "polish-highlight";
+                    addedSpan.textContent = text;
+                    fragment.appendChild(addedSpan);
                 } else {
-                    // Unchanged
-                    html += escText;
+                    // Unchanged text
+                    fragment.appendChild(document.createTextNode(text));
                 }
             }
-
-            // Convert newlines to <br> for proper HTML display
-            html = html.replace(/\n/g, '<br>');
-            return html;
+            
+            return fragment;
         } catch (e) {
             console.error("Error in word-level diff:", e);
-            return this.generateParagraphLevelDiff(original, modified);
+            return this.generateParagraphLevelDiffElements(original, modified);
         }
     }
 
-    // Escape HTML special characters to prevent injection
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
-    // Basic paragraph-level diff (original implementation, used as fallback)
-    private generateParagraphLevelDiff(original: string, modified: string): string {
+    // Basic paragraph-level diff that returns DOM elements
+    private generateParagraphLevelDiffElements(original: string, modified: string): DocumentFragment {
         // Split into paragraphs
         const originalParagraphs = original.split('\n');
         const modifiedParagraphs = modified.split('\n');
         
+        const fragment = document.createDocumentFragment();
+        
         // If extremely different lengths, don't try to diff - just return the modified content
         if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
-            return modified;
+            fragment.appendChild(document.createTextNode(modified));
+            return fragment;
         }
-        
-        // For this simple implementation, we'll just check for identical paragraphs
-        // and assume others have been modified
-        const result: string[] = [];
         
         // Use the longer array length to ensure we process all paragraphs
         const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
@@ -1452,22 +1453,56 @@ export default class AIPilotPlugin extends Plugin {
             
             if (origPara === modPara) {
                 // Identical paragraph
-                result.push(modPara);
+                fragment.appendChild(document.createTextNode(modPara));
             } else if (origPara && !modPara) {
                 // Paragraph was deleted
-                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+                const deletedSpan = document.createElement('span');
+                deletedSpan.className = "polish-deleted";
+                deletedSpan.textContent = origPara;
+                fragment.appendChild(deletedSpan);
             } else if (!origPara && modPara) {
                 // New paragraph was added
-                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+                const addedSpan = document.createElement('span');
+                addedSpan.className = "polish-highlight";
+                addedSpan.textContent = modPara;
+                fragment.appendChild(addedSpan);
             } else {
                 // Paragraph was modified
                 // Show both the deleted and added versions
-                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
-                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+                const deletedSpan = document.createElement('span');
+                deletedSpan.className = "polish-deleted";
+                deletedSpan.textContent = origPara;
+                fragment.appendChild(deletedSpan);
+                
+                // Add a line break
+                fragment.appendChild(document.createElement('br'));
+                
+                const addedSpan = document.createElement('span');
+                addedSpan.className = "polish-highlight";
+                addedSpan.textContent = modPara;
+                fragment.appendChild(addedSpan);
+            }
+            
+            // Add a line break between paragraphs (except the last one)
+            if (i < maxLength - 1) {
+                fragment.appendChild(document.createElement('br'));
             }
         }
         
-        return result.join('<br>');
+        return fragment;
+    }
+
+    // Keep the existing methods for backward compatibility but update them to use the new methods
+    private generateDiffHtml(original: string, modified: string): DocumentFragment {
+        return this.generateDiffElements(original, modified);
+    }
+    
+    private generateWordLevelDiff(original: string, modified: string): DocumentFragment {
+        return this.generateWordLevelDiffElements(original, modified);
+    }
+    
+    private generateParagraphLevelDiff(original: string, modified: string): DocumentFragment {
+        return this.generateParagraphLevelDiffElements(original, modified);
     }
 
     // Add this new method to clean Polish markup
@@ -1575,6 +1610,16 @@ export default class AIPilotPlugin extends Plugin {
             console.error('Failed to load diff-match-patch library:', error);
         }
     }
+
+    // Add the escapeHtml method to the main plugin class
+    public escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 }
 
 // Add the PolishResultModal class
@@ -1598,77 +1643,72 @@ export class PolishResultModal extends Modal {
         this.plugin = plugin;
     }
     
-    // Method to generate diff HTML with highlighting
-    private generateDiffHtml(original: string, modified: string): string {
+    // Method to generate diff DOM elements with highlighting
+    private generateDiffElements(original: string, modified: string): DocumentFragment {
         try {
             // Use the plugin's diff library if available
             if (this.plugin.diffMatchPatchLib) {
-                return this.generateWordLevelDiff(original, modified);
+                return this.generateWordLevelDiffElements(original, modified);
             }
         } catch (e) {
             console.error("Error using diff-match-patch library:", e);
         }
 
         // Fallback to a more basic paragraph-level diff
-        return this.generateParagraphLevelDiff(original, modified);
+        return this.generateParagraphLevelDiffElements(original, modified);
     }
 
-    // Advanced word-level diff implementation
-    private generateWordLevelDiff(original: string, modified: string): string {
+    // Advanced word-level diff implementation that returns DOM elements
+    private generateWordLevelDiffElements(original: string, modified: string): DocumentFragment {
         try {
             // Use the plugin's diff library
             const dmp = new this.plugin.diffMatchPatchLib();
             const diffs = dmp.diff_main(original, modified);
             dmp.diff_cleanupSemantic(diffs);
             
-            let html = '';
+            const fragment = document.createDocumentFragment();
+            
             for (const [operation, text] of diffs) {
-                const escText = this.escapeHtml(text);
+                const escText = this.plugin.escapeHtml(text);
+                
                 if (operation === -1) {
                     // Deletion
-                    html += `<span class="polish-deleted">${escText}</span>`;
+                    const deletedSpan = document.createElement('span');
+                    deletedSpan.className = "polish-deleted";
+                    deletedSpan.textContent = text;
+                    fragment.appendChild(deletedSpan);
                 } else if (operation === 1) {
                     // Addition
-                    html += `<span class="polish-highlight">${escText}</span>`;
+                    const addedSpan = document.createElement('span');
+                    addedSpan.className = "polish-highlight";
+                    addedSpan.textContent = text;
+                    fragment.appendChild(addedSpan);
                 } else {
-                    // Unchanged
-                    html += escText;
+                    // Unchanged text
+                    fragment.appendChild(document.createTextNode(text));
                 }
             }
-
-            // Convert newlines to <br> for proper HTML display
-            html = html.replace(/\n/g, '<br>');
-            return html;
+            
+            return fragment;
         } catch (e) {
             console.error("Error in word-level diff:", e);
-            return this.generateParagraphLevelDiff(original, modified);
+            return this.generateParagraphLevelDiffElements(original, modified);
         }
     }
 
-    // Escape HTML special characters to prevent injection
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-    
-    // Basic paragraph-level diff (original implementation, used as fallback)
-    private generateParagraphLevelDiff(original: string, modified: string): string {
+    // Basic paragraph-level diff that returns DOM elements
+    private generateParagraphLevelDiffElements(original: string, modified: string): DocumentFragment {
         // Split into paragraphs
         const originalParagraphs = original.split('\n');
         const modifiedParagraphs = modified.split('\n');
         
+        const fragment = document.createDocumentFragment();
+        
         // If extremely different lengths, don't try to diff - just return the modified content
         if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
-            return modified;
+            fragment.appendChild(document.createTextNode(modified));
+            return fragment;
         }
-        
-        // For this simple implementation, we'll just check for identical paragraphs
-        // and assume others have been modified
-        const result: string[] = [];
         
         // Use the longer array length to ensure we process all paragraphs
         const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
@@ -1679,22 +1719,43 @@ export class PolishResultModal extends Modal {
             
             if (origPara === modPara) {
                 // Identical paragraph
-                result.push(modPara);
+                fragment.appendChild(document.createTextNode(modPara));
             } else if (origPara && !modPara) {
                 // Paragraph was deleted
-                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+                const deletedSpan = document.createElement('span');
+                deletedSpan.className = "polish-deleted";
+                deletedSpan.textContent = origPara;
+                fragment.appendChild(deletedSpan);
             } else if (!origPara && modPara) {
                 // New paragraph was added
-                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+                const addedSpan = document.createElement('span');
+                addedSpan.className = "polish-highlight";
+                addedSpan.textContent = modPara;
+                fragment.appendChild(addedSpan);
             } else {
                 // Paragraph was modified
                 // Show both the deleted and added versions
-                result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
-                result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+                const deletedSpan = document.createElement('span');
+                deletedSpan.className = "polish-deleted";
+                deletedSpan.textContent = origPara;
+                fragment.appendChild(deletedSpan);
+                
+                // Add a line break
+                fragment.appendChild(document.createElement('br'));
+                
+                const addedSpan = document.createElement('span');
+                addedSpan.className = "polish-highlight";
+                addedSpan.textContent = modPara;
+                fragment.appendChild(addedSpan);
+            }
+            
+            // Add a line break between paragraphs (except the last one)
+            if (i < maxLength - 1) {
+                fragment.appendChild(document.createElement('br'));
             }
         }
         
-        return result.join('<br>');
+        return fragment;
     }
 
     onOpen() {
@@ -1731,7 +1792,9 @@ export class PolishResultModal extends Modal {
         
         // Content display with diff
         const contentContainer = contentEl.createDiv({ cls: "polish-result-container diff-rendered" });
-        contentContainer.innerHTML = diffHtml;
+        
+        // Use obsidian's dom API instead of innerHTML
+        this.renderDiffContent(contentContainer, diffHtml);
         
         // Buttons
         const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
@@ -1765,6 +1828,52 @@ export class PolishResultModal extends Modal {
     onClose() {
         const { contentEl } = this;
         contentEl.empty();
+    }
+
+    // Add a new method to render diff content safely
+    private renderDiffContent(container: HTMLElement, htmlContent: DocumentFragment) {
+        const tempDiv = document.createElement('div');
+        tempDiv.appendChild(htmlContent);
+        
+        // Safely transfer the content
+        const fragment = document.createDocumentFragment();
+        
+        // Process the nodes and create them using Obsidian's API
+        Array.from(tempDiv.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                // Text node
+                fragment.appendChild(document.createTextNode(node.textContent || ''));
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const elem = node as HTMLElement;
+                if (elem.tagName === 'SPAN') {
+                    // Handle span elements with classes
+                    const span = document.createElement('span');
+                    span.className = elem.className;
+                    span.textContent = elem.textContent || '';
+                    fragment.appendChild(span);
+                } else if (elem.tagName === 'BR') {
+                    // Handle line breaks
+                    fragment.appendChild(document.createElement('br'));
+                }
+            }
+        });
+        
+        container.appendChild(fragment);
+    }
+
+    // Add escapeHtml to the PolishResultModal class
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Add the generateDiffHtml method to PolishResultModal
+    private generateDiffHtml(original: string, modified: string): DocumentFragment {
+        return this.generateDiffElements(original, modified);
     }
 }
 
@@ -3055,4 +3164,5 @@ class CustomFunctionModal extends Modal {
         contentEl.empty();
     }
 }
+    
     

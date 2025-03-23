@@ -780,12 +780,32 @@ export class ChatView extends ItemView implements Component {
         const chatTab = this.tabsContainer.createDiv({
             cls: `chat-tab ${this.currentMode === 'chat' ? 'active' : ''}`,
         });
-        chatTab.innerHTML = '<svg viewBox="0 0 100 100" class="chat-icon"><path d="M20,20v45h10v15l15-15h35V20H20z M25,25h50v35H42.5L35,67.5V60H25V25z"/></svg>';
+        
+        // Create SVG for chat tab using DOM API
+        const chatIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        chatIcon.setAttribute('viewBox', '0 0 100 100');
+        chatIcon.classList.add('chat-icon');
+        
+        const chatPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        chatPath.setAttribute('d', 'M20,20v45h10v15l15-15h35V20H20z M25,25h50v35H42.5L35,67.5V60H25V25z');
+        
+        chatIcon.appendChild(chatPath);
+        chatTab.appendChild(chatIcon);
         
         const searchTab = this.tabsContainer.createDiv({
             cls: `chat-tab ${this.currentMode === 'search' ? 'active' : ''}`,
         });
-        searchTab.innerHTML = '<svg viewBox="0 0 100 100" class="search-icon"><path d="M80,75 L65,60 C70,54 73,46 73,38 C73,22 60,9 44,9 C28,9 15,22 15,38 C15,54 28,67 44,67 C52,67 60,64 66,59 L81,74 L80,75 Z M44,62 C31,62 20,51 20,38 C20,25 31,14 44,14 C57,14 68,25 68,38 C68,51 57,62 44,62 Z"/></svg>';
+        
+        // Create SVG for search tab using DOM API
+        const searchIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        searchIcon.setAttribute('viewBox', '0 0 100 100');
+        searchIcon.classList.add('search-icon');
+        
+        const searchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        searchPath.setAttribute('d', 'M80,75 L65,60 C70,54 73,46 73,38 C73,22 60,9 44,9 C28,9 15,22 15,38 C15,54 28,67 44,67 C52,67 60,64 66,59 L81,74 L80,75 Z M44,62 C31,62 20,51 20,38 C20,25 31,14 44,14 C57,14 68,25 68,38 C68,51 57,62 44,62 Z');
+        
+        searchIcon.appendChild(searchPath);
+        searchTab.appendChild(searchIcon);
 
         chatTab.onclick = () => this.switchMode('chat');
         searchTab.onclick = () => this.switchMode('search');

@@ -29,8 +29,16 @@ export class MarkdownRenderer extends Component {
             // Parse markdown using marked.js
             const rendered = await marked.parse(this.content, { async: true });
             
-            // Set HTML
-            this.container.innerHTML = rendered;
+            // Create a temporary div to parse the HTML content
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = rendered;
+            
+            // Safely append content using Obsidian's DOM API
+            const fragment = document.createDocumentFragment();
+            while (tempDiv.firstChild) {
+                fragment.appendChild(tempDiv.firstChild);
+            }
+            this.container.appendChild(fragment);
             
             // No action buttons will be added here - they'll be handled by ChatView
         } catch (error) {

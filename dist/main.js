@@ -4264,7 +4264,13 @@ var MarkdownRenderer = class _MarkdownRenderer extends import_obsidian.Component
         this.container.empty();
         this.container.addClass("markdown-rendered");
         const rendered = yield marked.parse(this.content, { async: true });
-        this.container.innerHTML = rendered;
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = rendered;
+        const fragment = document.createDocumentFragment();
+        while (tempDiv.firstChild) {
+          fragment.appendChild(tempDiv.firstChild);
+        }
+        this.container.appendChild(fragment);
       } catch (error) {
         console.error("Error rendering markdown:", error);
         this.container.setText("Error rendering content: " + error.message);
@@ -4807,11 +4813,23 @@ var ChatView = class extends import_obsidian2.ItemView {
     const chatTab = this.tabsContainer.createDiv({
       cls: `chat-tab ${this.currentMode === "chat" ? "active" : ""}`
     });
-    chatTab.innerHTML = '<svg viewBox="0 0 100 100" class="chat-icon"><path d="M20,20v45h10v15l15-15h35V20H20z M25,25h50v35H42.5L35,67.5V60H25V25z"/></svg>';
+    const chatIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    chatIcon.setAttribute("viewBox", "0 0 100 100");
+    chatIcon.classList.add("chat-icon");
+    const chatPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    chatPath.setAttribute("d", "M20,20v45h10v15l15-15h35V20H20z M25,25h50v35H42.5L35,67.5V60H25V25z");
+    chatIcon.appendChild(chatPath);
+    chatTab.appendChild(chatIcon);
     const searchTab = this.tabsContainer.createDiv({
       cls: `chat-tab ${this.currentMode === "search" ? "active" : ""}`
     });
-    searchTab.innerHTML = '<svg viewBox="0 0 100 100" class="search-icon"><path d="M80,75 L65,60 C70,54 73,46 73,38 C73,22 60,9 44,9 C28,9 15,22 15,38 C15,54 28,67 44,67 C52,67 60,64 66,59 L81,74 L80,75 Z M44,62 C31,62 20,51 20,38 C20,25 31,14 44,14 C57,14 68,25 68,38 C68,51 57,62 44,62 Z"/></svg>';
+    const searchIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    searchIcon.setAttribute("viewBox", "0 0 100 100");
+    searchIcon.classList.add("search-icon");
+    const searchPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    searchPath.setAttribute("d", "M80,75 L65,60 C70,54 73,46 73,38 C73,22 60,9 44,9 C28,9 15,22 15,38 C15,54 28,67 44,67 C52,67 60,64 66,59 L81,74 L80,75 Z M44,62 C31,62 20,51 20,38 C20,25 31,14 44,14 C57,14 68,25 68,38 C68,51 57,62 44,62 Z");
+    searchIcon.appendChild(searchPath);
+    searchTab.appendChild(searchIcon);
     chatTab.onclick = () => this.switchMode("chat");
     searchTab.onclick = () => this.switchMode("search");
   }
@@ -6047,7 +6065,7 @@ var ModelManager = class {
         "Authorization": `Bearer ${model.apiKey}`
       };
       const payload = {
-        model: model.modelName || options2.modelName || "gpt-3.5-turbo",
+        model: options2.modelName || model.modelName || "gpt-3.5-turbo",
         messages: [
           { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
           { role: "user", content: prompt }
@@ -6071,7 +6089,7 @@ var ModelManager = class {
         "Content-Type": "application/json"
       };
       const payload = {
-        model: model.modelName || options2.modelName || "llama2",
+        model: options2.modelName || model.modelName || "llama2",
         prompt,
         system: model.systemPrompt || "You are a helpful assistant.",
         options: {
@@ -6099,7 +6117,7 @@ var ModelManager = class {
         headers["x-api-key"] = model.apiKey;
       }
       const payload = {
-        model: model.modelName || options2.modelName || "claude-3-opus-20240229",
+        model: options2.modelName || model.modelName || "claude-3-opus-20240229",
         messages: [
           { role: "user", content: prompt }
         ],
@@ -7104,7 +7122,7 @@ var DebatePanel = class extends import_obsidian3.ItemView {
     });
     const contentEl = messageEl.createDiv({ cls: "message-content" });
     const formattedContent = this.formatMarkdown(message.content);
-    contentEl.innerHTML = formattedContent;
+    contentEl.appendChild(formattedContent);
     if (message.streaming) {
       const indicatorEl = messageEl.createDiv({ cls: "streaming-indicator" });
       const indicator = indicatorEl.createSpan({ text: "Typing" });
@@ -7121,8 +7139,9 @@ var DebatePanel = class extends import_obsidian3.ItemView {
     if (!messageEl) return;
     const contentEl = messageEl.querySelector(".message-content");
     if (contentEl) {
+      contentEl.empty();
       const formattedContent = this.formatMarkdown(message.content);
-      contentEl.innerHTML = formattedContent;
+      contentEl.appendChild(formattedContent);
     }
     if (message.streaming) {
       messageEl.addClass("streaming-message");
@@ -7144,9 +7163,106 @@ var DebatePanel = class extends import_obsidian3.ItemView {
       }
     }
   }
-  // Simple markdown formatter
+  // Simple markdown formatter - replaced with a safer implementation
   formatMarkdown(text) {
-    return text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/`(.*?)`/g, "<code>$1</code>").replace(/^# (.*?)$/gm, "<h1>$1</h1>").replace(/^## (.*?)$/gm, "<h2>$1</h2>").replace(/^### (.*?)$/gm, "<h3>$1</h3>").replace(/^#### (.*?)$/gm, "<h4>$1</h4>");
+    const container = document.createElement("div");
+    const lines = text.split("\n");
+    lines.forEach((line) => {
+      const h1Match = line.match(/^# (.*?)$/);
+      const h2Match = line.match(/^## (.*?)$/);
+      const h3Match = line.match(/^### (.*?)$/);
+      const h4Match = line.match(/^#### (.*?)$/);
+      if (h1Match) {
+        const h1 = document.createElement("h1");
+        h1.textContent = h1Match[1];
+        container.appendChild(h1);
+      } else if (h2Match) {
+        const h2 = document.createElement("h2");
+        h2.textContent = h2Match[1];
+        container.appendChild(h2);
+      } else if (h3Match) {
+        const h3 = document.createElement("h3");
+        h3.textContent = h3Match[1];
+        container.appendChild(h3);
+      } else if (h4Match) {
+        const h4 = document.createElement("h4");
+        h4.textContent = h4Match[1];
+        container.appendChild(h4);
+      } else {
+        const paragraph2 = document.createElement("p");
+        let content = line;
+        const processedContent = this.processInlineMarkdown(content);
+        paragraph2.appendChild(processedContent);
+        container.appendChild(paragraph2);
+      }
+    });
+    return container;
+  }
+  // Helper method to process inline markdown formatting
+  processInlineMarkdown(text) {
+    const fragment = document.createDocumentFragment();
+    let currentPos = 0;
+    let lastProcessedPos = 0;
+    const processBold = (text2, fragment2) => {
+      let pos = 0;
+      while ((pos = text2.indexOf("**", pos)) !== -1) {
+        const endPos = text2.indexOf("**", pos + 2);
+        if (endPos === -1) break;
+        if (pos > lastProcessedPos) {
+          fragment2.appendChild(document.createTextNode(text2.substring(lastProcessedPos, pos)));
+        }
+        const bold = document.createElement("strong");
+        bold.textContent = text2.substring(pos + 2, endPos);
+        fragment2.appendChild(bold);
+        lastProcessedPos = endPos + 2;
+        pos = endPos + 2;
+      }
+    };
+    const processItalic = (text2, fragment2) => {
+      let pos = 0;
+      while ((pos = text2.indexOf("*", pos)) !== -1) {
+        if (pos > 0 && text2[pos - 1] === "*") {
+          pos++;
+          continue;
+        }
+        if (pos < text2.length - 1 && text2[pos + 1] === "*") {
+          pos += 2;
+          continue;
+        }
+        const endPos = text2.indexOf("*", pos + 1);
+        if (endPos === -1) break;
+        if (pos > lastProcessedPos) {
+          fragment2.appendChild(document.createTextNode(text2.substring(lastProcessedPos, pos)));
+        }
+        const italic = document.createElement("em");
+        italic.textContent = text2.substring(pos + 1, endPos);
+        fragment2.appendChild(italic);
+        lastProcessedPos = endPos + 1;
+        pos = endPos + 1;
+      }
+    };
+    const processCode = (text2, fragment2) => {
+      let pos = 0;
+      while ((pos = text2.indexOf("`", pos)) !== -1) {
+        const endPos = text2.indexOf("`", pos + 1);
+        if (endPos === -1) break;
+        if (pos > lastProcessedPos) {
+          fragment2.appendChild(document.createTextNode(text2.substring(lastProcessedPos, pos)));
+        }
+        const code = document.createElement("code");
+        code.textContent = text2.substring(pos + 1, endPos);
+        fragment2.appendChild(code);
+        lastProcessedPos = endPos + 1;
+        pos = endPos + 1;
+      }
+    };
+    processBold(text, fragment);
+    processItalic(text, fragment);
+    processCode(text, fragment);
+    if (lastProcessedPos < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(lastProcessedPos)));
+    }
+    return fragment;
   }
   exportToNote() {
     return __async(this, null, function* () {
@@ -7769,8 +7885,7 @@ var AIPilotPlugin = class extends import_obsidian6.Plugin {
     this.addCommand({
       id: "clean-polish-markup",
       name: "Clean Polish Markup",
-      editorCallback: (editor, view) => this.cleanPolishMarkup(editor),
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "p" }]
+      editorCallback: (editor, view) => this.cleanPolishMarkup(editor)
     });
     this.addCommand({
       id: "custom-prompt",
@@ -8494,69 +8609,97 @@ ${content}
       }
     });
   }
-  // Method to generate diff HTML with highlighting
-  generateDiffHtml(original, modified) {
+  // Method to generate diff DOM elements with highlighting
+  generateDiffElements(original, modified) {
     try {
       if (this.diffMatchPatchLib) {
-        return this.generateWordLevelDiff(original, modified);
+        return this.generateWordLevelDiffElements(original, modified);
       }
     } catch (e) {
       console.error("Error using diff-match-patch library:", e);
     }
-    return this.generateParagraphLevelDiff(original, modified);
+    return this.generateParagraphLevelDiffElements(original, modified);
   }
-  // Advanced word-level diff implementation
-  generateWordLevelDiff(original, modified) {
+  // Advanced word-level diff implementation that returns DOM elements
+  generateWordLevelDiffElements(original, modified) {
     try {
       const dmp = new this.diffMatchPatchLib();
       const diffs = dmp.diff_main(original, modified);
       dmp.diff_cleanupSemantic(diffs);
-      let html2 = "";
+      const fragment = document.createDocumentFragment();
       for (const [operation, text] of diffs) {
         const escText = this.escapeHtml(text);
         if (operation === -1) {
-          html2 += `<span class="polish-deleted">${escText}</span>`;
+          const deletedSpan = document.createElement("span");
+          deletedSpan.className = "polish-deleted";
+          deletedSpan.textContent = text;
+          fragment.appendChild(deletedSpan);
         } else if (operation === 1) {
-          html2 += `<span class="polish-highlight">${escText}</span>`;
+          const addedSpan = document.createElement("span");
+          addedSpan.className = "polish-highlight";
+          addedSpan.textContent = text;
+          fragment.appendChild(addedSpan);
         } else {
-          html2 += escText;
+          fragment.appendChild(document.createTextNode(text));
         }
       }
-      html2 = html2.replace(/\n/g, "<br>");
-      return html2;
+      return fragment;
     } catch (e) {
       console.error("Error in word-level diff:", e);
-      return this.generateParagraphLevelDiff(original, modified);
+      return this.generateParagraphLevelDiffElements(original, modified);
     }
   }
-  // Escape HTML special characters to prevent injection
-  escapeHtml(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  }
-  // Basic paragraph-level diff (original implementation, used as fallback)
-  generateParagraphLevelDiff(original, modified) {
+  // Basic paragraph-level diff that returns DOM elements
+  generateParagraphLevelDiffElements(original, modified) {
     const originalParagraphs = original.split("\n");
     const modifiedParagraphs = modified.split("\n");
+    const fragment = document.createDocumentFragment();
     if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
-      return modified;
+      fragment.appendChild(document.createTextNode(modified));
+      return fragment;
     }
-    const result = [];
     const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
     for (let i = 0; i < maxLength; i++) {
       const origPara = i < originalParagraphs.length ? originalParagraphs[i] : "";
       const modPara = i < modifiedParagraphs.length ? modifiedParagraphs[i] : "";
       if (origPara === modPara) {
-        result.push(modPara);
+        fragment.appendChild(document.createTextNode(modPara));
       } else if (origPara && !modPara) {
-        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+        const deletedSpan = document.createElement("span");
+        deletedSpan.className = "polish-deleted";
+        deletedSpan.textContent = origPara;
+        fragment.appendChild(deletedSpan);
       } else if (!origPara && modPara) {
-        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+        const addedSpan = document.createElement("span");
+        addedSpan.className = "polish-highlight";
+        addedSpan.textContent = modPara;
+        fragment.appendChild(addedSpan);
       } else {
-        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
-        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+        const deletedSpan = document.createElement("span");
+        deletedSpan.className = "polish-deleted";
+        deletedSpan.textContent = origPara;
+        fragment.appendChild(deletedSpan);
+        fragment.appendChild(document.createElement("br"));
+        const addedSpan = document.createElement("span");
+        addedSpan.className = "polish-highlight";
+        addedSpan.textContent = modPara;
+        fragment.appendChild(addedSpan);
+      }
+      if (i < maxLength - 1) {
+        fragment.appendChild(document.createElement("br"));
       }
     }
-    return result.join("<br>");
+    return fragment;
+  }
+  // Keep the existing methods for backward compatibility but update them to use the new methods
+  generateDiffHtml(original, modified) {
+    return this.generateDiffElements(original, modified);
+  }
+  generateWordLevelDiff(original, modified) {
+    return this.generateWordLevelDiffElements(original, modified);
+  }
+  generateParagraphLevelDiff(original, modified) {
+    return this.generateParagraphLevelDiffElements(original, modified);
   }
   // Add this new method to clean Polish markup
   cleanPolishMarkup(editor) {
@@ -8635,6 +8778,10 @@ ${content}
       }
     });
   }
+  // Add the escapeHtml method to the main plugin class
+  escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
 };
 var PolishResultModal = class extends import_obsidian6.Modal {
   constructor(app, originalContent, polishedContent, onApply, plugin) {
@@ -8644,69 +8791,87 @@ var PolishResultModal = class extends import_obsidian6.Modal {
     this.onApply = onApply;
     this.plugin = plugin;
   }
-  // Method to generate diff HTML with highlighting
-  generateDiffHtml(original, modified) {
+  // Method to generate diff DOM elements with highlighting
+  generateDiffElements(original, modified) {
     try {
       if (this.plugin.diffMatchPatchLib) {
-        return this.generateWordLevelDiff(original, modified);
+        return this.generateWordLevelDiffElements(original, modified);
       }
     } catch (e) {
       console.error("Error using diff-match-patch library:", e);
     }
-    return this.generateParagraphLevelDiff(original, modified);
+    return this.generateParagraphLevelDiffElements(original, modified);
   }
-  // Advanced word-level diff implementation
-  generateWordLevelDiff(original, modified) {
+  // Advanced word-level diff implementation that returns DOM elements
+  generateWordLevelDiffElements(original, modified) {
     try {
       const dmp = new this.plugin.diffMatchPatchLib();
       const diffs = dmp.diff_main(original, modified);
       dmp.diff_cleanupSemantic(diffs);
-      let html2 = "";
+      const fragment = document.createDocumentFragment();
       for (const [operation, text] of diffs) {
-        const escText = this.escapeHtml(text);
+        const escText = this.plugin.escapeHtml(text);
         if (operation === -1) {
-          html2 += `<span class="polish-deleted">${escText}</span>`;
+          const deletedSpan = document.createElement("span");
+          deletedSpan.className = "polish-deleted";
+          deletedSpan.textContent = text;
+          fragment.appendChild(deletedSpan);
         } else if (operation === 1) {
-          html2 += `<span class="polish-highlight">${escText}</span>`;
+          const addedSpan = document.createElement("span");
+          addedSpan.className = "polish-highlight";
+          addedSpan.textContent = text;
+          fragment.appendChild(addedSpan);
         } else {
-          html2 += escText;
+          fragment.appendChild(document.createTextNode(text));
         }
       }
-      html2 = html2.replace(/\n/g, "<br>");
-      return html2;
+      return fragment;
     } catch (e) {
       console.error("Error in word-level diff:", e);
-      return this.generateParagraphLevelDiff(original, modified);
+      return this.generateParagraphLevelDiffElements(original, modified);
     }
   }
-  // Escape HTML special characters to prevent injection
-  escapeHtml(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  }
-  // Basic paragraph-level diff (original implementation, used as fallback)
-  generateParagraphLevelDiff(original, modified) {
+  // Basic paragraph-level diff that returns DOM elements
+  generateParagraphLevelDiffElements(original, modified) {
     const originalParagraphs = original.split("\n");
     const modifiedParagraphs = modified.split("\n");
+    const fragment = document.createDocumentFragment();
     if (Math.abs(originalParagraphs.length - modifiedParagraphs.length) > originalParagraphs.length * 0.5) {
-      return modified;
+      fragment.appendChild(document.createTextNode(modified));
+      return fragment;
     }
-    const result = [];
     const maxLength = Math.max(originalParagraphs.length, modifiedParagraphs.length);
     for (let i = 0; i < maxLength; i++) {
       const origPara = i < originalParagraphs.length ? originalParagraphs[i] : "";
       const modPara = i < modifiedParagraphs.length ? modifiedParagraphs[i] : "";
       if (origPara === modPara) {
-        result.push(modPara);
+        fragment.appendChild(document.createTextNode(modPara));
       } else if (origPara && !modPara) {
-        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
+        const deletedSpan = document.createElement("span");
+        deletedSpan.className = "polish-deleted";
+        deletedSpan.textContent = origPara;
+        fragment.appendChild(deletedSpan);
       } else if (!origPara && modPara) {
-        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+        const addedSpan = document.createElement("span");
+        addedSpan.className = "polish-highlight";
+        addedSpan.textContent = modPara;
+        fragment.appendChild(addedSpan);
       } else {
-        result.push(`<span class="polish-deleted">${this.escapeHtml(origPara)}</span>`);
-        result.push(`<span class="polish-highlight">${this.escapeHtml(modPara)}</span>`);
+        const deletedSpan = document.createElement("span");
+        deletedSpan.className = "polish-deleted";
+        deletedSpan.textContent = origPara;
+        fragment.appendChild(deletedSpan);
+        fragment.appendChild(document.createElement("br"));
+        const addedSpan = document.createElement("span");
+        addedSpan.className = "polish-highlight";
+        addedSpan.textContent = modPara;
+        fragment.appendChild(addedSpan);
+      }
+      if (i < maxLength - 1) {
+        fragment.appendChild(document.createElement("br"));
       }
     }
-    return result.join("<br>");
+    return fragment;
   }
   onOpen() {
     const { contentEl } = this;
@@ -8727,7 +8892,7 @@ var PolishResultModal = class extends import_obsidian6.Modal {
     addedItem.createSpan({ text: " - New or modified content" });
     const diffHtml = this.generateDiffHtml(this.originalContent, this.polishedContent);
     const contentContainer = contentEl.createDiv({ cls: "polish-result-container diff-rendered" });
-    contentContainer.innerHTML = diffHtml;
+    this.renderDiffContent(contentContainer, diffHtml);
     const buttonContainer = contentEl.createDiv({ cls: "polish-button-container" });
     const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
     cancelButton.addEventListener("click", () => {
@@ -8750,6 +8915,36 @@ var PolishResultModal = class extends import_obsidian6.Modal {
   onClose() {
     const { contentEl } = this;
     contentEl.empty();
+  }
+  // Add a new method to render diff content safely
+  renderDiffContent(container, htmlContent) {
+    const tempDiv = document.createElement("div");
+    tempDiv.appendChild(htmlContent);
+    const fragment = document.createDocumentFragment();
+    Array.from(tempDiv.childNodes).forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        fragment.appendChild(document.createTextNode(node.textContent || ""));
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const elem = node;
+        if (elem.tagName === "SPAN") {
+          const span = document.createElement("span");
+          span.className = elem.className;
+          span.textContent = elem.textContent || "";
+          fragment.appendChild(span);
+        } else if (elem.tagName === "BR") {
+          fragment.appendChild(document.createElement("br"));
+        }
+      }
+    });
+    container.appendChild(fragment);
+  }
+  // Add escapeHtml to the PolishResultModal class
+  escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  // Add the generateDiffHtml method to PolishResultModal
+  generateDiffHtml(original, modified) {
+    return this.generateDiffElements(original, modified);
   }
 };
 var CustomPromptInputModal = class extends import_obsidian6.Modal {

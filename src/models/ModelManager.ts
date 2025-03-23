@@ -26,6 +26,26 @@ export interface ProxyConfig {
   password?: string;
 }
 
+// Add a type definition for API options
+interface OpenAIOptions {
+  modelName?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface OllamaOptions {
+  modelName?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface ClaudeOptions {
+  modelName?: string;
+  maxTokens?: number;
+}
+
+type ModelOptions = OpenAIOptions | OllamaOptions | ClaudeOptions;
+
 export class ModelManager {
   private models: ModelConfig[] = [];
   private proxyConfig: ProxyConfig;
@@ -135,13 +155,13 @@ export class ModelManager {
       
       switch(model.type) {
         case 'openai':
-          result = await this.callOpenAI(model, prompt, useProxy, options);
+          result = await this.callOpenAI(model, prompt, useProxy, options as OpenAIOptions);
           break;
         case 'ollama':
-          result = await this.callOllama(model, prompt, useProxy, options);
+          result = await this.callOllama(model, prompt, useProxy, options as OllamaOptions);
           break;
         case 'claude':
-          result = await this.callClaude(model, prompt, useProxy, options);
+          result = await this.callClaude(model, prompt, useProxy, options as ClaudeOptions);
           break;
         case 'zhipu':
         case 'zhipuai':  // Add zhipuai as an alias for zhipu
@@ -163,7 +183,7 @@ export class ModelManager {
     }
   }
   
-  private async callOpenAI(model: ModelConfig, prompt: string, useProxy: boolean, options: any): Promise<string> {
+  private async callOpenAI(model: ModelConfig, prompt: string, useProxy: boolean, options: OpenAIOptions): Promise<string> {
     const url = model.baseUrl || "https://api.openai.com/v1/chat/completions";
     const headers = {
       "Content-Type": "application/json",
@@ -171,7 +191,7 @@ export class ModelManager {
     };
     
     const payload = {
-      model: model.modelName || options.modelName || "gpt-3.5-turbo",
+      model: options.modelName || model.modelName || "gpt-3.5-turbo",
       messages: [
         { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
         { role: "user", content: prompt }
@@ -190,14 +210,14 @@ export class ModelManager {
     return data.choices[0].message.content;
   }
   
-  private async callOllama(model: ModelConfig, prompt: string, useProxy: boolean, options: any): Promise<string> {
+  private async callOllama(model: ModelConfig, prompt: string, useProxy: boolean, options: OllamaOptions): Promise<string> {
     const url = model.baseUrl || "http://localhost:11434/api/generate";
     const headers = {
       "Content-Type": "application/json"
     };
     
     const payload = {
-      model: model.modelName || options.modelName || "llama2",
+      model: options.modelName || model.modelName || "llama2",
       prompt: prompt,
       system: model.systemPrompt || "You are a helpful assistant.",
       options: {
@@ -216,7 +236,7 @@ export class ModelManager {
     return data.response;
   }
   
-  private async callClaude(model: ModelConfig, prompt: string, useProxy: boolean, options: any): Promise<string> {
+  private async callClaude(model: ModelConfig, prompt: string, useProxy: boolean, options: ClaudeOptions): Promise<string> {
     // Implementation for Claude API
     const url = model.baseUrl || "https://api.anthropic.com/v1/messages";
     const headers: Record<string, string> = {
@@ -229,7 +249,7 @@ export class ModelManager {
     }
     
     const payload = {
-      model: model.modelName || options.modelName || "claude-3-opus-20240229",
+      model: options.modelName || model.modelName || "claude-3-opus-20240229",
       messages: [
         { role: "user", content: prompt }
       ],
