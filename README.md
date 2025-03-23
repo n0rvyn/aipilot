@@ -6,12 +6,13 @@ AIPilot is a powerful AI assistant plugin for Obsidian that enhances your writin
 
 ## Features
 
-- **AI Chat Interface**: Interact with AI models like OpenAI and Zhipu AI directly within Obsidian
+- **AI Chat Interface**: Interact with AI models like OpenAI, Zhipu AI, and Groq directly within Obsidian
 - **Text Polish**: Refine your writing with AI suggestions and see changes with visual diff highlighting
 - **Chat History**: Save, organize, and search through previous AI conversations
 - **Custom Functions**: Create personalized AI assistants with custom prompts
 - **Editor Integration**: Insert AI-generated content directly into your notes
 - **Knowledge Base**: Leverage your existing notes as context for AI responses
+- **Multi-Agent Debate**: Generate discussions between AI agents with different perspectives
 
 ## Installation
 
@@ -20,9 +21,10 @@ AIPilot is a powerful AI assistant plugin for Obsidian that enhances your writin
 3. Click Install, then Enable
 
 Or install manually:
-1. Download the latest release from the [releases page](https://github.com/norvyn/aipilot/releases)
-2. Extract the zip file into your Obsidian vault's `.obsidian/plugins/` directory
-3. Restart Obsidian and enable the plugin in Settings → Community plugins
+1. Download the latest release files (`main.js`, `styles.css`, and `manifest.json`) from the [releases page](https://github.com/norvyn/aipilot/releases)
+2. Create a folder named `aipilot` in your Obsidian vault's `.obsidian/plugins/` directory
+3. Place the downloaded files in this folder
+4. Restart Obsidian and enable the plugin in Settings → Community plugins
 
 ## Setup
 
@@ -46,6 +48,11 @@ Or install manually:
 - Create custom prompts for specific writing tasks
 - Access your custom functions directly from the chat interface
 
+### Agent Debate
+- Create discussions between multiple AI agents with different perspectives
+- Choose from debate modes like Pro vs Con, Six Thinking Hats, or Roundtable
+- Export debates to new notes
+
 ## Contributing
 
 To make changes to this plugin:
@@ -65,6 +72,11 @@ To make changes to this plugin:
 ```
 npm run build
 ```
+
+This will generate three files in the `dist` directory:
+- `main.js`: The plugin code
+- `styles.css`: The plugin styles
+- `manifest.json`: The plugin manifest
 
 ## Support
 
