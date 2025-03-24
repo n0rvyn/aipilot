@@ -3911,7 +3911,11 @@ ${content}`;
 
 // src/models/ModelManager.ts
 var ModelManager = class {
-  constructor(plugin, initialModels = [], initialProxyConfig = {
+  constructor(plugin, initialModels = [], initialEmbeddingConfig = {
+    modelName: "text-embedding-3-small",
+    provider: "openai",
+    dimensions: 1536
+  }, initialProxyConfig = {
     enabled: false,
     address: "",
     port: "",
@@ -3921,11 +3925,17 @@ var ModelManager = class {
     this.plugin = plugin;
     this.models = [];
     this.models = initialModels;
+    this.embeddingConfig = initialEmbeddingConfig;
     this.proxyConfig = initialProxyConfig;
     this.saveSettingsCallback = saveCallback;
   }
-  loadConfigs(models, proxyConfig) {
+  loadConfigs(models, embeddingConfig, proxyConfig) {
     this.models = models || [];
+    this.embeddingConfig = embeddingConfig || {
+      modelName: "text-embedding-3-small",
+      provider: "openai",
+      dimensions: 1536
+    };
     this.proxyConfig = proxyConfig || {
       enabled: false,
       address: "",
@@ -3976,6 +3986,13 @@ var ModelManager = class {
   updateProxyConfig(config) {
     this.proxyConfig = __spreadValues(__spreadValues({}, this.proxyConfig), config);
     this.saveProxyConfig();
+  }
+  getEmbeddingConfig() {
+    return this.embeddingConfig;
+  }
+  updateEmbeddingConfig(config) {
+    this.embeddingConfig = __spreadValues(__spreadValues({}, this.embeddingConfig), config);
+    this.saveModels();
   }
   saveModels() {
     this.saveSettingsCallback();
@@ -4298,48 +4315,61 @@ var ModelManager = class {
   // Add new methods for embedding functionality
   getEmbedding(text, modelId) {
     return __async(this, null, function* () {
-      const model = modelId ? this.getModelById(modelId) : this.getDefaultModel();
-      if (!model) {
-        throw new Error("No model found for embedding generation");
+      let embeddingConfig = this.embeddingConfig;
+      let apiKey = embeddingConfig.apiKey;
+      let baseUrl = embeddingConfig.baseUrl;
+      let useProxy = embeddingConfig.useProxy !== void 0 ? embeddingConfig.useProxy : this.proxyConfig.enabled;
+      if (modelId) {
+        const model = this.getModelById(modelId);
+        if (model) {
+          console.log(`Using model ${model.name} for embedding context`);
+          apiKey = model.apiKey || apiKey;
+          baseUrl = model.baseUrl || baseUrl;
+          useProxy = model.useProxy !== void 0 ? model.useProxy : this.proxyConfig.enabled;
+        } else {
+          console.log(`Model with ID ${modelId} not found, using global embedding config`);
+        }
+      } else {
+        console.log("Using global embedding configuration");
       }
-      const embeddingModel = model.embeddingModel || "embedding-3";
       try {
-        console.log(`Getting embedding using model: ${model.name}, embedding model: ${embeddingModel}`);
-        const useProxy = model.useProxy !== void 0 ? model.useProxy : this.proxyConfig.enabled;
-        switch (model.type) {
+        console.log(`Getting embedding using provider: ${embeddingConfig.provider}, model: ${embeddingConfig.modelName}`);
+        switch (embeddingConfig.provider) {
           case "openai":
-            return yield this.getOpenAIEmbedding(model, text, embeddingModel, useProxy);
-          case "zhipu":
+            return yield this.getOpenAIEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy);
           case "zhipuai":
-            return yield this.getZhipuEmbedding(model, text, embeddingModel, useProxy);
+            return yield this.getZhipuEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy);
           case "custom":
-            return yield this.getCustomEmbedding(model, text, embeddingModel, useProxy);
+            return yield this.getCustomEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy);
           default:
-            throw new Error(`Embedding not supported for model type: ${model.type}`);
+            throw new Error(`Embedding not supported for provider: ${embeddingConfig.provider}`);
         }
       } catch (error) {
-        console.error(`Error getting embedding using model ${model.name}:`, error);
+        console.error(`Error getting embedding:`, error);
         throw error;
       }
     });
   }
-  getOpenAIEmbedding(model, text, embeddingModel, useProxy) {
+  getOpenAIEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy) {
     return __async(this, null, function* () {
       var _a, _b;
-      const url = "https://api.openai.com/v1/embeddings";
+      const url = baseUrl || "https://api.openai.com/v1/embeddings";
+      if (!apiKey) {
+        throw new Error("API key is required for OpenAI embeddings");
+      }
       const headers = {
-        "Authorization": `Bearer ${model.apiKey}`,
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       };
       const payload = {
-        model: embeddingModel,
+        model: embeddingConfig.modelName,
         input: text
       };
       const response = yield this.fetchWithProxy(url, {
         method: "POST",
         headers,
         body: JSON.stringify(payload)
-      }, useProxy);
+      }, !!useProxy);
       const data = yield response.json();
       if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
         throw new Error("Invalid embedding response from OpenAI");
@@ -4347,70 +4377,61 @@ var ModelManager = class {
       return data.data[0].embedding;
     });
   }
-  getZhipuEmbedding(model, text, embeddingModel, useProxy) {
+  getZhipuEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy) {
     return __async(this, null, function* () {
       var _a, _b;
-      const url = model.baseUrl || "https://open.bigmodel.cn/api/paas/v4/embeddings";
+      const url = baseUrl || "https://open.bigmodel.cn/api/paas/v4/embeddings";
+      if (!apiKey) {
+        throw new Error("API key is required for Zhipu AI embeddings");
+      }
       const headers = {
-        "Authorization": `Bearer ${model.apiKey}`,
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       };
-      const MAX_CHARS = 3e3;
-      if (text.length > MAX_CHARS) {
-        const truncated = text.substring(0, MAX_CHARS);
-        const lastPeriod = truncated.lastIndexOf(".");
-        const lastNewline = truncated.lastIndexOf("\n");
-        const breakPoint = Math.max(lastPeriod, lastNewline);
-        text = breakPoint > 0 ? truncated.substring(0, breakPoint + 1) : truncated;
-      }
       const payload = {
-        model: embeddingModel,
+        model: embeddingConfig.modelName,
         input: text,
-        dimensions: embeddingModel === "embedding-3" ? 1024 : void 0
+        dimensions: embeddingConfig.dimensions || 1024
       };
-      console.log(`ZhipuAI Embedding: Sending request to ${url} with model ${embeddingModel}`);
+      console.log(`ZhipuAI Embedding: Sending request to ${url} with model ${embeddingConfig.modelName}`);
       const response = yield this.fetchWithProxy(url, {
         method: "POST",
         headers,
         body: JSON.stringify(payload)
-      }, useProxy);
+      }, !!useProxy);
       if (!response.ok) {
-        const errorData = yield response.text();
-        console.error(`ZhipuAI Embedding API error (${response.status}): ${errorData}`);
-        if (response.status === 404) {
-          throw new Error(`ZhipuAI Embedding API endpoint not found. Please check your model configuration and API documentation for the correct URL. Status: ${response.status}`);
-        }
-        throw new Error(`ZhipuAI Embedding API error: ${response.status} ${response.statusText}`);
+        const errorText = yield response.text();
+        throw new Error(`ZhipuAI embedding API error (${response.status}): ${errorText}`);
       }
       const data = yield response.json();
       if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
-        console.error("Invalid embedding response from ZhipuAI:", data);
         throw new Error("Invalid embedding response from ZhipuAI");
       }
       return data.data[0].embedding;
     });
   }
-  getCustomEmbedding(model, text, embeddingModel, useProxy) {
+  getCustomEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy) {
     return __async(this, null, function* () {
       var _a, _b;
-      if (!model.baseUrl) {
+      if (!baseUrl) {
         throw new Error("Base URL is required for custom embedding API");
       }
       const headers = {
         "Content-Type": "application/json"
       };
-      if (model.apiKey) {
-        headers["Authorization"] = `Bearer ${model.apiKey}`;
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
       }
       const payload = {
-        model: embeddingModel,
-        input: text
+        model: embeddingConfig.modelName,
+        input: text,
+        dimensions: embeddingConfig.dimensions
       };
-      const response = yield this.fetchWithProxy(model.baseUrl + "/embeddings", {
+      const response = yield this.fetchWithProxy(baseUrl + "/embeddings", {
         method: "POST",
         headers,
         body: JSON.stringify(payload)
-      }, useProxy);
+      }, !!useProxy);
       const data = yield response.json();
       if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
         throw new Error("Invalid embedding response from custom API");
@@ -5518,7 +5539,9 @@ var DEFAULT_SETTINGS = {
   model: "gpt-4",
   provider: "openai",
   embeddingModel: "embedding-3",
+  // Legacy field
   embeddingDimensions: 1024,
+  // Legacy field
   knowledgeBasePath: "AI_KnowledgeBase",
   promptOrganize: 'Please organize the content of the following article logically, following an introduction-body-conclusion structure. Use Markdown format, ensuring a smooth flow between sections. Output in the same language as the input text:\n1. Use `#` and `##` for main and secondary headings, marking primary sections and sub-sections, respectively.\n2. If appropriate, divide content into list form or use block quotes (`>`) to present specific points.\n3. Avoid repetitive content, highlight key information, and ensure the article structure is clearer and easier to read.\n4. Summarize the core points of the article in the conclusion.\n5. Do not include any lines that start with "=".\nHere is the content that needs to be organized:',
   promptCheckGrammar: "Please check the grammar, typos, and punctuation in the following text. Never delete any content, and provide the corrected text in the same language. For any errors in the original text, please list them at the end of the corrected version:",
@@ -5601,6 +5624,12 @@ Guidelines:
   ],
   chatHistoryPath: "AI_ChatHistory",
   editorModeEnabled: true,
+  embeddingConfig: {
+    modelName: "text-embedding-3-small",
+    // Default OpenAI embedding model
+    provider: "openai",
+    dimensions: 1536
+  },
   proxyConfig: {
     enabled: false,
     address: "",
@@ -5650,10 +5679,16 @@ var AIPilotPlugin = class extends import_obsidian6.Plugin {
     return __async(this, null, function* () {
       yield this.loadSettings();
       this.migrateLegacyAPIKey();
+      this.migrateEmbeddingConfig();
       this.modelManager = new ModelManager(
         this,
         this.settings.models || [],
         // Ensure we have a default empty array if models is undefined
+        this.settings.embeddingConfig || {
+          modelName: "text-embedding-3-small",
+          provider: "openai",
+          dimensions: 1536
+        },
         this.settings.proxyConfig,
         () => __async(this, null, function* () {
           yield this.saveSettings();
@@ -5853,7 +5888,7 @@ var AIPilotPlugin = class extends import_obsidian6.Plugin {
         const modal = new SearchPromptModal(this.app);
         const query = yield modal.openAndGetValue();
         if (!query) return;
-        const loadingModal = new LoadingModal2(this.app, true);
+        const loadingModal = new LoadingModal2(this.app, true, "Searching...");
         loadingModal.open();
         try {
           const files = yield this.getKnowledgeBaseNotes();
@@ -6035,7 +6070,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   }
   processOrganize(content, editor) {
     return __async(this, null, function* () {
-      const loadingModal = new LoadingModal2(this.app, true);
+      const loadingModal = new LoadingModal2(this.app, true, "Organizing...");
       loadingModal.open();
       const prompt = `${this.settings.promptOrganize}${content}
 
@@ -6076,7 +6111,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   }
   processGrammar(content, editor) {
     return __async(this, null, function* () {
-      const loadingModal = new LoadingModal2(this.app, true);
+      const loadingModal = new LoadingModal2(this.app, true, "Checking grammar...");
       loadingModal.open();
       const grammarCheckedText = yield this.callAI(content, this.settings.promptCheckGrammar);
       loadingModal.close();
@@ -6143,7 +6178,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   }
   processDialogue(content, editor) {
     return __async(this, null, function* () {
-      const loadingModal = new LoadingModal2(this.app, true);
+      const loadingModal = new LoadingModal2(this.app, true, "Creating dialogue...");
       loadingModal.open();
       const dialoguePrompt = `${this.settings.promptDialogue}${content}`;
       const aiResponse = yield this.callAI(dialoguePrompt);
@@ -6187,7 +6222,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
   }
   processCustomPrompt(content, editor) {
     return __async(this, null, function* () {
-      const loadingModal = new LoadingModal2(this.app, true);
+      const loadingModal = new LoadingModal2(this.app, true, "Processing...");
       loadingModal.open();
       const customResponse = yield this.callAI(content);
       loadingModal.close();
@@ -6407,7 +6442,7 @@ Note: This is part of a larger text. Ensure continuity with the previous section
       const modal = new SearchPromptModal(this.app);
       const query = yield modal.openAndGetValue();
       if (!query) return;
-      const loadingModal = new LoadingModal2(this.app, true);
+      const loadingModal = new LoadingModal2(this.app, true, "Searching...");
       loadingModal.open();
       try {
         const files = yield this.getKnowledgeBaseNotes();
@@ -6540,7 +6575,7 @@ ${content}
   }
   processPolish(content, editor) {
     return __async(this, null, function* () {
-      const loadingModal = new LoadingModal2(this.app, true);
+      const loadingModal = new LoadingModal2(this.app, true, "Polishing...");
       loadingModal.open();
       const polishFunc = this.settings.functions.find((f) => f.isBuiltIn && f.name === "Polish");
       const polishPrompt = polishFunc ? polishFunc.prompt : "Please polish and refine the following text:";
@@ -6735,6 +6770,18 @@ ${content}
   // Add the escapeHtml method to the main plugin class
   escapeHtml(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  // Add after the migrateLegacyAPIKey method
+  migrateEmbeddingConfig() {
+    if (!this.settings.embeddingConfig && this.settings.embeddingModel) {
+      console.log("Migrating legacy embedding configuration");
+      this.settings.embeddingConfig = {
+        modelName: this.settings.embeddingModel === "embedding-3" ? "text-embedding-3-small" : "text-embedding-ada-002",
+        provider: this.settings.provider === "zhipuai" ? "zhipuai" : "openai",
+        dimensions: this.settings.embeddingDimensions || (this.settings.embeddingModel === "embedding-3" ? 1024 : 1536)
+      };
+      this.saveSettings();
+    }
   }
 };
 var PolishResultModal = class extends import_obsidian6.Modal {
@@ -6972,21 +7019,22 @@ var FeatureSelectionModal = class extends import_obsidian6.Modal {
   }
 };
 var LoadingModal2 = class extends import_obsidian6.Modal {
-  constructor(app, isProgress = false) {
+  constructor(app, isProgress = false, modalTitle = "") {
     super(app);
     this.isProgress = isProgress;
+    this.modalTitle = modalTitle || (isProgress ? "Processing..." : "Processing...");
   }
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     if (this.isProgress) {
       contentEl.addClass("loading-modal");
-      contentEl.createEl("h2", { text: "Searching..." });
+      contentEl.createEl("h2", { text: this.modalTitle });
       this.statusEl = contentEl.createEl("p", { text: "Initializing..." });
       this.countEl = contentEl.createEl("p", { cls: "count-text" });
       this.progressEl = contentEl.createEl("p", { cls: "progress-text" });
     } else {
-      contentEl.createEl("h2", { text: "Processing..." });
+      contentEl.createEl("h2", { text: this.modalTitle });
       contentEl.createEl("div", { text: "Please wait while the AI processes your text.", cls: "loading-text" });
       this.spinnerEl = contentEl.createDiv({ cls: "spinner" });
       for (let i = 0; i < 3; i++) {
@@ -7375,6 +7423,74 @@ var AIPilotSettingTab = class extends import_obsidian6.PluginSettingTab {
     }));
     const modelsContainer = containerEl.createDiv({ cls: "models-container" });
     this.renderModelsList(modelsContainer);
+    containerEl.createEl("h2", { text: "Embedding Configuration" });
+    containerEl.createEl("p", {
+      text: "Configure the embedding model used for knowledge base search and similar content features.",
+      cls: "setting-item-description"
+    });
+    if (!this.plugin.settings.embeddingConfig) {
+      this.plugin.settings.embeddingConfig = {
+        modelName: "text-embedding-3-small",
+        provider: "openai",
+        dimensions: 1536
+      };
+    }
+    const embeddingConfig = this.plugin.settings.embeddingConfig;
+    new import_obsidian6.Setting(containerEl).setName("Embedding Provider").setDesc("Select the provider for embeddings").addDropdown((dropdown) => dropdown.addOption("openai", "OpenAI").addOption("zhipuai", "Zhipu AI").addOption("custom", "Custom API").setValue(embeddingConfig.provider).onChange((value) => __async(this, null, function* () {
+      embeddingConfig.provider = value;
+      if (value === "openai" && !embeddingConfig.modelName) {
+        embeddingConfig.modelName = "text-embedding-3-small";
+      } else if (value === "zhipuai" && !embeddingConfig.modelName) {
+        embeddingConfig.modelName = "embedding-3";
+      }
+      yield this.plugin.saveSettings();
+      this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+      this.display();
+    })));
+    new import_obsidian6.Setting(containerEl).setName("Embedding Model").setDesc("The model to use for generating embeddings").addText((text) => {
+      const placeholder = embeddingConfig.provider === "openai" ? "e.g., text-embedding-3-small" : embeddingConfig.provider === "zhipuai" ? "e.g., embedding-3" : "Embedding model name";
+      text.setPlaceholder(placeholder).setValue(embeddingConfig.modelName).onChange((value) => __async(this, null, function* () {
+        embeddingConfig.modelName = value;
+        yield this.plugin.saveSettings();
+        this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+      }));
+    });
+    if (embeddingConfig.provider === "zhipuai" || embeddingConfig.provider === "custom") {
+      new import_obsidian6.Setting(containerEl).setName("Embedding Dimensions").setDesc("Number of dimensions for the embedding vectors (leave empty to use default)").addText(
+        (text) => {
+          var _a;
+          return text.setPlaceholder("e.g., 1024").setValue(((_a = embeddingConfig.dimensions) == null ? void 0 : _a.toString()) || "").onChange((value) => __async(this, null, function* () {
+            const dimensions = parseInt(value);
+            embeddingConfig.dimensions = isNaN(dimensions) ? void 0 : dimensions;
+            yield this.plugin.saveSettings();
+            this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+          }));
+        }
+      );
+    }
+    if (embeddingConfig.provider === "custom") {
+      new import_obsidian6.Setting(containerEl).setName("API Endpoint URL").setDesc("The URL for the custom embedding API").addText(
+        (text) => text.setPlaceholder("https://api.example.com/embeddings").setValue(embeddingConfig.baseUrl || "").onChange((value) => __async(this, null, function* () {
+          embeddingConfig.baseUrl = value;
+          yield this.plugin.saveSettings();
+          this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+        }))
+      );
+      new import_obsidian6.Setting(containerEl).setName("API Key").setDesc("Optional: Use a separate API key for embedding calls").addText(
+        (text) => text.setPlaceholder("Enter API key").setValue(embeddingConfig.apiKey || "").onChange((value) => __async(this, null, function* () {
+          embeddingConfig.apiKey = value;
+          yield this.plugin.saveSettings();
+          this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+        })).inputEl.setAttribute("type", "password")
+      );
+    }
+    new import_obsidian6.Setting(containerEl).setName("Use Proxy for Embeddings").setDesc("Override global proxy settings for embedding requests").addToggle(
+      (toggle) => toggle.setValue(embeddingConfig.useProxy || false).onChange((value) => __async(this, null, function* () {
+        embeddingConfig.useProxy = value;
+        yield this.plugin.saveSettings();
+        this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+      }))
+    );
     containerEl.createEl("h2", { text: "Chat History" });
     new import_obsidian6.Setting(containerEl).setName("Chat History Path").setDesc("Path to store chat history files (relative to vault)").addText((text) => text.setPlaceholder("AI_ChatHistory").setValue(this.plugin.settings.chatHistoryPath).onChange((value) => __async(this, null, function* () {
       this.plugin.settings.chatHistoryPath = value;

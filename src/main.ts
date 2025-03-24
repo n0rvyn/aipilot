@@ -41,7 +41,7 @@ import {
 import './styles.css';
 import { ChatView, VIEW_TYPE_CHAT } from './ChatView';
 import { MarkdownRenderer as NewMarkdownRenderer } from './MarkdownRenderer';
-import { ModelManager, ModelConfig as LLMModelConfig, ProxyConfig } from './models/ModelManager';
+import { ModelManager, ModelConfig as LLMModelConfig, ProxyConfig, EmbeddingConfig } from './models/ModelManager';
 import { DebatePanel, DEBATE_VIEW_TYPE } from './debate/DebatePanel';
 import { AgentDebateEngine, DebateConfig } from './debate/AgentDebateEngine';
 import { ModelConfigModal } from './models/ModelConfigModal';
@@ -67,8 +67,8 @@ interface AIPilotPluginSettings {
     apiKey: string;
     model: string;
     provider: 'zhipuai' | 'openai' | 'groq';
-    embeddingModel: EmbeddingModelKey;
-    embeddingDimensions: number;
+    embeddingModel: EmbeddingModelKey; // Legacy field - kept for backward compatibility
+    embeddingDimensions: number; // Legacy field - kept for backward compatibility
     knowledgeBasePath: string;
     promptOrganize: string; // Kept for backward compatibility
     promptCheckGrammar: string; // Kept for backward compatibility
@@ -81,6 +81,7 @@ interface AIPilotPluginSettings {
     chatHistoryPath: string; // Path to store chat history files
     editorModeEnabled: boolean; // Whether functions apply to editor or chat
     models: LLMModelConfig[];
+    embeddingConfig: EmbeddingConfig; // New field for separate embedding configuration
     proxyConfig: ProxyConfig;
     debateConfigs: DebateConfig[];
 }
@@ -89,8 +90,8 @@ export const DEFAULT_SETTINGS: Partial<AIPilotPluginSettings> = {
     apiKey: '',
     model: 'gpt-4',
     provider: 'openai',
-    embeddingModel: 'embedding-3',
-    embeddingDimensions: 1024,
+    embeddingModel: 'embedding-3', // Legacy field
+    embeddingDimensions: 1024, // Legacy field
     knowledgeBasePath: 'AI_KnowledgeBase',
     promptOrganize: 'Please organize the content of the following article logically, following an introduction-body-conclusion structure. Use Markdown format, ensuring a smooth flow between sections. Output in the same language as the input text:\n1. Use `#` and `##` for main and secondary headings, marking primary sections and sub-sections, respectively.\n2. If appropriate, divide content into list form or use block quotes (`>`) to present specific points.\n3. Avoid repetitive content, highlight key information, and ensure the article structure is clearer and easier to read.\n4. Summarize the core points of the article in the conclusion.\n5. Do not include any lines that start with "=".\nHere is the content that needs to be organized:',
     promptCheckGrammar: 'Please check the grammar, typos, and punctuation in the following text. Never delete any content, and provide the corrected text in the same language. For any errors in the original text, please list them at the end of the corrected version:',
@@ -171,6 +172,11 @@ Guidelines:
     ],
     chatHistoryPath: 'AI_ChatHistory',
     editorModeEnabled: true,
+    embeddingConfig: {
+        modelName: "text-embedding-3-small", // Default OpenAI embedding model
+        provider: "openai",
+        dimensions: 1536
+    },
     proxyConfig: {
         enabled: false,
         address: "",
@@ -285,10 +291,18 @@ export default class AIPilotPlugin extends Plugin {
         // Migrate legacy API key to models system if needed
         this.migrateLegacyAPIKey();
         
+        // Migrate legacy embedding configuration
+        this.migrateEmbeddingConfig();
+        
         // Now initialize ModelManager with settings that are loaded
         this.modelManager = new ModelManager(
             this,
             this.settings.models || [], // Ensure we have a default empty array if models is undefined
+            this.settings.embeddingConfig || {
+                modelName: "text-embedding-3-small",
+                provider: "openai",
+                dimensions: 1536
+            },
             this.settings.proxyConfig,
             async () => {
                 await this.saveSettings();
@@ -548,7 +562,7 @@ export default class AIPilotPlugin extends Plugin {
                 const query = await modal.openAndGetValue();
                 if (!query) return;
 
-                const loadingModal = new LoadingModal(this.app, true);
+                const loadingModal = new LoadingModal(this.app, true, "Searching...");
                 loadingModal.open();
 
                 try {
@@ -761,7 +775,7 @@ export default class AIPilotPlugin extends Plugin {
     }
 
     async processOrganize(content: string, editor: any) {
-        const loadingModal = new LoadingModal(this.app, true);
+        const loadingModal = new LoadingModal(this.app, true, "Organizing...");
         loadingModal.open();
 
         // const prompt = `${this.settings.promptOrganize}${content}`;
@@ -805,7 +819,7 @@ export default class AIPilotPlugin extends Plugin {
     }
 
     async processGrammar(content: string, editor: any) {
-        const loadingModal = new LoadingModal(this.app, true);
+        const loadingModal = new LoadingModal(this.app, true, "Checking grammar...");
         loadingModal.open();
 
         const grammarCheckedText = await this.callAI(content, this.settings.promptCheckGrammar);
@@ -879,7 +893,7 @@ export default class AIPilotPlugin extends Plugin {
     }
 
     async processDialogue(content: string, editor: any) {
-        const loadingModal = new LoadingModal(this.app, true);
+        const loadingModal = new LoadingModal(this.app, true, "Creating dialogue...");
         loadingModal.open();
 
         const dialoguePrompt = `${this.settings.promptDialogue}${content}`;
@@ -928,7 +942,7 @@ export default class AIPilotPlugin extends Plugin {
     }
 
     async processCustomPrompt(content: string, editor: any) {
-        const loadingModal = new LoadingModal(this.app, true);
+        const loadingModal = new LoadingModal(this.app, true, "Processing...");
         loadingModal.open();
 
         const customResponse = await this.callAI(content);
@@ -1183,7 +1197,7 @@ export default class AIPilotPlugin extends Plugin {
         const query = await modal.openAndGetValue();
         if (!query) return;
 
-        const loadingModal = new LoadingModal(this.app, true);
+        const loadingModal = new LoadingModal(this.app, true, "Searching...");
         loadingModal.open();
 
         try {
@@ -1335,7 +1349,7 @@ export default class AIPilotPlugin extends Plugin {
     }
 
     async processPolish(content: string, editor: any) {
-        const loadingModal = new LoadingModal(this.app, true);
+        const loadingModal = new LoadingModal(this.app, true, "Polishing...");
         loadingModal.open();
 
         // Find the Polish function in the functions array
@@ -1609,6 +1623,25 @@ export default class AIPilotPlugin extends Plugin {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    // Add after the migrateLegacyAPIKey method
+    private migrateEmbeddingConfig(): void {
+        // Check if we need to migrate embedding configuration
+        if (!this.settings.embeddingConfig && this.settings.embeddingModel) {
+            console.log('Migrating legacy embedding configuration');
+            
+            // Initialize embeddingConfig using legacy settings
+            this.settings.embeddingConfig = {
+                modelName: this.settings.embeddingModel === 'embedding-3' ? 'text-embedding-3-small' : 'text-embedding-ada-002',
+                provider: this.settings.provider === 'zhipuai' ? 'zhipuai' : 'openai',
+                dimensions: this.settings.embeddingDimensions || 
+                    (this.settings.embeddingModel === 'embedding-3' ? 1024 : 1536)
+            };
+            
+            // Save the migrated settings
+            this.saveSettings();
+        }
     }
 }
 
@@ -1961,10 +1994,12 @@ export class LoadingModal extends Modal {
     private countEl: HTMLElement;
     private spinnerEl: HTMLElement;
     private isProgress: boolean;
+    private modalTitle: string;
 
-    constructor(app: App, isProgress: boolean = false) {
+    constructor(app: App, isProgress: boolean = false, modalTitle: string = "") {
         super(app);
         this.isProgress = isProgress;
+        this.modalTitle = modalTitle || (isProgress ? "Processing..." : "Processing...");
     }
 
     onOpen() {
@@ -1974,13 +2009,13 @@ export class LoadingModal extends Modal {
         if (this.isProgress) {
             // Progress-style modal (used for batch operations)
             contentEl.addClass('loading-modal');
-        contentEl.createEl("h2", { text: "Searching..." });
-        this.statusEl = contentEl.createEl("p", { text: "Initializing..." });
-        this.countEl = contentEl.createEl("p", { cls: "count-text" });
-        this.progressEl = contentEl.createEl("p", { cls: "progress-text" });
+            contentEl.createEl("h2", { text: this.modalTitle });
+            this.statusEl = contentEl.createEl("p", { text: "Initializing..." });
+            this.countEl = contentEl.createEl("p", { cls: "count-text" });
+            this.progressEl = contentEl.createEl("p", { cls: "progress-text" });
         } else {
             // Simple spinner-style modal (used for single operations)
-            contentEl.createEl("h2", { text: "Processing..." });
+            contentEl.createEl("h2", { text: this.modalTitle });
             contentEl.createEl("div", { text: "Please wait while the AI processes your text.", cls: "loading-text" });
             this.spinnerEl = contentEl.createDiv({ cls: "spinner" });
             for (let i = 0; i < 3; i++) {
@@ -2598,6 +2633,126 @@ class AIPilotSettingTab extends PluginSettingTab {
         // Display existing models
         const modelsContainer = containerEl.createDiv({ cls: 'models-container' });
         this.renderModelsList(modelsContainer);
+        
+        // Embedding Configuration Section
+        containerEl.createEl('h2', { text: 'Embedding Configuration' });
+        containerEl.createEl('p', { 
+            text: 'Configure the embedding model used for knowledge base search and similar content features.',
+            cls: 'setting-item-description'
+        });
+        
+        // Initialize embedding config if needed
+        if (!this.plugin.settings.embeddingConfig) {
+            this.plugin.settings.embeddingConfig = {
+                modelName: "text-embedding-3-small",
+                provider: "openai",
+                dimensions: 1536
+            };
+        }
+        
+        const embeddingConfig = this.plugin.settings.embeddingConfig;
+        
+        new Setting(containerEl)
+            .setName('Embedding Provider')
+            .setDesc('Select the provider for embeddings')
+            .addDropdown(dropdown => dropdown
+                .addOption('openai', 'OpenAI')
+                .addOption('zhipuai', 'Zhipu AI')
+                .addOption('custom', 'Custom API')
+                .setValue(embeddingConfig.provider)
+                .onChange(async (value: 'openai' | 'zhipuai' | 'custom') => {
+                    embeddingConfig.provider = value;
+                    
+                    // Set appropriate default model names based on provider
+                    if (value === 'openai' && !embeddingConfig.modelName) {
+                        embeddingConfig.modelName = 'text-embedding-3-small';
+                    } else if (value === 'zhipuai' && !embeddingConfig.modelName) {
+                        embeddingConfig.modelName = 'embedding-3';
+                    }
+                    
+                    await this.plugin.saveSettings();
+                    this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+                    this.display(); // Refresh to show relevant fields
+                }));
+        
+        new Setting(containerEl)
+            .setName('Embedding Model')
+            .setDesc('The model to use for generating embeddings')
+            .addText(text => {
+                const placeholder = embeddingConfig.provider === 'openai' 
+                    ? 'e.g., text-embedding-3-small' 
+                    : embeddingConfig.provider === 'zhipuai'
+                        ? 'e.g., embedding-3'
+                        : 'Embedding model name';
+                
+                text
+                    .setPlaceholder(placeholder)
+                    .setValue(embeddingConfig.modelName)
+                    .onChange(async (value) => {
+                        embeddingConfig.modelName = value;
+                        await this.plugin.saveSettings();
+                        this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+                    });
+            });
+        
+        // Only show dimensions for certain providers
+        if (embeddingConfig.provider === 'zhipuai' || embeddingConfig.provider === 'custom') {
+            new Setting(containerEl)
+                .setName('Embedding Dimensions')
+                .setDesc('Number of dimensions for the embedding vectors (leave empty to use default)')
+                .addText(text => text
+                    .setPlaceholder('e.g., 1024')
+                    .setValue(embeddingConfig.dimensions?.toString() || '')
+                    .onChange(async (value) => {
+                        const dimensions = parseInt(value);
+                        embeddingConfig.dimensions = isNaN(dimensions) ? undefined : dimensions;
+                        await this.plugin.saveSettings();
+                        this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+                    })
+                );
+        }
+        
+        // Custom API settings
+        if (embeddingConfig.provider === 'custom') {
+            new Setting(containerEl)
+                .setName('API Endpoint URL')
+                .setDesc('The URL for the custom embedding API')
+                .addText(text => text
+                    .setPlaceholder('https://api.example.com/embeddings')
+                    .setValue(embeddingConfig.baseUrl || '')
+                    .onChange(async (value) => {
+                        embeddingConfig.baseUrl = value;
+                        await this.plugin.saveSettings();
+                        this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+                    })
+                );
+                
+            new Setting(containerEl)
+                .setName('API Key')
+                .setDesc('Optional: Use a separate API key for embedding calls')
+                .addText(text => text
+                    .setPlaceholder('Enter API key')
+                    .setValue(embeddingConfig.apiKey || '')
+                    .onChange(async (value) => {
+                        embeddingConfig.apiKey = value;
+                        await this.plugin.saveSettings();
+                        this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+                    })
+                    .inputEl.setAttribute('type', 'password')
+                );
+        }
+        
+        new Setting(containerEl)
+            .setName('Use Proxy for Embeddings')
+            .setDesc('Override global proxy settings for embedding requests')
+            .addToggle(toggle => toggle
+                .setValue(embeddingConfig.useProxy || false)
+                .onChange(async (value) => {
+                    embeddingConfig.useProxy = value;
+                    await this.plugin.saveSettings();
+                    this.plugin.modelManager.updateEmbeddingConfig(embeddingConfig);
+                })
+            );
         
         // Chat History Section
         containerEl.createEl('h2', { text: 'Chat History' });

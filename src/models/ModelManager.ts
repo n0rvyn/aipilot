@@ -12,8 +12,16 @@ export interface ModelConfig {
   active: boolean;
   isDefault?: boolean;
   modelName?: string; // Specific model name for this provider (e.g., gpt-4, llama2, etc.)
-  embeddingModel?: string; // The embedding model associated with this LLM
-  embeddingDimensions?: number; // Dimensions of the embedding model output
+}
+
+// New interface for embedding configuration
+export interface EmbeddingConfig {
+  modelName: string; // Name of the embedding model (e.g., text-embedding-3-small)
+  dimensions?: number; // Dimensions of embedding vectors (if needed)
+  provider: 'openai' | 'zhipuai' | 'custom'; // Provider type for embeddings
+  apiKey?: string; // Can use a separate API key just for embeddings
+  baseUrl?: string; // Can use a separate endpoint for embeddings
+  useProxy?: boolean; // Whether to use proxy for embedding requests
 }
 
 export interface ProxyConfig {
@@ -48,12 +56,18 @@ type ModelOptions = OpenAIOptions | OllamaOptions | ClaudeOptions;
 
 export class ModelManager {
   private models: ModelConfig[] = [];
+  private embeddingConfig: EmbeddingConfig;
   private proxyConfig: ProxyConfig;
   private saveSettingsCallback: () => Promise<void>;
 
   constructor(
     private plugin: Plugin, 
     initialModels: ModelConfig[] = [], 
+    initialEmbeddingConfig: EmbeddingConfig = {
+      modelName: "text-embedding-3-small",
+      provider: "openai",
+      dimensions: 1536
+    },
     initialProxyConfig: ProxyConfig = {
       enabled: false,
       address: "",
@@ -64,12 +78,18 @@ export class ModelManager {
     saveCallback: () => Promise<void>
   ) {
     this.models = initialModels;
+    this.embeddingConfig = initialEmbeddingConfig;
     this.proxyConfig = initialProxyConfig;
     this.saveSettingsCallback = saveCallback;
   }
 
-  loadConfigs(models: ModelConfig[], proxyConfig: ProxyConfig) {
+  loadConfigs(models: ModelConfig[], embeddingConfig: EmbeddingConfig, proxyConfig: ProxyConfig) {
     this.models = models || [];
+    this.embeddingConfig = embeddingConfig || {
+      modelName: "text-embedding-3-small",
+      provider: "openai",
+      dimensions: 1536
+    };
     this.proxyConfig = proxyConfig || {
       enabled: false,
       address: "",
@@ -131,6 +151,15 @@ export class ModelManager {
   updateProxyConfig(config: Partial<ProxyConfig>): void {
     this.proxyConfig = { ...this.proxyConfig, ...config };
     this.saveProxyConfig();
+  }
+
+  getEmbeddingConfig(): EmbeddingConfig {
+    return this.embeddingConfig;
+  }
+
+  updateEmbeddingConfig(config: Partial<EmbeddingConfig>): void {
+    this.embeddingConfig = { ...this.embeddingConfig, ...config };
+    this.saveModels();
   }
 
   private saveModels(): void {
@@ -529,56 +558,75 @@ export class ModelManager {
 
   // Add new methods for embedding functionality
   async getEmbedding(text: string, modelId?: string): Promise<number[]> {
-    // If modelId is provided, use that model; otherwise use the default model
-    const model = modelId ? this.getModelById(modelId) : this.getDefaultModel();
+    // For backward compatibility: if modelId is provided, try to use that model's configured embedding settings
+    // Otherwise, use the global embedding configuration
+    let embeddingConfig = this.embeddingConfig; // Initialize with the global config by default
+    let apiKey: string | undefined = embeddingConfig.apiKey;
+    let baseUrl: string | undefined = embeddingConfig.baseUrl;
+    let useProxy: boolean = embeddingConfig.useProxy !== undefined ? embeddingConfig.useProxy : this.proxyConfig.enabled;
     
-    if (!model) {
-      throw new Error('No model found for embedding generation');
+    if (modelId) {
+      const model = this.getModelById(modelId);
+      
+      if (model) {
+        console.log(`Using model ${model.name} for embedding context`);
+        apiKey = model.apiKey || apiKey;
+        baseUrl = model.baseUrl || baseUrl;
+        useProxy = model.useProxy !== undefined ? model.useProxy : this.proxyConfig.enabled;
+      } else {
+        console.log(`Model with ID ${modelId} not found, using global embedding config`);
+      }
+    } else {
+      console.log('Using global embedding configuration');
     }
     
-    // If the model doesn't have an embedding model specified, use the default global one
-    const embeddingModel = model.embeddingModel || 'embedding-3'; // Fallback to a safe default
-    
     try {
-      console.log(`Getting embedding using model: ${model.name}, embedding model: ${embeddingModel}`);
+      console.log(`Getting embedding using provider: ${embeddingConfig.provider}, model: ${embeddingConfig.modelName}`);
       
-      // Determine if we should use proxy
-      const useProxy = model.useProxy !== undefined ? model.useProxy : this.proxyConfig.enabled;
-      
-      switch(model.type) {
+      switch(embeddingConfig.provider) {
         case 'openai':
-          return await this.getOpenAIEmbedding(model, text, embeddingModel, useProxy);
-        case 'zhipu':
+          return await this.getOpenAIEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy);
         case 'zhipuai':
-          return await this.getZhipuEmbedding(model, text, embeddingModel, useProxy);
+          return await this.getZhipuEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy);
         case 'custom':
-          return await this.getCustomEmbedding(model, text, embeddingModel, useProxy);
+          return await this.getCustomEmbedding(text, embeddingConfig, apiKey, baseUrl, useProxy);
         default:
-          throw new Error(`Embedding not supported for model type: ${model.type}`);
+          throw new Error(`Embedding not supported for provider: ${embeddingConfig.provider}`);
       }
     } catch (error) {
-      console.error(`Error getting embedding using model ${model.name}:`, error);
+      console.error(`Error getting embedding:`, error);
       throw error;
     }
   }
   
-  private async getOpenAIEmbedding(model: ModelConfig, text: string, embeddingModel: string, useProxy: boolean): Promise<number[]> {
-    const url = 'https://api.openai.com/v1/embeddings';
+  private async getOpenAIEmbedding(
+    text: string, 
+    embeddingConfig: EmbeddingConfig, 
+    apiKey?: string, 
+    baseUrl?: string, 
+    useProxy?: boolean
+  ): Promise<number[]> {
+    const url = baseUrl || 'https://api.openai.com/v1/embeddings';
+    
+    if (!apiKey) {
+      throw new Error('API key is required for OpenAI embeddings');
+    }
+    
     const headers = {
-      'Authorization': `Bearer ${model.apiKey}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     };
     
     const payload = {
-      model: embeddingModel,
+      model: embeddingConfig.modelName,
       input: text,
     };
     
     const response = await this.fetchWithProxy(url, {
       method: 'POST',
-      headers,
+      headers: headers,
       body: JSON.stringify(payload)
-    }, useProxy);
+    }, !!useProxy);
     
     const data = await response.json();
     
@@ -589,84 +637,83 @@ export class ModelManager {
     return data.data[0].embedding;
   }
   
-  private async getZhipuEmbedding(model: ModelConfig, text: string, embeddingModel: string, useProxy: boolean): Promise<number[]> {
+  private async getZhipuEmbedding(
+    text: string, 
+    embeddingConfig: EmbeddingConfig, 
+    apiKey?: string, 
+    baseUrl?: string, 
+    useProxy?: boolean
+  ): Promise<number[]> {
     // Use the complete URL for the embeddings endpoint
-    const url = model.baseUrl || 'https://open.bigmodel.cn/api/paas/v4/embeddings';
+    const url = baseUrl || 'https://open.bigmodel.cn/api/paas/v4/embeddings';
+    
+    if (!apiKey) {
+      throw new Error('API key is required for Zhipu AI embeddings');
+    }
     
     const headers = {
-      'Authorization': `Bearer ${model.apiKey}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     };
     
-    // Add text chunking for large texts
-    const MAX_CHARS = 3000; // Safe limit for embedding
-    if (text.length > MAX_CHARS) {
-      // Take the first part of the text up to MAX_CHARS, trying to break at a sentence
-      const truncated = text.substring(0, MAX_CHARS);
-      const lastPeriod = truncated.lastIndexOf('.');
-      const lastNewline = truncated.lastIndexOf('\n');
-      const breakPoint = Math.max(lastPeriod, lastNewline);
-      text = breakPoint > 0 ? truncated.substring(0, breakPoint + 1) : truncated;
-    }
-    
     const payload = {
-      model: embeddingModel,
+      model: embeddingConfig.modelName,
       input: text,
-      dimensions: embeddingModel === 'embedding-3' ? 1024 : undefined
+      dimensions: embeddingConfig.dimensions || 1024
     };
     
-    console.log(`ZhipuAI Embedding: Sending request to ${url} with model ${embeddingModel}`);
+    console.log(`ZhipuAI Embedding: Sending request to ${url} with model ${embeddingConfig.modelName}`);
     
     const response = await this.fetchWithProxy(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
-    }, useProxy);
+    }, !!useProxy);
     
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`ZhipuAI Embedding API error (${response.status}): ${errorData}`);
-      
-      if (response.status === 404) {
-        throw new Error(`ZhipuAI Embedding API endpoint not found. Please check your model configuration and API documentation for the correct URL. Status: ${response.status}`);
-      }
-      
-      throw new Error(`ZhipuAI Embedding API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`ZhipuAI embedding API error (${response.status}): ${errorText}`);
     }
     
     const data = await response.json();
     
     if (!data.data?.[0]?.embedding) {
-      console.error('Invalid embedding response from ZhipuAI:', data);
       throw new Error('Invalid embedding response from ZhipuAI');
     }
     
     return data.data[0].embedding;
   }
   
-  private async getCustomEmbedding(model: ModelConfig, text: string, embeddingModel: string, useProxy: boolean): Promise<number[]> {
-    if (!model.baseUrl) {
+  private async getCustomEmbedding(
+    text: string, 
+    embeddingConfig: EmbeddingConfig, 
+    apiKey?: string, 
+    baseUrl?: string, 
+    useProxy?: boolean
+  ): Promise<number[]> {
+    if (!baseUrl) {
       throw new Error('Base URL is required for custom embedding API');
     }
     
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     };
     
-    if (model.apiKey) {
-      headers['Authorization'] = `Bearer ${model.apiKey}`;
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
     }
     
     const payload = {
-      model: embeddingModel,
+      model: embeddingConfig.modelName,
       input: text,
+      dimensions: embeddingConfig.dimensions
     };
     
-    const response = await this.fetchWithProxy(model.baseUrl + '/embeddings', {
+    const response = await this.fetchWithProxy(baseUrl + '/embeddings', {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
-    }, useProxy);
+    }, !!useProxy);
     
     const data = await response.json();
     
