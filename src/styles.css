@@ -91,9 +91,10 @@
 .chat-view-container .chat-container {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: calc(100% - 15px); /* Reduce spacing to half */
     background-color: var(--background-secondary);
     color: var(--text-normal);
+    position: relative;
 }
 
 .chat-view-container .messages-container {
@@ -104,7 +105,8 @@
     flex-direction: column;
     gap: 16px;
     scroll-behavior: smooth; /* Add smooth scrolling */
-    margin-bottom: 4px; /* Add space between messages and input */
+    margin-bottom: 8px; /* Increase space between messages and input */
+    max-height: calc(100% - 130px); /* Reduce to accommodate smaller bottom spacing */
 }
 
 /* Input Area - Fixed at bottom */
@@ -115,6 +117,8 @@
     border-top: 1px solid var(--background-modifier-border);
     background-color: var(--background-primary);
     position: relative;
+    z-index: 100; /* Add z-index to make sure input container appears above status bar */
+    margin-bottom: 15px; /* Reduce bottom margin to half */
 }
 
 .input-wrapper {
@@ -145,6 +149,8 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 8px;
+    position: relative;
+    z-index: 100; /* Add z-index to ensure function icons appear above status bar */
 }
 
 /* Messages */
