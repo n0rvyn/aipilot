@@ -3490,26 +3490,90 @@ var ChatView = class extends import_obsidian2.ItemView {
       }
     });
   }
-  displaySearchResults(resultsContainer, topResults) {
+  displaySearchResults(resultsContainer, topResults, query) {
     return __async(this, null, function* () {
+      if (!query) {
+        const searchInput = document.querySelector(".search-input");
+        query = searchInput ? searchInput.value.trim() : "";
+      }
       const contextsWithRefs = topResults.map((result, index) => {
-        const cleanContent = result.content.replace(/\n+/g, " ").slice(0, 1e3);
-        return `Document [${index + 1}] (${result.file.basename}):
-${cleanContent}...`;
-      }).join("\n\n");
-      const summaryPrompt = `${this.plugin.settings.promptSummary}
+        const cleanContent = result.content.replace(/\n{3,}/g, "\n\n").trim();
+        const fileInfo = {
+          name: result.file.basename,
+          path: result.file.path,
+          extension: result.file.extension,
+          size: result.file.stat ? `${Math.round(result.file.stat.size / 1024)}KB` : "unknown"
+        };
+        return `Document [${index + 1}]: ${fileInfo.name} (${fileInfo.extension})
+Path: ${fileInfo.path}
+---
+${cleanContent}`;
+      }).join("\n\n========\n\n");
+      const detectLanguage = (text) => {
+        const chineseCharCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+        const latinCharCount = (text.match(/[a-zA-Z]/g) || []).length;
+        const totalChars = text.length;
+        const chineseRatio = chineseCharCount / totalChars;
+        return chineseRatio > 0.15 ? "chinese" : "english";
+      };
+      const primaryLanguage = detectLanguage(contextsWithRefs);
+      let qaPrompt = "";
+      if (primaryLanguage === "chinese") {
+        qaPrompt = `Please answer the following question in Chinese (respond in Chinese):
+            
+QUESTION: "${query}"
 
-${contextsWithRefs}`;
-      const summary = yield this.plugin.getAIResponse(summaryPrompt);
-      const summaryDiv = resultsContainer.createDiv({ cls: "search-summary" });
-      yield MarkdownRenderer.renderMarkdown(summary, summaryDiv, "", this.plugin);
+Below are document sections that may contain relevant information:
+
+${contextsWithRefs}
+
+Instructions:
+1. Provide a direct, comprehensive answer to the question based on the provided documents
+2. If different documents contain conflicting information, note the differences and explain pros and cons 
+3. When using information from a specific document, cite it as [Document X] in your answer
+4. If the provided documents don't fully answer the question, clearly indicate what information is missing
+5. Format code blocks, lists, and any structured content appropriately in your answer
+6. Highlight key points using bold or other markdown formatting for readability
+7. DO NOT summarize the documents - instead, directly answer the question
+8. Keep your answer focused and concise`;
+      } else {
+        qaPrompt = `Please answer the following question in English (respond in English):
+            
+QUESTION: "${query}"
+
+Below are document sections that may contain relevant information:
+
+${contextsWithRefs}
+
+Instructions:
+1. Provide a direct, comprehensive answer to the question based on the provided documents
+2. If different documents contain conflicting information, note the differences and explain pros and cons 
+3. When using information from a specific document, cite it as [Document X] in your answer
+4. If the provided documents don't fully answer the question, clearly indicate what information is missing
+5. Format code blocks, lists, and any structured content appropriately in your answer
+6. Highlight key points using bold or other markdown formatting for readability
+7. DO NOT summarize the documents - instead, directly answer the question
+8. Keep your answer focused and concise`;
+      }
+      const answer = yield this.plugin.getAIResponse(qaPrompt);
+      const answerContainer = resultsContainer.createDiv({ cls: "search-answer-container" });
+      const questionDiv = answerContainer.createDiv({ cls: "search-question" });
+      questionDiv.createEl("h3", { text: primaryLanguage === "chinese" ? "\u95EE\u9898" : "Question" });
+      questionDiv.createEl("p", { text: query });
+      const answerDiv = answerContainer.createDiv({ cls: "search-answer" });
+      answerDiv.createEl("h3", { text: primaryLanguage === "chinese" ? "\u56DE\u7B54" : "Answer" });
+      yield MarkdownRenderer.renderMarkdown(answer, answerDiv, "", this.plugin);
       const refsDiv = resultsContainer.createDiv({ cls: "search-references" });
-      refsDiv.createEl("h3", { text: "References" });
+      refsDiv.createEl("h3", { text: primaryLanguage === "chinese" ? "\u53C2\u8003\u8D44\u6599" : "References" });
       topResults.forEach((result, index) => {
         const refDiv = refsDiv.createDiv({ cls: "search-reference-item" });
         const link2 = refDiv.createEl("a", {
           text: `[${index + 1}] ${result.file.basename}`,
           cls: "search-reference-link"
+        });
+        const metaDiv = refDiv.createDiv({ cls: "search-reference-meta" });
+        metaDiv.createEl("span", {
+          text: `Path: ${result.file.path} \u2022 ${result.file.extension.toUpperCase()} \u2022 Relevance: ${(result.similarity * 100).toFixed(1)}%`
         });
         link2.addEventListener("click", () => {
           this.app.workspace.getLeaf().openFile(result.file);
@@ -5903,7 +5967,11 @@ var AIPilotPlugin = class extends import_obsidian6.Plugin {
           }
           const topResults = results.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
           loadingModal.close();
-          new SearchResultsModal(this.app, topResults).open();
+          if (topResults.length === 0) {
+            new import_obsidian6.Notice("No relevant documents found for your query.", 3e3);
+            return;
+          }
+          new SearchResultsModal(this.app, topResults, query).open();
         } catch (error) {
           new import_obsidian6.Notice("Error searching knowledge base: " + error.message);
           loadingModal.close();
@@ -6270,7 +6338,9 @@ Note: This is part of a larger text. Ensure continuity with the previous section
         searchFolder(folder);
       }
       if (selectedDir) {
-        files = files.filter((file) => file.path.startsWith(selectedDir));
+        files = files.filter((file) => {
+          return file.path.startsWith(selectedDir) && (file.path.length === selectedDir.length || file.path.charAt(selectedDir.length) === "/");
+        });
       }
       return files;
     });
@@ -6451,13 +6521,22 @@ Note: This is part of a larger text. Ensure continuity with the previous section
         for (const file of files) {
           const content = yield this.app.vault.read(file);
           const similarity = this.calculateSimilarity(query, content);
-          results.push({ file, similarity });
+          if (similarity > 0.1) {
+            const snippet = this.getRelevantSnippet(content, query, 1e3);
+            results.push({ file, similarity, content: snippet });
+          } else {
+            results.push({ file, similarity, content: "" });
+          }
           processed++;
           loadingModal.setProgress(processed / files.length, processed, files.length);
         }
-        const topResults = results.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
+        const topResults = results.sort((a, b) => b.similarity - a.similarity).slice(0, 5).filter((result) => result.content.length > 0);
         loadingModal.close();
-        new SearchResultsModal(this.app, topResults).open();
+        if (topResults.length === 0) {
+          new import_obsidian6.Notice("No relevant documents found for your query.", 3e3);
+          return;
+        }
+        new SearchResultsModal(this.app, topResults, query).open();
       } catch (error) {
         new import_obsidian6.Notice("Error searching knowledge base: " + error.message);
         loadingModal.close();
@@ -6521,26 +6600,105 @@ ${content}
       return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
     });
   }
+  // Enhanced getRelevantSnippet with improved extraction techniques
   getRelevantSnippet(content, query, snippetLength = 300) {
-    const lowerContent = content.toLowerCase();
+    const paragraphs = content.split(/\n\s*\n/);
     const lowerQuery = query.toLowerCase();
-    const index = lowerContent.indexOf(lowerQuery);
-    if (index === -1) {
-      const queryWords = query.toLowerCase().split(/\s+/);
-      for (const word of queryWords) {
-        const wordIndex = lowerContent.indexOf(word);
-        if (wordIndex !== -1) {
-          return this.extractSnippet(content, wordIndex, snippetLength);
+    const queryTerms = lowerQuery.split(/\s+/).filter((term) => term.length > 2);
+    const scoredParagraphs = paragraphs.map((para, index) => {
+      const lowerPara = para.toLowerCase();
+      let score = 0;
+      if (lowerPara.includes(lowerQuery)) {
+        score += 100;
+      }
+      queryTerms.forEach((term) => {
+        if (lowerPara.includes(term)) {
+          score += 10;
+        }
+      });
+      const uniqueTermsCount = queryTerms.filter((term) => lowerPara.includes(term)).length;
+      score += uniqueTermsCount * 5;
+      const isHeader = /^#+\s+.+$/.test(para);
+      if (isHeader) {
+        score += 5;
+      }
+      return { paragraph: para, score, index, isHeader };
+    });
+    const relevantParagraphs = scoredParagraphs.filter((p) => p.score > 0).sort((a, b) => b.score - a.score);
+    if (relevantParagraphs.length === 0) {
+      return this.extractSnippet(content, 0, snippetLength);
+    }
+    const topParagraphs = relevantParagraphs.slice(0, 3);
+    topParagraphs.sort((a, b) => a.index - b.index);
+    const result = [];
+    let lastHeaderIndex = -1;
+    for (const para of topParagraphs) {
+      let headerText = "";
+      for (let i = para.index - 1; i > lastHeaderIndex; i--) {
+        if (i < 0) break;
+        const potentialHeader = paragraphs[i];
+        if (/^#+\s+.+$/.test(potentialHeader)) {
+          headerText = potentialHeader;
+          break;
         }
       }
-      return content.slice(0, snippetLength) + "...";
+      const position = Math.floor(para.index / paragraphs.length * 100);
+      const positionMarker = `[${position}% into document]`;
+      if (headerText) {
+        result.push(`${positionMarker} ${headerText}`);
+      }
+      result.push(para.paragraph);
+      lastHeaderIndex = para.index;
     }
-    return this.extractSnippet(content, index, snippetLength);
+    return result.join("\n\n...\n\n");
   }
   extractSnippet(content, index, snippetLength) {
-    const start = Math.max(0, index - snippetLength / 2);
-    const end = Math.min(content.length, index + snippetLength / 2);
+    let start = Math.max(0, index - snippetLength / 2);
+    if (start > 0) {
+      const textBefore = content.substring(0, start);
+      const sentenceBoundary = Math.max(
+        textBefore.lastIndexOf(". "),
+        textBefore.lastIndexOf(".\n"),
+        textBefore.lastIndexOf("? "),
+        textBefore.lastIndexOf("?\n"),
+        textBefore.lastIndexOf("! "),
+        textBefore.lastIndexOf("!\n")
+      );
+      if (sentenceBoundary !== -1) {
+        start = sentenceBoundary + 2;
+      } else {
+        const paragraphBoundary = textBefore.lastIndexOf("\n\n");
+        if (paragraphBoundary !== -1) {
+          start = paragraphBoundary + 2;
+        }
+      }
+    }
+    let end = Math.min(content.length, index + snippetLength / 2);
+    if (end < content.length) {
+      const textAfter = content.substring(end);
+      let sentenceEnd = -1;
+      const endMatch = textAfter.match(/[.!?](?:\s|$)/);
+      if (endMatch && endMatch.index !== void 0) {
+        sentenceEnd = endMatch.index + 1;
+      }
+      if (sentenceEnd !== -1) {
+        end += sentenceEnd + 1;
+      } else {
+        const paragraphEnd = textAfter.indexOf("\n\n");
+        if (paragraphEnd !== -1) {
+          end += paragraphEnd;
+        }
+      }
+    }
     let snippet = content.slice(start, end);
+    if (snippet.includes("```") && snippet.split("```").length % 2 === 0) {
+      const textAfter = content.substring(end);
+      const codeBlockEnd = textAfter.indexOf("```");
+      if (codeBlockEnd !== -1) {
+        end += codeBlockEnd + 3;
+        snippet = content.slice(start, end);
+      }
+    }
     if (start > 0) snippet = "..." + snippet;
     if (end < content.length) snippet = snippet + "...";
     return snippet;
@@ -7368,33 +7526,107 @@ var ConfirmModal2 = class extends import_obsidian6.Modal {
   }
 };
 var SearchResultsModal = class extends import_obsidian6.Modal {
-  constructor(app, results) {
+  constructor(app, results, query) {
     super(app);
     this.results = results;
+    this.query = query;
   }
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("search-results-modal");
+    let query = this.query;
+    if (!query) {
+      const searchInput = document.querySelector(".search-prompt-input");
+      query = searchInput ? searchInput.value.trim() : "";
+    }
     contentEl.createEl("h2", { text: "Search Results" });
-    const resultsContainer = contentEl.createDiv({ cls: "results-container" });
-    this.results.forEach((result) => {
-      const resultEl = resultsContainer.createDiv({ cls: "result-item" });
-      resultEl.createEl("span", { text: `${result.file.basename} - Similarity: ${result.similarity.toFixed(2)}` });
-      resultEl.addEventListener("click", () => __async(this, null, function* () {
-        const leaf = this.app.workspace.getLeaf(false);
-        if (leaf && result.file) {
-          try {
-            yield leaf.openFile(result.file);
-          } catch (error) {
-            console.error("Error opening file:", error);
-            new import_obsidian6.Notice("Failed to open file", 2e3);
-          }
-        } else {
-          new import_obsidian6.Notice("Could not open file", 2e3);
+    const hasContent = this.results.length > 0 && this.results[0].content !== void 0;
+    if (hasContent) {
+      const resultsContainer = contentEl.createDiv({ cls: "search-full-results" });
+      const contentItems = this.results.map((result, index) => {
+        return {
+          file: result.file,
+          similarity: result.similarity,
+          content: result.content || ""
+        };
+      });
+      const questionDiv = resultsContainer.createDiv({ cls: "search-question" });
+      questionDiv.createEl("h3", { text: "Question" });
+      questionDiv.createEl("p", { text: query || "Unknown query" });
+      const contentDiv = resultsContainer.createDiv({ cls: "search-content" });
+      const detectLanguage = (text) => {
+        const chineseCharCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+        const totalChars = text.length;
+        return chineseCharCount / totalChars > 0.15 ? "chinese" : "english";
+      };
+      let allContentText = "";
+      contentItems.forEach((item, index) => {
+        allContentText += item.content;
+      });
+      const primaryLanguage = detectLanguage(allContentText);
+      contentDiv.createEl("h3", { text: primaryLanguage === "chinese" ? "\u5185\u5BB9" : "Content" });
+      contentItems.forEach((item, index) => {
+        const docDiv = contentDiv.createDiv({ cls: "search-result-document" });
+        docDiv.createEl("h4", {
+          text: `${primaryLanguage === "chinese" ? "\u6587\u6863" : "Document"} ${index + 1}: ${item.file.basename}`,
+          cls: "search-result-document-title"
+        });
+        const contentTextEl = docDiv.createEl("pre", {
+          cls: "search-result-document-content",
+          text: item.content
+        });
+        if (index < contentItems.length - 1) {
+          contentDiv.createEl("hr");
         }
-      }));
-    });
+      });
+      const refsDiv = resultsContainer.createDiv({ cls: "search-references" });
+      refsDiv.createEl("h3", { text: primaryLanguage === "chinese" ? "\u53C2\u8003\u8D44\u6599" : "References" });
+      contentItems.forEach((result, index) => {
+        const refDiv = refsDiv.createDiv({ cls: "search-reference-item" });
+        const link2 = refDiv.createEl("a", {
+          text: `[${index + 1}] ${result.file.basename}`,
+          cls: "search-reference-link"
+        });
+        const metaDiv = refDiv.createDiv({ cls: "search-reference-meta" });
+        metaDiv.createEl("span", {
+          text: `Path: ${result.file.path} \u2022 ${result.file.extension.toUpperCase()} \u2022 Relevance: ${(result.similarity * 100).toFixed(1)}%`
+        });
+        link2.addEventListener("click", () => __async(this, null, function* () {
+          const leaf = this.app.workspace.getLeaf(false);
+          if (leaf && result.file) {
+            try {
+              yield leaf.openFile(result.file);
+              this.close();
+            } catch (error) {
+              console.error("Error opening file:", error);
+              new import_obsidian6.Notice("Failed to open file", 2e3);
+            }
+          } else {
+            new import_obsidian6.Notice("Could not open file", 2e3);
+          }
+        }));
+      });
+    } else {
+      const resultsContainer = contentEl.createDiv({ cls: "results-container" });
+      this.results.forEach((result) => {
+        const resultEl = resultsContainer.createDiv({ cls: "result-item" });
+        resultEl.createEl("span", { text: `${result.file.basename} - Similarity: ${result.similarity.toFixed(2)}` });
+        resultEl.addEventListener("click", () => __async(this, null, function* () {
+          const leaf = this.app.workspace.getLeaf(false);
+          if (leaf && result.file) {
+            try {
+              yield leaf.openFile(result.file);
+            } catch (error) {
+              console.error("Error opening file:", error);
+              new import_obsidian6.Notice("Failed to open file", 2e3);
+            }
+          } else {
+            new import_obsidian6.Notice("Could not open file", 2e3);
+          }
+        }));
+      });
+    }
   }
   onClose() {
     const { contentEl } = this;

@@ -1734,31 +1734,130 @@ export class ChatView extends ItemView implements Component {
         }
     }
 
-    private async displaySearchResults(resultsContainer: HTMLElement, topResults: Array<{file: TFile, similarity: number, content: string}>) {
-        const contextsWithRefs = topResults.map((result, index) => {
-            const cleanContent = result.content
-                .replace(/\n+/g, ' ')
-                .slice(0, 1000);
-            return `Document [${index + 1}] (${result.file.basename}):\n${cleanContent}...`;
-        }).join('\n\n');
-
-        const summaryPrompt = `${this.plugin.settings.promptSummary}\n\n${contextsWithRefs}`;
-        const summary = await this.plugin.getAIResponse(summaryPrompt);
-
-        // Display summary
-        const summaryDiv = resultsContainer.createDiv({ cls: "search-summary" });
-        await NewMarkdownRenderer.renderMarkdown(summary, summaryDiv, '', this.plugin);
-
-        // Add references
-        const refsDiv = resultsContainer.createDiv({ cls: "search-references" });
-        refsDiv.createEl('h3', { text: 'References' });
+    private async displaySearchResults(resultsContainer: HTMLElement, topResults: Array<{file: TFile, similarity: number, content: string}>, query?: string) {
+        // Step 1: Extract and process the search query
+        // Get the search query from parameter or search input
+        if (!query) {
+            const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+            query = searchInput ? searchInput.value.trim() : '';
+        }
         
+        // Step 2: Format document contexts with more structure
+        const contextsWithRefs = topResults.map((result, index) => {
+            // Clean up content to keep paragraph structure
+            const cleanContent = result.content
+                .replace(/\n{3,}/g, '\n\n') // Normalize excessive newlines
+                .trim();
+                
+            // Include file metadata for better context
+            const fileInfo = {
+                name: result.file.basename,
+                path: result.file.path,
+                extension: result.file.extension,
+                size: result.file.stat ? `${Math.round(result.file.stat.size / 1024)}KB` : 'unknown'
+            };
+            
+            // Return structured content with reference
+            return `Document [${index + 1}]: ${fileInfo.name} (${fileInfo.extension})
+Path: ${fileInfo.path}
+---
+${cleanContent}`;
+        }).join('\n\n========\n\n');
+        
+        // Step 3: Detect primary language of content to determine output language
+        const detectLanguage = (text: string): string => {
+            // Simple language detection heuristic
+            // Count Chinese characters vs Latin characters
+            const chineseCharCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+            const latinCharCount = (text.match(/[a-zA-Z]/g) || []).length;
+            
+            // If over 15% Chinese characters, consider it primarily Chinese
+            const totalChars = text.length;
+            const chineseRatio = chineseCharCount / totalChars;
+            
+            return chineseRatio > 0.15 ? 'chinese' : 'english';
+        };
+        
+        const primaryLanguage = detectLanguage(contextsWithRefs);
+        
+        // Step 4: Create an enhanced question-answering prompt
+        // Different prompts based on detected language
+        let qaPrompt = '';
+        if (primaryLanguage === 'chinese') {
+            qaPrompt = `Please answer the following question in Chinese (respond in Chinese):
+            
+QUESTION: "${query}"
+
+Below are document sections that may contain relevant information:
+
+${contextsWithRefs}
+
+Instructions:
+1. Provide a direct, comprehensive answer to the question based on the provided documents
+2. If different documents contain conflicting information, note the differences and explain pros and cons 
+3. When using information from a specific document, cite it as [Document X] in your answer
+4. If the provided documents don't fully answer the question, clearly indicate what information is missing
+5. Format code blocks, lists, and any structured content appropriately in your answer
+6. Highlight key points using bold or other markdown formatting for readability
+7. DO NOT summarize the documents - instead, directly answer the question
+8. Keep your answer focused and concise`;
+        } else {
+            qaPrompt = `Please answer the following question in English (respond in English):
+            
+QUESTION: "${query}"
+
+Below are document sections that may contain relevant information:
+
+${contextsWithRefs}
+
+Instructions:
+1. Provide a direct, comprehensive answer to the question based on the provided documents
+2. If different documents contain conflicting information, note the differences and explain pros and cons 
+3. When using information from a specific document, cite it as [Document X] in your answer
+4. If the provided documents don't fully answer the question, clearly indicate what information is missing
+5. Format code blocks, lists, and any structured content appropriately in your answer
+6. Highlight key points using bold or other markdown formatting for readability
+7. DO NOT summarize the documents - instead, directly answer the question
+8. Keep your answer focused and concise`;
+        }
+        
+        // Step 5: Call AI to generate an answer instead of a summary
+        const answer = await this.plugin.getAIResponse(qaPrompt);
+        
+        // Step 6: Create a structured UI to display the answer
+        const answerContainer = resultsContainer.createDiv({ cls: "search-answer-container" });
+        
+        // 6.1 Display the question
+        const questionDiv = answerContainer.createDiv({ cls: "search-question" });
+        questionDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '问题' : 'Question' });
+        questionDiv.createEl('p', { text: query });
+        
+        // 6.2 Display the answer with improved formatting
+        const answerDiv = answerContainer.createDiv({ cls: "search-answer" });
+        answerDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '回答' : 'Answer' });
+        await NewMarkdownRenderer.renderMarkdown(answer, answerDiv, '', this.plugin);
+        
+        // 6.3 Add references section with improved formatting
+        const refsDiv = resultsContainer.createDiv({ cls: "search-references" });
+        refsDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '参考资料' : 'References' });
+        
+        // Create a more detailed references list with file information
         topResults.forEach((result, index) => {
             const refDiv = refsDiv.createDiv({ cls: 'search-reference-item' });
+            
+            // Create clickable title
             const link = refDiv.createEl('a', {
                 text: `[${index + 1}] ${result.file.basename}`,
                 cls: 'search-reference-link'
             });
+            
+            // Add file metadata
+            const metaDiv = refDiv.createDiv({ cls: 'search-reference-meta' });
+            metaDiv.createEl('span', { 
+                text: `Path: ${result.file.path} • ${result.file.extension.toUpperCase()} • Relevance: ${(result.similarity * 100).toFixed(1)}%` 
+            });
+            
+            // Add click handler to open the file
             link.addEventListener('click', () => {
                 this.app.workspace.getLeaf().openFile(result.file);
             });

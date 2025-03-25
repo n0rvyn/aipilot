@@ -34,7 +34,9 @@ import {
     setIcon,
     Editor,
     TextAreaComponent,
-    addIcon
+    addIcon,
+    ItemView,
+    View
 } from "obsidian";
 
 // Import styles for type-checking but actual CSS will be loaded via manifest.json
@@ -584,7 +586,13 @@ export default class AIPilotPlugin extends Plugin {
                         .slice(0, 5);
 
                     loadingModal.close();
-                    new SearchResultsModal(this.app, topResults).open();
+                    
+                    if (topResults.length === 0) {
+                        new Notice("No relevant documents found for your query.", 3000);
+                        return;
+                    }
+                    
+                    new SearchResultsModal(this.app, topResults, query).open();
                 } catch (error) {
                     new Notice("Error searching knowledge base: " + error.message);
                     loadingModal.close();
@@ -1001,7 +1009,15 @@ export default class AIPilotPlugin extends Plugin {
 
         // Filter by selected directory if provided
         if (selectedDir) {
-            files = files.filter(file => file.path.startsWith(selectedDir));
+            files = files.filter(file => {
+                // More precise directory matching:
+                // 1. Check if path starts with the selectedDir
+                // 2. Ensure it's either exactly the selectedDir or followed by a path separator
+                // This prevents matching similarly named directories (e.g., "Notes" vs "Notes-Archive")
+                return file.path.startsWith(selectedDir) && 
+                    (file.path.length === selectedDir.length || 
+                     file.path.charAt(selectedDir.length) === '/');
+            });
         }
 
         return files;
@@ -1206,23 +1222,39 @@ export default class AIPilotPlugin extends Plugin {
             let processed = 0;
 
             for (const file of files) {
-                    const content = await this.app.vault.read(file);
-                    const similarity = this.calculateSimilarity(query, content);
-                results.push({ file, similarity });
+                const content = await this.app.vault.read(file);
+                // Calculate similarity
+                const similarity = this.calculateSimilarity(query, content);
                 
-                    processed++;
+                // Only include if there's some relevance
+                if (similarity > 0.1) {
+                    // Get a relevant snippet with our enhanced extraction
+                    const snippet = this.getRelevantSnippet(content, query, 1000);
+                    results.push({ file, similarity, content: snippet });
+                } else {
+                    results.push({ file, similarity, content: '' });
+                }
+                
+                processed++;
                 loadingModal.setProgress(processed / files.length, processed, files.length);
             }
 
             const topResults = results
                 .sort((a, b) => b.similarity - a.similarity)
-                .slice(0, 5);
+                .slice(0, 5)
+                .filter(result => result.content.length > 0); // Filter out results with no content
 
-                loadingModal.close();
-            new SearchResultsModal(this.app, topResults).open();
-            } catch (error) {
+            loadingModal.close();
+            
+            if (topResults.length === 0) {
+                new Notice("No relevant documents found for your query.", 3000);
+                return;
+            }
+            
+            new SearchResultsModal(this.app, topResults, query).open();
+        } catch (error) {
             new Notice("Error searching knowledge base: " + error.message);
-                loadingModal.close();
+            loadingModal.close();
         }
     }
 
@@ -1288,37 +1320,169 @@ export default class AIPilotPlugin extends Plugin {
             .slice(0, limit);
     }
 
+    // Enhanced getRelevantSnippet with improved extraction techniques
     private getRelevantSnippet(content: string, query: string, snippetLength: number = 300): string {
-        const lowerContent = content.toLowerCase();
+        // Implementation of paragraph-based extraction and multiple relevant sections
+        // Detect paragraphs by looking for double line breaks
+        const paragraphs = content.split(/\n\s*\n/);
         const lowerQuery = query.toLowerCase();
+        const queryTerms = lowerQuery.split(/\s+/).filter(term => term.length > 2);
         
-        // Find the best matching position
-        const index = lowerContent.indexOf(lowerQuery);
-        if (index === -1) {
-            // If exact match not found, try to find any query word
-            const queryWords = query.toLowerCase().split(/\s+/);
-            for (const word of queryWords) {
-                const wordIndex = lowerContent.indexOf(word);
-                if (wordIndex !== -1) {
-                    return this.extractSnippet(content, wordIndex, snippetLength);
+        // Calculate relevance score for each paragraph
+        const scoredParagraphs = paragraphs.map((para, index) => {
+            const lowerPara = para.toLowerCase();
+            let score = 0;
+            
+            // Check exact match first
+            if (lowerPara.includes(lowerQuery)) {
+                score += 100;
+            }
+            
+            // Count matching query terms
+            queryTerms.forEach(term => {
+                if (lowerPara.includes(term)) {
+                    score += 10;
+                }
+            });
+            
+            // Give higher score to paragraphs containing more distinct query terms
+            const uniqueTermsCount = queryTerms.filter(term => lowerPara.includes(term)).length;
+            score += uniqueTermsCount * 5;
+            
+            // Check if paragraph is a header (for header-aware context)
+            const isHeader = /^#+\s+.+$/.test(para);
+            if (isHeader) {
+                score += 5;
+            }
+            
+            return { paragraph: para, score, index, isHeader };
+        });
+        
+        // Sort paragraphs by relevance score
+        const relevantParagraphs = scoredParagraphs
+            .filter(p => p.score > 0)
+            .sort((a, b) => b.score - a.score);
+        
+        // No relevant paragraphs found, return beginning of document
+        if (relevantParagraphs.length === 0) {
+            return this.extractSnippet(content, 0, snippetLength);
+        }
+        
+        // Take top 3 most relevant paragraphs
+        const topParagraphs = relevantParagraphs.slice(0, 3);
+        
+        // Sort by original order to maintain document flow
+        topParagraphs.sort((a, b) => a.index - b.index);
+        
+        // Add headers above relevant paragraphs to provide context
+        const result = [];
+        let lastHeaderIndex = -1;
+        
+        for (const para of topParagraphs) {
+            // Try to find the nearest header above this paragraph
+            let headerText = "";
+            for (let i = para.index - 1; i > lastHeaderIndex; i--) {
+                if (i < 0) break;
+                const potentialHeader = paragraphs[i];
+                if (/^#+\s+.+$/.test(potentialHeader)) {
+                    headerText = potentialHeader;
+                    break;
                 }
             }
-            // If no matches found, return start of document
-            return content.slice(0, snippetLength) + "...";
+            
+            // Add position marker showing approximate location in document
+            const position = Math.floor((para.index / paragraphs.length) * 100);
+            const positionMarker = `[${position}% into document]`;
+            
+            // Add header if found, then the paragraph
+            if (headerText) {
+                result.push(`${positionMarker} ${headerText}`);
+            }
+            result.push(para.paragraph);
+            
+            // Update last header index to avoid duplicate headers
+            lastHeaderIndex = para.index;
         }
-
-        return this.extractSnippet(content, index, snippetLength);
+        
+        // Join the selected paragraphs with separators
+        return result.join('\n\n...\n\n');
     }
 
     private extractSnippet(content: string, index: number, snippetLength: number): string {
-        const start = Math.max(0, index - snippetLength / 2);
-        const end = Math.min(content.length, index + snippetLength / 2);
+        // Improved snippet extraction with contextual boundaries
+        // Try to find sentence or paragraph boundaries
+        
+        // Determine the start of the snippet
+        let start = Math.max(0, index - snippetLength / 2);
+        
+        // Try to start at a sentence boundary
+        if (start > 0) {
+            // Look backward for the start of a sentence (period followed by space or newline)
+            const textBefore = content.substring(0, start);
+            const sentenceBoundary = Math.max(
+                textBefore.lastIndexOf('. '),
+                textBefore.lastIndexOf('.\n'),
+                textBefore.lastIndexOf('? '),
+                textBefore.lastIndexOf('?\n'),
+                textBefore.lastIndexOf('! '),
+                textBefore.lastIndexOf('!\n')
+            );
+            
+            if (sentenceBoundary !== -1) {
+                start = sentenceBoundary + 2; // Move past the period and space
+            } else {
+                // If no sentence boundary, try paragraph boundary
+                const paragraphBoundary = textBefore.lastIndexOf('\n\n');
+                if (paragraphBoundary !== -1) {
+                    start = paragraphBoundary + 2;
+                }
+            }
+        }
+        
+        // Determine end of the snippet
+        let end = Math.min(content.length, index + snippetLength / 2);
+        
+        // Try to end at a sentence boundary
+        if (end < content.length) {
+            // Look forward for the end of a sentence
+            const textAfter = content.substring(end);
+            let sentenceEnd = -1;
+            
+            const endMatch = textAfter.match(/[.!?](?:\s|$)/);
+            if (endMatch && endMatch.index !== undefined) {
+                sentenceEnd = endMatch.index + 1;
+            }
+            
+            if (sentenceEnd !== -1) {
+                end += sentenceEnd + 1; // Include the punctuation and the space
+            } else {
+                // If no sentence boundary, try paragraph boundary
+                const paragraphEnd = textAfter.indexOf('\n\n');
+                if (paragraphEnd !== -1) {
+                    end += paragraphEnd;
+                }
+            }
+        }
+        
+        // Extract the snippet
         let snippet = content.slice(start, end);
-
-        // Add ellipsis if we're not at the start/end
+        
+        // Detect special content structure like code blocks, lists, tables
+        // If we're in the middle of a code block or table, try to include the whole block
+        if (snippet.includes('```') && snippet.split('```').length % 2 === 0) {
+            // We're in the middle of a code block, try to find the end
+            const textAfter = content.substring(end);
+            const codeBlockEnd = textAfter.indexOf('```');
+            if (codeBlockEnd !== -1) {
+                end += codeBlockEnd + 3; // Include the closing backticks
+                snippet = content.slice(start, end);
+            }
+        }
+        
+        // Add ellipsis if we're not at the start/end of document
         if (start > 0) snippet = "..." + snippet;
         if (end < content.length) snippet = snippet + "...";
-
+        
         return snippet;
     }
 
@@ -2555,7 +2719,7 @@ class ConfirmModal extends Modal {
 }
 
 class SearchResultsModal extends Modal {
-    constructor(app: App, private results: { file: TFile; similarity: number }[]) {
+    constructor(app: App, private results: { file: TFile; similarity: number, content?: string }[], private query?: string) {
         super(app);
     }
 
@@ -2564,28 +2728,136 @@ class SearchResultsModal extends Modal {
         contentEl.empty();
         contentEl.addClass('search-results-modal');
         
+        // Extract the query from the constructor or get it from the search input
+        let query = this.query;
+        if (!query) {
+            const searchInput = document.querySelector('.search-prompt-input') as HTMLInputElement;
+            query = searchInput ? searchInput.value.trim() : '';
+        }
+        
         contentEl.createEl('h2', { text: 'Search Results' });
         
-        const resultsContainer = contentEl.createDiv({ cls: 'results-container' });
+        // Check if we have full content results or just similarity scores
+        const hasContent = this.results.length > 0 && this.results[0].content !== undefined;
         
-        this.results.forEach((result) => {
-            const resultEl = resultsContainer.createDiv({ cls: 'result-item' });
-            resultEl.createEl('span', { text: `${result.file.basename} - Similarity: ${result.similarity.toFixed(2)}` });
+        if (hasContent) {
+            // Create main results container
+            const resultsContainer = contentEl.createDiv({ cls: 'search-full-results' });
             
-            resultEl.addEventListener('click', async () => {
-                const leaf = this.app.workspace.getLeaf(false);
-                if (leaf && result.file) {
-                    try {
-                        await leaf.openFile(result.file);
-                    } catch (error) {
-                        console.error('Error opening file:', error);
-                        new Notice('Failed to open file', 2000);
-                    }
-                } else {
-                    new Notice('Could not open file', 2000);
+            // Format content for display
+            const contentItems = this.results.map((result, index) => {
+                return {
+                    file: result.file,
+                    similarity: result.similarity,
+                    content: result.content || ''
+                };
+            });
+            
+            // 1. Display the question
+            const questionDiv = resultsContainer.createDiv({ cls: "search-question" });
+            questionDiv.createEl('h3', { text: 'Question' });
+            questionDiv.createEl('p', { text: query || 'Unknown query' });
+            
+            // 2. Display content in a simple format
+            const contentDiv = resultsContainer.createDiv({ cls: "search-content" });
+            
+            // Simple language detection
+            const detectLanguage = (text: string): string => {
+                const chineseCharCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+                const totalChars = text.length;
+                return chineseCharCount / totalChars > 0.15 ? 'chinese' : 'english';
+            };
+            
+            // Primary language detection from all content
+            let allContentText = '';
+            contentItems.forEach((item, index) => {
+                allContentText += item.content;
+            });
+            const primaryLanguage = detectLanguage(allContentText);
+            
+            // Display header
+            contentDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '内容' : 'Content' });
+            
+            // Create content entries for each result
+            contentItems.forEach((item, index) => {
+                const docDiv = contentDiv.createDiv({ cls: 'search-result-document' });
+                
+                // Document header
+                docDiv.createEl('h4', { 
+                    text: `${primaryLanguage === 'chinese' ? '文档' : 'Document'} ${index + 1}: ${item.file.basename}`,
+                    cls: 'search-result-document-title' 
+                });
+                
+                // Document content in pre-formatted text
+                const contentTextEl = docDiv.createEl('pre', { 
+                    cls: 'search-result-document-content',
+                    text: item.content 
+                });
+                
+                // Add divider except for last item
+                if (index < contentItems.length - 1) {
+                    contentDiv.createEl('hr');
                 }
             });
-        });
+            
+            // 3. Add references with more details
+            const refsDiv = resultsContainer.createDiv({ cls: "search-references" });
+            refsDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '参考资料' : 'References' });
+            
+            contentItems.forEach((result, index) => {
+                const refDiv = refsDiv.createDiv({ cls: 'search-reference-item' });
+                
+                // Create clickable title
+                const link = refDiv.createEl('a', {
+                    text: `[${index + 1}] ${result.file.basename}`,
+                    cls: 'search-reference-link'
+                });
+                
+                // Add file metadata
+                const metaDiv = refDiv.createDiv({ cls: 'search-reference-meta' });
+                metaDiv.createEl('span', { 
+                    text: `Path: ${result.file.path} • ${result.file.extension.toUpperCase()} • Relevance: ${(result.similarity * 100).toFixed(1)}%` 
+                });
+                
+                // Add click handler to open the file
+                link.addEventListener('click', async () => {
+                    const leaf = this.app.workspace.getLeaf(false);
+                    if (leaf && result.file) {
+                        try {
+                            await leaf.openFile(result.file);
+                            this.close(); // Close the modal after opening the file
+                        } catch (error) {
+                            console.error('Error opening file:', error);
+                            new Notice('Failed to open file', 2000);
+                        }
+                    } else {
+                        new Notice('Could not open file', 2000);
+                    }
+                });
+            });
+        } else {
+            // Display simple results list (legacy mode)
+            const resultsContainer = contentEl.createDiv({ cls: 'results-container' });
+            
+            this.results.forEach((result) => {
+                const resultEl = resultsContainer.createDiv({ cls: 'result-item' });
+                resultEl.createEl('span', { text: `${result.file.basename} - Similarity: ${result.similarity.toFixed(2)}` });
+                
+                resultEl.addEventListener('click', async () => {
+                    const leaf = this.app.workspace.getLeaf(false);
+                    if (leaf && result.file) {
+                        try {
+                            await leaf.openFile(result.file);
+                        } catch (error) {
+                            console.error('Error opening file:', error);
+                            new Notice('Failed to open file', 2000);
+                        }
+                    } else {
+                        new Notice('Could not open file', 2000);
+                    }
+                });
+            });
+        }
     }
 
     onClose() {
