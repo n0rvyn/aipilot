@@ -599,6 +599,14 @@ export default class AIPilotPlugin extends Plugin {
                 }
             }
         });
+
+        this.addCommand({
+            id: 'knowledge-base-qa',
+            name: 'Knowledge Base Q&A',
+            callback: () => {
+                this.activateKnowledgeBaseQA();
+            }
+        });
     }
 
     // Approximate token estimation function
@@ -1010,14 +1018,15 @@ export default class AIPilotPlugin extends Plugin {
         // Filter by selected directory if provided
         if (selectedDir) {
             files = files.filter(file => {
-                // More precise directory matching:
-                // 1. Check if path starts with the selectedDir
-                // 2. Ensure it's either exactly the selectedDir or followed by a path separator
-                // This prevents matching similarly named directories (e.g., "Notes" vs "Notes-Archive")
-                return file.path.startsWith(selectedDir) && 
-                    (file.path.length === selectedDir.length || 
-                     file.path.charAt(selectedDir.length) === '/');
+                // More lenient path matching - consider a file to be in the directory if:
+                // 1. It exactly matches the selected directory
+                // 2. The path starts with selectedDir followed by a path separator (/)
+                // 3. The path is in a subdirectory of selectedDir
+                return file.path === selectedDir || 
+                       file.path.startsWith(selectedDir + '/') ||
+                       file.parent && file.parent.path.startsWith(selectedDir);
             });
+            console.log(`Filtered to ${files.length} files in directory: ${selectedDir}`);
         }
 
         return files;
@@ -1025,18 +1034,45 @@ export default class AIPilotPlugin extends Plugin {
 
     // 计算文本相似度
     public calculateSimilarity(query: string, content: string): number {
-        // Simple keyword matching
-        const queryWords = new Set(query.split(/\s+/).filter(word => word.length > 2));
-        const contentWords = new Set(content.split(/\s+/).filter(word => word.length > 2));
+        // Handle Chinese text differently than languages that use spaces
+        // Check if contains Chinese characters
+        const containsChinese = /[\u4e00-\u9fa5]/.test(query);
+        
+        if (containsChinese) {
+            // For Chinese text, don't split by spaces but use character-by-character matching
+            // and also do direct substring matching
+            const lowerQuery = query.toLowerCase();
+            const lowerContent = content.toLowerCase();
+            
+            // Direct match gives high score
+            if (lowerContent.includes(lowerQuery)) {
+                return 0.9; // Strong match
+            }
+            
+            // For partial matches, score by character overlap
+            let matches = 0;
+            for (let i = 0; i < query.length; i++) {
+                const char = query.charAt(i);
+                if (content.includes(char)) {
+                    matches++;
+                }
+            }
+            
+            return matches / query.length;
+        } else {
+            // For non-Chinese text, use the original word-based approach
+            const queryWords = new Set(query.toLowerCase().split(/\s+/).filter(word => word.length > 2));
+            const contentWords = new Set(content.toLowerCase().split(/\s+/).filter(word => word.length > 2));
 
-        // Count matching words
-        let matches = 0;
-        for (const word of queryWords) {
-            if (contentWords.has(word)) matches++;
+            // Count matching words
+            let matches = 0;
+            for (const word of queryWords) {
+                if (contentWords.has(word)) matches++;
+            }
+
+            // Calculate similarity score
+            return matches / Math.max(queryWords.size, 1);
         }
-
-        // Calculate similarity score
-        return matches / Math.max(queryWords.size, 1);
     }
 
     // Getting text embedding vector
@@ -1213,49 +1249,229 @@ export default class AIPilotPlugin extends Plugin {
         const query = await modal.openAndGetValue();
         if (!query) return;
 
-        const loadingModal = new LoadingModal(this.app, true, "Searching...");
+        const loadingModal = new LoadingModal(this.app, true, "Searching with advanced RAG...");
         loadingModal.open();
 
         try {
-            const files = await this.getKnowledgeBaseNotes();
-            const results = [];
-            let processed = 0;
-
-            for (const file of files) {
-                const content = await this.app.vault.read(file);
-                // Calculate similarity
-                const similarity = this.calculateSimilarity(query, content);
-                
-                // Only include if there's some relevance
-                if (similarity > 0.1) {
-                    // Get a relevant snippet with our enhanced extraction
-                    const snippet = this.getRelevantSnippet(content, query, 1000);
-                    results.push({ file, similarity, content: snippet });
-                } else {
-                    results.push({ file, similarity, content: '' });
-                }
-                
-                processed++;
-                loadingModal.setProgress(processed / files.length, processed, files.length);
-            }
-
-            const topResults = results
-                .sort((a, b) => b.similarity - a.similarity)
-                .slice(0, 5)
-                .filter(result => result.content.length > 0); // Filter out results with no content
-
+            // Use the shared advanced search method
+            const results = await this.advancedSearch(query, 10, loadingModal);
+            
             loadingModal.close();
             
-            if (topResults.length === 0) {
+            if (results.length === 0) {
                 new Notice("No relevant documents found for your query.", 3000);
                 return;
             }
             
-            new SearchResultsModal(this.app, topResults, query).open();
+            new SearchResultsModal(this.app, results, query).open();
         } catch (error) {
+            console.error("Error searching knowledge base:", error);
             new Notice("Error searching knowledge base: " + error.message);
             loadingModal.close();
         }
+    }
+
+    // Vector-based semantic search using embeddings
+    private async vectorSearch(query: string): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        try {
+            console.log("Attempting vector search for:", query);
+            const files = await this.getKnowledgeBaseNotes();
+            const results = [];
+            
+            // Get query embedding
+            const queryEmbedding = await this.getEmbedding(query);
+            
+            for (const file of files) {
+                try {
+                    const content = await this.app.vault.read(file);
+                    
+                    // Get content embedding
+                    const contentEmbedding = await this.getCachedEmbedding(content);
+                    
+                    // Calculate cosine similarity
+                    const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
+                    
+                    if (similarity > 0.5) { // Set a reasonable threshold
+                        console.log(`High vector similarity (${similarity.toFixed(2)}) for file: ${file.path}`);
+                        const snippet = this.getRelevantSnippet(content, query, 1000);
+                        results.push({ file, similarity, content: snippet });
+                    }
+                } catch (error) {
+                    console.error(`Error processing file ${file.path} for vector search:`, error);
+                }
+            }
+            
+            return results;
+        } catch (error) {
+            console.error("Vector search failed:", error);
+            return []; // Return empty array to trigger fallback
+        }
+    }
+
+    // Calculate cosine similarity between two vectors
+    private calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
+        if (vec1.length !== vec2.length) {
+            throw new Error("Vectors must have the same dimensions");
+        }
+        
+        let dotProduct = 0;
+        let mag1 = 0;
+        let mag2 = 0;
+        
+        for (let i = 0; i < vec1.length; i++) {
+            dotProduct += vec1[i] * vec2[i];
+            mag1 += vec1[i] * vec1[i];
+            mag2 += vec2[i] * vec2[i];
+        }
+        
+        mag1 = Math.sqrt(mag1);
+        mag2 = Math.sqrt(mag2);
+        
+        if (mag1 === 0 || mag2 === 0) return 0;
+        
+        return dotProduct / (mag1 * mag2);
+    }
+
+    // Search using Obsidian's native search capabilities
+    private async obsidianSearch(query: string): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        try {
+            console.log("Attempting Obsidian native search for:", query);
+            const results = [];
+            
+            // Try to get Obsidian's search plugin
+            // Use any type for accessing internal APIs
+            const searchPlugin = (this.app as any).internalPlugins?.getPluginById('global-search');
+            
+            if (!searchPlugin || !searchPlugin.enabled) {
+                console.log("Obsidian search plugin not available");
+                return [];
+            }
+            
+            // Execute search using Obsidian's search API
+            const searchResults = await new Promise<any[]>((resolve) => {
+                // Use the Obsidian search API
+                const searchLeaf = this.app.workspace.getLeavesOfType('search')[0];
+                if (!searchLeaf) {
+                    resolve([]);
+                    return;
+                }
+                
+                // Access the search view with type assertion
+                const searchView = searchLeaf.view as any;
+                
+                // Execute the search
+                if (searchView && typeof searchView.search === 'function') {
+                    searchView.searchQuery = query;
+                    searchView.search();
+                    
+                    // Wait a bit for results (this is a hack, ideally we'd hook into an event)
+                    setTimeout(() => {
+                        const matches = searchView.dom?.resultDomLookup;
+                        const results = [];
+                        
+                        // Convert results to our format
+                        if (matches) {
+                            for (const [path, match] of Object.entries(matches)) {
+                                const file = this.app.vault.getAbstractFileByPath(path);
+                                if (file instanceof TFile) {
+                                    results.push(file);
+                                }
+                            }
+                        }
+                        
+                        resolve(results);
+                    }, 500);
+                } else {
+                    console.log("Search view doesn't have expected methods");
+                    resolve([]);
+                }
+            });
+            
+            // Convert Obsidian search results to our format
+            for (const file of searchResults) {
+                if (file instanceof TFile) {
+                    try {
+                        const content = await this.app.vault.read(file);
+                        const snippet = this.getRelevantSnippet(content, query, 1000);
+                        
+                        // Assign a high similarity score to Obsidian's results
+                        results.push({ 
+                            file, 
+                            similarity: 0.85, // High score since Obsidian found it relevant
+                            content: snippet 
+                        });
+                    } catch (error) {
+                        console.error(`Error processing file ${file.path} for Obsidian search:`, error);
+                    }
+                }
+            }
+            
+            return results;
+        } catch (error) {
+            console.error("Obsidian search failed:", error);
+            return []; // Return empty array to trigger fallback
+        }
+    }
+
+    // Fallback text-matching search
+    private async textMatchingSearch(query: string): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        console.log("Using text matching search for:", query);
+        const files = await this.getKnowledgeBaseNotes();
+        const results = [];
+        
+        // Determine if the query contains Chinese characters
+        const containsChinese = /[\u4e00-\u9fa5]/.test(query);
+        
+        for (const file of files) {
+            try {
+                const content = await this.app.vault.read(file);
+                // Calculate similarity
+                const similarity = this.calculateSimilarity(query, content);
+                
+                // For Chinese queries, use a lower threshold to include more results
+                const threshold = containsChinese ? 0.05 : 0.1;
+                
+                // Log high similarity matches for debugging
+                if (similarity > 0.5) {
+                    console.log(`High text similarity (${similarity.toFixed(2)}) for file: ${file.path}`);
+                }
+                
+                // Only include if there's some relevance
+                if (similarity > threshold) {
+                    // Get a relevant snippet with our enhanced extraction
+                    const snippet = this.getRelevantSnippet(content, query, 1000);
+                    results.push({ file, similarity, content: snippet });
+                }
+            } catch (error) {
+                console.error(`Error processing file ${file.path} for text matching:`, error);
+            }
+        }
+
+        // For Chinese queries, prioritize exact filename matches as well
+        if (containsChinese) {
+            for (const file of files) {
+                // Boost score for files whose name contains the query
+                if (file.basename.includes(query)) {
+                    console.log(`Boosting score for filename match: ${file.basename}`);
+                    
+                    // Check if we already added this file
+                    const existingResult = results.find(r => r.file.path === file.path);
+                    if (existingResult) {
+                        existingResult.similarity = Math.max(existingResult.similarity, 0.8);
+                    } else {
+                        try {
+                            const content = await this.app.vault.read(file);
+                            const snippet = this.getRelevantSnippet(content, query, 1000);
+                            results.push({ file, similarity: 0.8, content: snippet });
+                        } catch (error) {
+                            console.error(`Error processing file ${file.path} for filename match:`, error);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return results;
     }
 
     async handleSelection(editor: Editor) {
@@ -1295,29 +1511,8 @@ export default class AIPilotPlugin extends Plugin {
     }
 
     public async getTopRelevantNotes(query: string, limit: number = 5): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
-        const files = await this.getKnowledgeBaseNotes();
-        const results: Array<{ file: TFile; similarity: number; content: string }> = [];
-
-        for (const file of files) {
-            try {
-                const content = await this.app.vault.read(file);
-                // Use the synchronous calculateSimilarity method
-                const similarity = this.calculateSimilarity(query.toLowerCase(), content.toLowerCase());
-                
-                if (similarity > 0) {
-                    // Get a relevant snippet of the content
-                    const snippet = this.getRelevantSnippet(content, query);
-                    results.push({ file, similarity, content: snippet });
-                }
-            } catch (error) {
-                console.error(`Error processing file ${file.path}:`, error);
-            }
-        }
-
-        // Sort by similarity and return top results
-        return results
-            .sort((a, b) => b.similarity - a.similarity)
-            .slice(0, limit);
+        console.log(`Advanced search: Finding relevant notes for "${query}"`);
+        return this.advancedSearch(query, limit);
     }
 
     // Enhanced getRelevantSnippet with improved extraction techniques
@@ -1805,6 +2000,622 @@ export default class AIPilotPlugin extends Plugin {
             
             // Save the migrated settings
             this.saveSettings();
+        }
+    }
+
+    // Core shared advanced search functionality
+    private async advancedSearch(query: string, limit: number = 10, loadingModal?: LoadingModal): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        try {
+            // Report progress if a loading modal was provided
+            const updateStatus = (status: string) => {
+                if (loadingModal) loadingModal.setStatus(status);
+                else console.log(status);
+            };
+
+            // 1. Query Rewriting - Optimize the original query
+            updateStatus("Optimizing query...");
+            const optimizedQuery = await this.rewriteQuery(query);
+            console.log(`Original query: "${query}"\nOptimized query: "${optimizedQuery}"`);
+            
+            // 2. HyDE - Generate a hypothetical document answer
+            updateStatus("Generating hypothetical answer...");
+            const { hypotheticalDoc, hydeResults } = await this.hydeSearch(query);
+            
+            // 3. Standard search using optimized query
+            updateStatus("Searching knowledge base...");
+            const standardResults = await this.getTopRelevantNotesLegacy(optimizedQuery, limit);
+            
+            // Combine results from different search strategies
+            let allResults = [...standardResults];
+            if (hydeResults && hydeResults.length > 0) {
+                // Add HyDE results that aren't already included
+                hydeResults.forEach(hydeResult => {
+                    if (!allResults.some(r => r.file.path === hydeResult.file.path)) {
+                        allResults.push(hydeResult);
+                    }
+                });
+            }
+            
+            if (allResults.length === 0) {
+                return [];
+            }
+            
+            // 4. Maximal Marginal Relevance reranking
+            updateStatus("Optimizing document selection...");
+            const rerankedResults = this.maximalMarginalRelevance(allResults, query);
+            
+            // 5. Semantic chunking to get better context
+            updateStatus("Preparing knowledge context...");
+            const enhancedResults: Array<{ file: TFile; similarity: number; content: string }> = [];
+            
+            // Process each document to create semantic chunks
+            for (const result of rerankedResults.slice(0, Math.min(8, rerankedResults.length))) {
+                try {
+                    const fullContent = await this.app.vault.read(result.file);
+                    const semanticChunks = this.createSemanticChunks(fullContent, query);
+                    
+                    // Only include the most relevant chunks
+                    for (const [i, chunk] of semanticChunks.slice(0, 2).entries()) {
+                        enhancedResults.push({
+                            file: result.file,
+                            similarity: result.similarity,
+                            content: chunk
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error processing file ${result.file.path}:`, error);
+                }
+            }
+            
+            // Sort by similarity and return results
+            return enhancedResults
+                .sort((a, b) => b.similarity - a.similarity)
+                .slice(0, limit);
+        } catch (error) {
+            console.error("Error in advanced search:", error);
+            // Fallback to legacy search if advanced search fails
+            return this.getTopRelevantNotesLegacy(query, limit);
+        }
+    }
+
+    // Rename the original method to avoid naming conflicts
+    private async getTopRelevantNotesLegacy(query: string, limit: number = 5): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        console.log(`Legacy search: Finding relevant notes for "${query}"`);
+        
+        // Try vector search first
+        try {
+            console.log("Attempting vector-based search for related notes");
+            const vectorResults = await this.vectorSearch(query);
+            
+            if (vectorResults && vectorResults.length > 0) {
+                console.log(`Found ${vectorResults.length} relevant notes using vector search`);
+                return vectorResults
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .slice(0, limit);
+            }
+        } catch (error) {
+            console.error("Vector search for related notes failed:", error);
+        }
+        
+        // Try Obsidian search next
+        try {
+            console.log("Attempting Obsidian search for related notes");
+            const obsidianResults = await this.obsidianSearch(query);
+            
+            if (obsidianResults && obsidianResults.length > 0) {
+                console.log(`Found ${obsidianResults.length} relevant notes using Obsidian search`);
+                return obsidianResults
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .slice(0, limit);
+            }
+        } catch (error) {
+            console.error("Obsidian search for related notes failed:", error);
+        }
+        
+        // Fall back to text matching
+        console.log("Falling back to text matching for related notes");
+        const textResults = await this.textMatchingSearch(query);
+        
+        return textResults
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, limit);
+    }
+
+    // Update the public method to use the advanced search
+    public async getTopRelevantNotes(query: string, limit: number = 5): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        console.log(`Advanced search: Finding relevant notes for "${query}"`);
+        return this.advancedSearch(query, limit);
+    }
+
+    // Update the searchKnowledgeBase method to use advanced search
+    async searchKnowledgeBase() {
+        const modal = new SearchPromptModal(this.app);
+        const query = await modal.openAndGetValue();
+        if (!query) return;
+
+        const loadingModal = new LoadingModal(this.app, true, "Searching with advanced RAG...");
+        loadingModal.open();
+
+        try {
+            // Use the shared advanced search method
+            const results = await this.advancedSearch(query, 10, loadingModal);
+            
+            loadingModal.close();
+            
+            if (results.length === 0) {
+                new Notice("No relevant documents found for your query.", 3000);
+                return;
+            }
+            
+            new SearchResultsModal(this.app, results, query).open();
+        } catch (error) {
+            console.error("Error searching knowledge base:", error);
+            new Notice("Error searching knowledge base: " + error.message);
+            loadingModal.close();
+        }
+    }
+
+    // ENHANCEMENT 1: Query rewriting for better search
+    private async rewriteQuery(originalQuery: string): Promise<string> {
+        try {
+            // Don't rewrite short queries or waste tokens on simple queries
+            if (originalQuery.length < 10 || originalQuery.split(' ').length < 3) {
+                return originalQuery;
+            }
+            
+            const messages = [
+                { role: "system", content: "You are a search query optimization expert. Your task is to rewrite search queries to make them more effective for semantic search. Return ONLY the rewritten query without explanation or additional text." },
+                { role: "user", content: `Original query: "${originalQuery}"\n\nRewrite this query to be more effective for semantic search in a personal knowledge base. Add relevant keywords and context. Return ONLY the rewritten query, without any explanation.` }
+            ];
+            
+            const rewrittenQuery = await this.callAIChat(messages as any);
+            
+            // Clean up the response (remove quotes, newlines, etc.)
+            let cleanedQuery = rewrittenQuery.trim()
+                .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+                .replace(/^Rewritten query: /i, '') // Remove potential prefixes
+                .replace(/\.$/, ''); // Remove trailing period
+                
+            // Don't return empty queries or overly long ones
+            if (!cleanedQuery || cleanedQuery.length < 3 || cleanedQuery.length > 200) {
+                return originalQuery;
+            }
+            
+            return cleanedQuery;
+        } catch (error) {
+            console.error("Error rewriting query:", error);
+            // Fallback to original query
+            return originalQuery;
+        }
+    }
+
+    // ENHANCEMENT 2: HyDE (Hypothetical Document Embeddings) search
+    private async hydeSearch(query: string): Promise<{ hypotheticalDoc: string, hydeResults: Array<{ file: TFile; similarity: number; content: string }> }> {
+        try {
+            // Generate a hypothetical answer to use as a search document
+            const messages = [
+                { role: "system", content: "Generate a detailed, factual passage that directly answers the user's question. Write as if you're a knowledgeable expert providing an ideal answer based on verified information. Include specific details, examples, and explanations. Do not include phrases like 'According to my knowledge' or 'As an AI'. Write in a natural, informative style." },
+                { role: "user", content: query }
+            ];
+            
+            const hypotheticalDoc = await this.callAIChat(messages as any);
+            
+            // Use this hypothetical document to search the knowledge base
+            // We're using it directly as a query for semantic search
+            const hydeResults = await this.vectorSearch(hypotheticalDoc);
+            
+            return { hypotheticalDoc, hydeResults };
+        } catch (error) {
+            console.error("Error in HyDE search:", error);
+            // Return empty results in case of error
+            return { hypotheticalDoc: "", hydeResults: [] };
+        }
+    }
+
+    // ENHANCEMENT 3: Maximal Marginal Relevance for result diversity
+    private maximalMarginalRelevance(docs: Array<{ file: TFile; similarity: number; content: string }>, 
+                                      query: string, 
+                                      lambda: number = 0.5, 
+                                      k: number = 10): Array<{ file: TFile; similarity: number; content: string }> {
+        // If we have too few docs, just return them all
+        if (docs.length <= k) return docs;
+        
+        try {
+            // Sort by similarity first
+            const sortedDocs = [...docs].sort((a, b) => b.similarity - a.similarity);
+            
+            // Start with the most relevant document
+            const selected = [sortedDocs[0]];
+            const remainingCandidates = sortedDocs.slice(1);
+            
+            // Select k-1 more documents
+            while (selected.length < k && remainingCandidates.length > 0) {
+                let nextBestScore = -Infinity;
+                let nextBestIndex = -1;
+                
+                // For each remaining document
+                for (let i = 0; i < remainingCandidates.length; i++) {
+                    const candidate = remainingCandidates[i];
+                    
+                    // Calculate similarity term (relevance to query)
+                    const similarityTerm = candidate.similarity;
+                    
+                    // Calculate diversity term (distance from already selected docs)
+                    let maxSimilarityToSelected = -Infinity;
+                    for (const selectedDoc of selected) {
+                        // Calculate text similarity between candidate and selected doc
+                        // Simple approach: shared words/terms
+                        const similarity = this.calculateTextSimilarity(
+                            candidate.content, 
+                            selectedDoc.content
+                        );
+                        maxSimilarityToSelected = Math.max(maxSimilarityToSelected, similarity);
+                    }
+                    
+                    // MMR score: balance between relevance and diversity
+                    const mmrScore = lambda * similarityTerm - (1 - lambda) * maxSimilarityToSelected;
+                    
+                    if (mmrScore > nextBestScore) {
+                        nextBestScore = mmrScore;
+                        nextBestIndex = i;
+                    }
+                }
+                
+                // Add the best candidate to selected and remove from candidates
+                if (nextBestIndex !== -1) {
+                    selected.push(remainingCandidates[nextBestIndex]);
+                    remainingCandidates.splice(nextBestIndex, 1);
+                } else {
+                    break; // No more suitable candidates
+                }
+            }
+            
+            return selected;
+        } catch (error) {
+            console.error("Error applying MMR:", error);
+            // Fallback to simple similarity-based ranking
+            return docs.sort((a, b) => b.similarity - a.similarity).slice(0, k);
+        }
+    }
+
+    // Helper for MMR: calculate text similarity between two content strings
+    private calculateTextSimilarity(text1: string, text2: string): number {
+        // Simple word-based Jaccard similarity
+        const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(word => word.length > 3));
+        const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(word => word.length > 3));
+        
+        if (words1.size === 0 || words2.size === 0) return 0;
+        
+        // Calculate intersection
+        let intersection = 0;
+        for (const word of words1) {
+            if (words2.has(word)) intersection++;
+        }
+        
+        // Jaccard similarity: intersection / union
+        const union = words1.size + words2.size - intersection;
+        return intersection / union;
+    }
+
+    // ENHANCEMENT 4: Semantic chunking
+    private createSemanticChunks(text: string, query: string, maxChunkSize: number = 1000): string[] {
+        try {
+            // 1. First, divide by natural document structure
+            // Look for headings, section breaks, etc.
+            const structuralDividers = /\n#{1,6}\s+|\n---+|\n\*\*\*+|\n={3,}/g;
+            let sections = text.split(structuralDividers).filter(s => s.trim().length > 0);
+            
+            // 2. For each large section, further divide by paragraphs
+            const result: string[] = [];
+            for (const section of sections) {
+                if (section.length <= maxChunkSize) {
+                    result.push(section);
+                    continue;
+                }
+                
+                // Split by paragraphs
+                const paragraphs = section.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+                
+                // Create chunks of paragraphs, respecting the max size
+                let currentChunk = "";
+                for (const paragraph of paragraphs) {
+                    if (currentChunk.length + paragraph.length > maxChunkSize && currentChunk.length > 0) {
+                        // Current chunk is full, save it and start a new one
+                        result.push(currentChunk);
+                        currentChunk = paragraph;
+                    } else {
+                        // Add to current chunk
+                        if (currentChunk.length > 0) {
+                            currentChunk += "\n\n" + paragraph;
+                        } else {
+                            currentChunk = paragraph;
+                        }
+                    }
+                }
+                
+                // Add the last chunk if not empty
+                if (currentChunk.length > 0) {
+                    result.push(currentChunk);
+                }
+            }
+            
+            // 3. Score and sort chunks by relevance to query
+            const scoredChunks = result.map(chunk => {
+                let score = 0;
+                
+                // Match query terms
+                const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 3);
+                const lowerChunk = chunk.toLowerCase();
+                
+                // Score based on query term presence
+                for (const term of queryTerms) {
+                    if (lowerChunk.includes(term)) {
+                        score += 10;
+                        // Bonus for term in headings (starts with # in Markdown)
+                        const lines = lowerChunk.split("\n");
+                        for (const line of lines) {
+                            if (line.startsWith("#") && line.toLowerCase().includes(term)) {
+                                score += 5;
+                            }
+                        }
+                    }
+                }
+                
+                // Penalty for very short chunks
+                if (chunk.length < 100) score -= 5;
+                
+                return { chunk, score };
+            });
+            
+            // Sort by score and return the chunks
+            return scoredChunks
+                .sort((a, b) => b.score - a.score)
+                .map(item => item.chunk);
+            
+        } catch (error) {
+            console.error("Error creating semantic chunks:", error);
+            // Fallback to simple splitting
+            return [text.substring(0, Math.min(text.length, maxChunkSize))];
+        }
+    }
+
+    // Function to prompt for a question and show the answer
+    async activateKnowledgeBaseQA() {
+        const modal = new SearchPromptModal(this.app);
+        const query = await modal.openAndGetValue();
+        
+        if (!query) return;
+        
+        try {
+            const loadingModal = new LoadingModal(this.app, true, "Processing your question...");
+            loadingModal.open();
+            
+            const answer = await this.knowledgeBaseQA(query);
+            
+            loadingModal.close();
+            
+            // Create a modal to display the answer
+            const qaModal = new Modal(this.app);
+            qaModal.titleEl.setText(`Q&A: ${query.length > 50 ? query.substring(0, 50) + '...' : query}`);
+            
+            // Add content to the modal
+            const contentEl = qaModal.contentEl;
+            contentEl.addClass('ai-pilot-qa-modal');
+            
+            // Create container for the answer
+            const answerContainer = contentEl.createDiv({ cls: 'ai-pilot-qa-answer' });
+            await this.renderMarkdown(answer, answerContainer);
+            
+            // Add button to insert into current note
+            const buttonContainer = contentEl.createDiv({ cls: 'ai-pilot-qa-buttons' });
+            const insertButton = buttonContainer.createEl('button', { text: 'Insert into current note' });
+            
+            insertButton.addEventListener('click', () => {
+                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (activeView) {
+                    const editor = activeView.editor;
+                    const cursor = editor.getCursor();
+                    
+                    // Format for insertion
+                    const formattedAnswer = `## ${query}\n\n${answer}`;
+                    
+                    editor.replaceRange(formattedAnswer, cursor);
+                    new Notice('Answer inserted into current note', 2000);
+                } else {
+                    new Notice('No active markdown editor found', 2000);
+                }
+            });
+            
+            // Open the modal
+            qaModal.open();
+            
+        } catch (error) {
+            console.error("Knowledge Base Q&A error:", error);
+            new Notice(`Error in Knowledge Base Q&A: ${error.message}`, 3000);
+        }
+    }
+
+    // Knowledge Base Q&A with advanced RAG
+    async knowledgeBaseQA(query: string): Promise<string> {
+        const loadingModal = new LoadingModal(this.app, true, "Preparing knowledge base Q&A...");
+        loadingModal.open();
+        
+        try {
+            // 1. Use shared advanced search
+            loadingModal.setStatus("Searching knowledge base...");
+            const relevantNotes = await this.advancedSearch(query, 15, loadingModal);
+            
+            if (relevantNotes.length === 0) {
+                loadingModal.close();
+                return "I couldn't find any relevant information in your knowledge base to answer this question.";
+            }
+            
+            // 2. Construct context from search results
+            loadingModal.setStatus("Building knowledge context...");
+            let context = `Answer the question based on the following information from my knowledge base:\n\n`;
+            relevantNotes.forEach((note, index) => {
+                context += `Source [${index + 1}]: ${note.file.basename}\n`;
+                context += `${note.content}\n\n`;
+            });
+            
+            // Initial system prompts for reflection, including uncertainty assessment
+            const systemMessages = [
+                { role: "system", content: "You are a helpful assistant with access to a personal knowledge base." },
+                { role: "system", content: "Answer questions based only on the provided knowledge base extracts." },
+                { role: "system", content: "If the information to answer the question is not in the provided extracts, say so clearly." },
+                { role: "system", content: "When citing information, reference the source number in brackets, e.g., [1]." },
+                // 5. ENHANCEMENT: Uncertainty assessment prompt
+                { role: "system", content: "For each major part of your answer, indicate your confidence level as [High], [Medium], or [Low]." }
+            ];
+            
+            // Start reflection loop
+            let currentAnswer = "";
+            let reflectionCount = 0;
+            let shouldContinueReflection = true;
+            
+            loadingModal.setStatus("Generating initial answer...");
+            
+            // Continue reflection until satisfied
+            while (shouldContinueReflection) {
+                reflectionCount++;
+                loadingModal.setStatus(`Reflection round ${reflectionCount}...`);
+                
+                // Generate answer based on current context
+                const messages = [
+                    ...systemMessages,
+                    { role: "user", content: `${context}\n\nQuestion: ${query}\n\nProvide a comprehensive answer with confidence levels ([High]/[Medium]/[Low]) for each main point. Cite sources as [1], [2], etc.` }
+                ];
+                
+                if (currentAnswer) {
+                    // Include prior answer in subsequent iterations
+                    messages.push({ role: "assistant", content: currentAnswer });
+                    messages.push({ 
+                        role: "user", 
+                        content: "Reflect on your previous answer. Identify gaps, missing information, or areas where your confidence is low. What additional information would help provide a better answer?" 
+                    });
+                }
+                
+                // Generate new answer or reflection
+                const response = await this.callAIChat(messages as any);
+                
+                if (!currentAnswer) {
+                    // First iteration - this is our initial answer
+                    currentAnswer = response;
+                } else {
+                    // Subsequent iterations - this is a reflection
+                    // Parse reflection to identify gaps
+                    const reflectionMessages = [
+                        { role: "system", content: "You are analyzing a reflection on an answer to identify specific information gaps." },
+                        { role: "user", content: `This is a reflection on an answer to the question: "${query}"\n\nReflection: ${response}\n\nBased on this reflection, extract 1-3 specific search queries that would help address the information gaps. Format them as a numbered list of search queries only, without any explanation or additional text.` }
+                    ];
+                    
+                    const searchQueries = await this.callAIChat(reflectionMessages as any);
+                    
+                    // Check if reflection indicates we need more information
+                    if (searchQueries.toLowerCase().includes("no additional") || 
+                        searchQueries.toLowerCase().includes("sufficient information") ||
+                        reflectionCount > 5) { // Safety limit
+                        
+                        // Reflection indicates we have enough information or reached limit
+                        shouldContinueReflection = false;
+                        
+                        // Final answer generation with all gathered context
+                        const finalMessages = [
+                            ...systemMessages,
+                            { role: "user", content: `${context}\n\nQuestion: ${query}\n\nProvide a comprehensive answer based on all available information. For each main point, indicate your confidence level as [High], [Medium], or [Low]. Cite sources as [1], [2], etc.` }
+                        ];
+                        
+                        currentAnswer = await this.callAIChat(finalMessages as any);
+                    } else {
+                        // Extract search queries from the reflection
+                        const queryMatches = searchQueries.match(/\d+\.\s*(.*?)(?=\d+\.|$)/g) || [];
+                        const newQueries = queryMatches.map(m => m.replace(/^\d+\.\s*/, '').trim());
+                        
+                        if (newQueries.length > 0) {
+                            loadingModal.setStatus(`Searching for additional information...`);
+                            
+                            // For each identified gap, perform targeted searches
+                            for (const newQuery of newQueries) {
+                                // Get more context with the advanced search
+                                const additionalNotes = await this.advancedSearch(newQuery, 3);
+                                
+                                if (additionalNotes.length > 0) {
+                                    // Add new information to context
+                                    context += `\n\nAdditional information for: "${newQuery}"\n\n`;
+                                    additionalNotes.forEach((note, index) => {
+                                        const sourceIndex = relevantNotes.length + index + 1;
+                                        context += `Source [${sourceIndex}]: ${note.file.basename}\n`;
+                                        context += `${note.content}\n\n`;
+                                        
+                                        // Add to main relevantNotes array
+                                        relevantNotes.push(note);
+                                    });
+                                }
+                            }
+                            
+                            // Generate improved answer with enhanced context
+                            const improvedMessages = [
+                                ...systemMessages,
+                                { role: "user", content: `${context}\n\nQuestion: ${query}\n\nPlease answer this question based on ALL the information provided, including the additional context. For each main point, indicate your confidence level as [High], [Medium], or [Low]. Cite sources as [1], [2], etc.` }
+                            ];
+                            
+                            loadingModal.setStatus(`Generating improved answer...`);
+                            currentAnswer = await this.callAIChat(improvedMessages as any);
+                        } else {
+                            // No clear new queries found, end reflection
+                            shouldContinueReflection = false;
+                        }
+                    }
+                }
+            }
+            
+            loadingModal.close();
+            
+            // Format the answer with source links
+            let formattedAnswer = currentAnswer;
+            
+            // Add footnotes with source information
+            formattedAnswer += "\n\n---\n**Sources:**\n";
+            const usedSources = new Set<string>();
+            
+            // Find all source references [1], [2], etc.
+            const sourceRefs = currentAnswer.match(/\[\d+\]/g) || [];
+            const usedRefs = new Set<string>();
+            
+            sourceRefs.forEach(ref => {
+                usedRefs.add(ref);
+            });
+            
+            // Add all used sources
+            Array.from(usedRefs).forEach(ref => {
+                const sourceNum = parseInt(ref.replace(/[\[\]]/g, '')) - 1;
+                if (sourceNum >= 0 && sourceNum < relevantNotes.length) {
+                    const source = relevantNotes[sourceNum];
+                    if (!usedSources.has(source.file.path)) {
+                        usedSources.add(source.file.path);
+                        formattedAnswer += `\n${ref}: [[${source.file.path}|${source.file.basename}]]`;
+                    }
+                }
+            });
+            
+            // If no sources were explicitly cited, add the most relevant ones
+            if (usedSources.size === 0 && relevantNotes.length > 0) {
+                formattedAnswer += "\n*Based on:*\n";
+                relevantNotes.slice(0, 3).forEach((note, i) => {
+                    formattedAnswer += `\n[${i + 1}]: [[${note.file.path}|${note.file.basename}]]`;
+                });
+            }
+            
+            // Add metadata about the search process
+            formattedAnswer += "\n\n---\n*Query processing: ";
+            formattedAnswer += `${reflectionCount} reflection rounds performed.*`;
+            
+            return formattedAnswer;
+            
+        } catch (error) {
+            console.error("Error in Knowledge Base Q&A:", error);
+            loadingModal.close();
+            return `Sorry, I encountered an error while searching your knowledge base: ${error.message}`;
         }
     }
 }
