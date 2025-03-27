@@ -84,17 +84,17 @@ export class ModelConfigModal extends Modal {
     
     // Base URL
     new Setting(contentEl)
-      .setName('API Endpoint URL')
+      .setName('Base URL')
       .setDesc(this.getUrlDescription())
       .addText(text => text
-        .setPlaceholder(this.getUrlPlaceholder())
+        .setPlaceholder(this.model.type === 'ollama' ? 'http://localhost:11434/api/generate' : '')
         .setValue(this.model.baseUrl || '')
         .onChange(value => this.model.baseUrl = value)
       );
     
-    // Specific Model Name (for the provider)
+    // Model name/ID
     new Setting(contentEl)
-      .setName('Model Name')
+      .setName('Model Name/ID')
       .setDesc(this.getModelNameDescription())
       .addText(text => text
         .setPlaceholder(this.getModelNamePlaceholder())
@@ -102,96 +102,66 @@ export class ModelConfigModal extends Modal {
         .onChange(value => this.model.modelName = value)
       );
     
-    // System Prompt
+    // System prompt
     new Setting(contentEl)
       .setName('System Prompt')
-      .setDesc('Instructions that define how the AI responds')
+      .setDesc('Default system prompt for this model')
       .addTextArea(text => text
-        .setPlaceholder('You are a helpful assistant...')
+        .setPlaceholder('You are a helpful assistant.')
         .setValue(this.model.systemPrompt || '')
         .onChange(value => this.model.systemPrompt = value)
       );
     
+    // Description
+    new Setting(contentEl)
+      .setName('Description')
+      .setDesc('Optional description for this model')
+      .addText(text => text
+        .setPlaceholder('e.g., Fast and efficient for general tasks')
+        .setValue(this.model.description || '')
+        .onChange(value => this.model.description = value)
+      );
+    
+    // Model status
+    contentEl.createEl('h3', { text: 'Model Status' });
+
+    // Active status (for debate)
+    new Setting(contentEl)
+        .setName('Active')
+        .setDesc('Enable this model for AI debate')
+        .addToggle(toggle => toggle
+            .setValue(this.model.active || false)
+            .onChange(value => this.model.active = value));
+
+    // Default status (for chat/functions)
+    new Setting(contentEl)
+        .setName('Set as Default')
+        .setDesc('Make this model the default for AI chat and function icons')
+        .addToggle(toggle => toggle
+            .setValue(this.model.isDefault || false)
+            .onChange(value => this.model.isDefault = value));
+    
     // Proxy settings
     new Setting(contentEl)
       .setName('Use Proxy')
-      .setDesc('Override global proxy settings for this model')
+      .setDesc('Use proxy for API calls to this model')
       .addToggle(toggle => toggle
         .setValue(this.model.useProxy || false)
         .onChange(value => this.model.useProxy = value)
       );
     
-    // Add embedding model settings - only for supported providers
-    if (['openai', 'zhipuai', 'custom'].includes(this.model.type)) {
-      contentEl.createEl('h3', { text: 'Embedding Settings' });
-      
-      // Embedding model
-      new Setting(contentEl)
-        .setName('Embedding Model')
-        .setDesc('The model to use for generating embeddings')
-        .addText(text => {
-          const placeholder = this.model.type === 'openai' 
-            ? 'e.g., text-embedding-3-small' 
-            : this.model.type === 'zhipuai'
-              ? 'e.g., embedding-3'
-              : 'Embedding model name';
-          
-          text
-            .setPlaceholder(placeholder)
-            .setValue(this.model.embeddingModel || '')
-            .onChange(value => this.model.embeddingModel = value);
-        });
-      
-      // Embedding dimensions (only if needed)
-      if (this.model.type === 'zhipuai' || this.model.type === 'custom') {
-        new Setting(contentEl)
-          .setName('Embedding Dimensions')
-          .setDesc('Number of dimensions for the embedding vectors (leave empty to use default)')
-          .addText(text => text
-            .setPlaceholder('e.g., 1024')
-            .setValue(this.model.embeddingDimensions?.toString() || '')
-            .onChange(value => {
-              const dimensions = parseInt(value);
-              this.model.embeddingDimensions = isNaN(dimensions) ? undefined : dimensions;
-            })
-          );
+    // Submit button
+    const submitButtonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+    const submitButton = submitButtonContainer.createEl('button', {
+      text: this.isNewModel ? 'Add Model' : 'Save Changes',
+      cls: 'mod-cta'
+    });
+    submitButton.addEventListener('click', async () => {
+      if (this.validateModel()) {
+        this.onSubmit(this.model);
+        this.close();
       }
-    }
-    
-    // Active status
-    new Setting(contentEl)
-      .setName('Active')
-      .setDesc('Enable or disable this model')
-      .addToggle(toggle => toggle
-        .setValue(this.model.active)
-        .onChange(value => this.model.active = value)
-      );
-    
-    // Default model setting
-    new Setting(contentEl)
-      .setName('Set as Default')
-      .setDesc('Use this model as the default when no specific model is selected')
-      .addToggle(toggle => toggle
-        .setValue(this.model.isDefault || false)
-        .onChange(value => this.model.isDefault = value)
-      );
-    
-    // Buttons
-    new Setting(contentEl)
-      .addButton(button => button
-        .setButtonText(this.isNewModel ? 'Add Model' : 'Save Changes')
-        .setCta()
-        .onClick(() => {
-          if (this.validateModel()) {
-            this.onSubmit(this.model);
-            this.close();
-          }
-        })
-      )
-      .addButton(button => button
-        .setButtonText('Cancel')
-        .onClick(() => this.close())
-      );
+    });
   }
 
   onClose() {

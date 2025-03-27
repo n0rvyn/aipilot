@@ -1,0 +1,157 @@
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, Vault, WorkspaceLeaf } from 'obsidian';
+// Other imports...
+import { ChatView, VIEW_TYPE_CHAT } from './ChatView';
+import { KnowledgeBaseView, KNOWLEDGE_BASE_VIEW_TYPE } from './KnowledgeBaseView';
+import { DebatePanel, DEBATE_VIEW_TYPE } from './debate/DebatePanel';
+// Import RAG-related components
+import { createRAGService, RAGService } from './rag';
+
+// Placeholder for key sections, you'd need to copy the rest of the original file here
+
+export default class AIPilotPlugin extends Plugin {
+    // Existing properties...
+    ragService: RAGService;
+
+    async onload() {
+        // Existing setup code...
+
+        // Register the debate view
+        this.registerView(
+            DEBATE_VIEW_TYPE,
+            (leaf: WorkspaceLeaf) => new DebatePanel(leaf, this.modelManager)
+        );
+        
+        // Register a command to open the debate panel
+        this.addCommand({
+            id: 'open-debate-panel',
+            name: 'Open Agent Debate Panel',
+            callback: () => this.activateDebateView()
+        });
+        
+        // Register Chat View
+        this.registerView(
+            VIEW_TYPE_CHAT,
+            (leaf: WorkspaceLeaf) => new ChatView(leaf, this as unknown as AIPilotPlugin, this.modelManager)
+        );
+
+        // Register Knowledge Base View
+        this.registerView(
+            KNOWLEDGE_BASE_VIEW_TYPE,
+            (leaf: WorkspaceLeaf) => new KnowledgeBaseView(leaf, this as unknown as AIPilotPlugin)
+        );
+
+        // Add command to open chat view
+        this.addCommand({
+            id: 'open-chat-view',
+            name: 'Open AI Chat',
+            callback: () => {
+                this.activateView();
+            },
+        });
+
+        // Add command to open knowledge base view
+        this.addCommand({
+            id: 'open-kb-view',
+            name: 'Open Knowledge Base Search',
+            callback: () => {
+                this.activateKnowledgeBaseView();
+            },
+        });
+
+        // Add ribbon icon for chat
+        this.addRibbonIcon("message-square", "Open AI Chat", () => {
+            this.activateView();
+        });
+
+        // Add ribbon icon for knowledge base search
+        this.addRibbonIcon("search", "Search Knowledge Base", () => {
+            this.activateKnowledgeBaseView();
+        });
+
+        // Initialize the RAG service
+        this.ragService = createRAGService(this.app, this as unknown as AIPilotPlugin, this.settings);
+    }
+
+    // Keep only one implementation of this method
+    async searchKnowledgeBase() {
+        // Redirect to the knowledge base view
+        this.activateKnowledgeBaseView();
+    }
+
+    async activateView() {
+        const workspace = this.app.workspace;
+        let leaf = workspace.getLeavesOfType(VIEW_TYPE_CHAT)[0];
+        
+        if (!leaf) {
+            // Create new leaf in right sidebar
+            const rightLeaf = workspace.getRightLeaf(false);
+            if (!rightLeaf) return;
+            
+            leaf = rightLeaf;
+            await leaf.setViewState({
+                type: VIEW_TYPE_CHAT,
+                active: true,
+            });
+        }
+
+        workspace.revealLeaf(leaf);
+    }
+
+    async activateKnowledgeBaseView() {
+        const workspace = this.app.workspace;
+        let leaf = workspace.getLeavesOfType(KNOWLEDGE_BASE_VIEW_TYPE)[0];
+        
+        if (!leaf) {
+            // Create new leaf in right sidebar
+            const rightLeaf = workspace.getRightLeaf(false);
+            if (!rightLeaf) return;
+            
+            leaf = rightLeaf;
+            await leaf.setViewState({
+                type: KNOWLEDGE_BASE_VIEW_TYPE,
+                active: true,
+            });
+        }
+
+        workspace.revealLeaf(leaf);
+    }
+
+    // Fix the array typing issues
+    private async vectorSearch(query: string): Promise<Array<{ file: TFile; similarity: number; content: string }>> {
+        try {
+            console.log("Attempting vector search for:", query);
+            const files = await this.getKnowledgeBaseNotes();
+            const results: Array<{ file: TFile; similarity: number; content: string }> = [];
+            
+            // Get query embedding
+            const queryEmbedding = await this.getEmbedding(query);
+
+            for (const file of files) {
+                try {
+                    const content = await this.app.vault.read(file);
+                    
+                    // Get content embedding
+                    const contentEmbedding = await this.getCachedEmbedding(content);
+                    
+                    // Calculate cosine similarity
+                    const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
+                    
+                    if (similarity > 0.5) { // Set a reasonable threshold
+                        console.log(`High vector similarity (${similarity.toFixed(2)}) for file: ${file.path}`);
+                        const snippet = this.getRelevantSnippet(content, query, 1000);
+                        results.push({ file, similarity, content: snippet });
+                    }
+                } catch (error) {
+                    console.error(`Error processing file ${file.path} for vector search:`, error);
+                }
+            }
+            
+            return results;
+        } catch (error) {
+            console.error("Vector search failed:", error);
+            return []; // Return empty array to trigger fallback
+        }
+    }
+
+    // Copy other method implementations with properly typed arrays
+} 

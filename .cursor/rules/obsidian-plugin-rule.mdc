@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+When generating code for this Obsidian plugin, ensure to:
+- Use TypeScript and follow the sample plugin structure.
+- Implement `onload` and `onunload` methods.
+- Adhere to guidelines from https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin

@@ -25,10 +25,9 @@ const extractCssPlugin = {
             const css = await fs.promises.readFile(args.path, 'utf8');
             cssContent += css + '\n';
             
-            // Return empty JS - using export {} instead of export default
-            // This allows import './styles.css' to work without errors
+            // Return empty JS instead of export default
             return {
-                contents: 'export {};',
+                contents: 'export {}',
                 loader: 'js',
             };
         });

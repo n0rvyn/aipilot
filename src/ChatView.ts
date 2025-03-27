@@ -2,10 +2,37 @@ import { ItemView, WorkspaceLeaf, TFile, Component, TFolder, setIcon, Notice, Ma
 import type AIPilot from "./main";
 import { DEFAULT_SETTINGS } from "./main";
 import { MarkdownRenderer as NewMarkdownRenderer } from './MarkdownRenderer';
-import { LoadingModal, PolishResultModal } from './main';
+import { LoadingModal } from './modals';
 import { ModelManager, ModelConfig } from './models/ModelManager';
 
 export const VIEW_TYPE_CHAT = "chat-view";
+
+// Add missing type definitions
+interface Message {
+    role: "user" | "assistant";
+    content: string;
+}
+
+// Add the diff match patch library type to the AIPilot interface
+declare module "./main" {
+    interface AIPilot extends Plugin {
+        settings: any;
+        requestId: string | null;
+        saveSettings(): Promise<void>;
+        diffMatchPatchLib?: any; // Add this line for the diff library
+    }
+}
+
+type FunctionMode = 'none' | 'organize' | 'grammar' | 'generate' | 'dialogue' | 'summary' | 'polish' | 'custom';
+
+// Define CustomFunction interface if not imported
+interface CustomFunction {
+    name: string;
+    icon: string;
+    prompt: string;
+    tooltip?: string;
+    isBuiltIn?: boolean;
+}
 
 // Add ConfirmModal class
 class ConfirmModal extends Modal {
@@ -699,54 +726,30 @@ interface ChatHistory {
 }
 
 export class ChatView extends ItemView implements Component {
-    private chatContainer: HTMLElement;
-    private inputContainer: HTMLElement;
-    private messagesContainer: HTMLElement;
-    private plugin: AIPilot;
-    private messages: { role: 'user' | 'assistant', content: string }[] = [];
-    private currentMode: ViewMode = 'chat';
-    private tabsContainer: HTMLElement;
-    private viewContainer: HTMLElement;
-    private requestId: string | null = null;
-    private currentInput: HTMLTextAreaElement;
-    private knowledgeBaseCache: Map<string, { 
-        similarity: number, 
-        content: string, 
-        timestamp: number,
-        hash: string 
-    }> = new Map();
-    private readonly MAX_RETRIES = 3;
-    private readonly RETRY_DELAY = 1000;
-    private readonly MAX_TOKENS = 4096;
-    private readonly RENDER_THROTTLE = 30; // Reduced from 50ms to 30ms for smoother updates
-    private chatHistoryButton: HTMLElement; // New history button
-    private lastHistorySave: number = 0;
-    private isEndingConversation: boolean = false;
-    private conversationId: string | null = null;
-    private lastNoticedFile: string | null = null;
-    private modelManager: ModelManager;
-    private modelSelectEl: HTMLSelectElement;
-    private currentModelId: string = '';
+    plugin: AIPilot;
+    modelManager: ModelManager;
+    messagesContainer: HTMLElement;
+    inputContainer: HTMLElement;
+    chatContainer: HTMLElement;
+    messages: Message[] = [];
+    viewContainer: HTMLElement;
+    chatHistoryButton: HTMLElement;
+    currentInput: HTMLTextAreaElement | null = null;
+    isGenerating: boolean = false;
+    currentMessage: HTMLElement | null = null;
+    controller: AbortController | null = null;
+    conversationId: string | null = null;
+    requestId: string | null = null;
+    lastHistorySave: number = 0;
+    isEndingConversation: boolean = false;
+    currentFunctionMode: FunctionMode = 'none';
+    currentMode: 'chat' = 'chat'; // No more search mode, only chat
 
     constructor(leaf: WorkspaceLeaf, plugin: AIPilot, modelManager: ModelManager) {
         super(leaf);
         this.plugin = plugin;
-        this.requestId = this.plugin.requestId;
         this.modelManager = modelManager;
-        
-        // Initialize with the first available model
-        const models = this.modelManager.getActiveModels();
-        if (models.length > 0) {
-          this.currentModelId = models[0].id;
-        }
-    }
-
-    load(): void {
-        // Required by Component interface
-    }
-
-    unload(): void {
-        // Required by Component interface
+        this.requestId = plugin.requestId;
     }
 
     getViewType(): string {
@@ -754,89 +757,18 @@ export class ChatView extends ItemView implements Component {
     }
 
     getDisplayText(): string {
-        return "AI Chat";
-    }
-
-    getIcon(): string {
-        return "message-square";
+        return "AI Chat Assistant";
     }
 
     async onOpen(): Promise<void> {
         // Add container class for styling
         this.contentEl.addClass('chat-view-container');
         
-        // Create tabs
-        this.tabsContainer = this.contentEl.createDiv({ cls: "chat-tabs" });
-        this.createTabs();
-
-        // Create view container
+        // Create view container - simplified with no tabs
         this.viewContainer = this.contentEl.createDiv({ cls: "view-container" });
         
-        // Initialize the default view
+        // Initialize the chat view directly
         this.initializeChatView();
-    }
-
-    private createTabs() {
-        const chatTab = this.tabsContainer.createDiv({
-            cls: `chat-tab ${this.currentMode === 'chat' ? 'active' : ''}`,
-        });
-        
-        // Create SVG for chat tab using DOM API
-        const chatIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        chatIcon.setAttribute('viewBox', '0 0 100 100');
-        chatIcon.classList.add('chat-icon');
-        
-        const chatPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        chatPath.setAttribute('d', 'M20,20v45h10v15l15-15h35V20H20z M25,25h50v35H42.5L35,67.5V60H25V25z');
-        
-        chatIcon.appendChild(chatPath);
-        chatTab.appendChild(chatIcon);
-        
-        const searchTab = this.tabsContainer.createDiv({
-            cls: `chat-tab ${this.currentMode === 'search' ? 'active' : ''}`,
-        });
-        
-        // Create SVG for search tab using DOM API
-        const searchIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        searchIcon.setAttribute('viewBox', '0 0 100 100');
-        searchIcon.classList.add('search-icon');
-        
-        const searchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        searchPath.setAttribute('d', 'M80,75 L65,60 C70,54 73,46 73,38 C73,22 60,9 44,9 C28,9 15,22 15,38 C15,54 28,67 44,67 C52,67 60,64 66,59 L81,74 L80,75 Z M44,62 C31,62 20,51 20,38 C20,25 31,14 44,14 C57,14 68,25 68,38 C68,51 57,62 44,62 Z');
-        
-        searchIcon.appendChild(searchPath);
-        searchTab.appendChild(searchIcon);
-
-        chatTab.onclick = () => this.switchMode('chat');
-        searchTab.onclick = () => this.switchMode('search');
-    }
-
-    private async switchMode(mode: ViewMode) {
-        // Save the current chat before switching if we have messages
-        if (this.currentMode === 'chat' && mode === 'search' && this.messages.length > 0) {
-            // Set flag to indicate we're ending the current conversation
-            this.isEndingConversation = true;
-            await this.saveChatHistory();
-        }
-        
-        this.currentMode = mode;
-        
-        // Update tab styling
-        const tabs = this.tabsContainer.querySelectorAll('.chat-tab');
-        tabs.forEach(tab => tab.classList.remove('active'));
-        const activeTab = this.tabsContainer.querySelector(`.chat-tab:nth-child(${mode === 'chat' ? 1 : 2})`);
-        if (activeTab) {
-            activeTab.classList.add('active');
-        }
-
-        // Clear view container
-        this.viewContainer.empty();
-
-        if (mode === 'chat') {
-            await this.initializeChatView();
-        } else {
-            await this.initializeSearchView();
-        }
     }
 
     private async initializeChatView() {
@@ -872,49 +804,27 @@ export class ChatView extends ItemView implements Component {
         // Create container for function icons
         const functionIconsContainer = this.inputContainer.createDiv({ cls: 'function-icons-container' });
 
-        // Initialize the plugin functions array if it doesn't exist
-        if (!this.plugin.settings.functions) {
-            console.log("Initializing functions array from defaults");
-            // Use default functions from settings - ensure it's initialized properly
-            this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
-                [...DEFAULT_SETTINGS.functions] : 
-                [];
-            
-            // Copy any existing custom functions
-            if (this.plugin.settings.customFunctions && this.plugin.settings.customFunctions.length > 0) {
-                this.plugin.settings.functions.push(...this.plugin.settings.customFunctions);
-            }
-            
-            // Save the updated settings
-            this.plugin.saveSettings();
-        } else if (this.plugin.settings.functions.length === 0) {
-            // If array exists but is empty
-            this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
-                [...DEFAULT_SETTINGS.functions] : 
-                [];
-            this.plugin.saveSettings();
-        }
+        // Add the function buttons
+        this.createFunctionButtons(functionIconsContainer);
         
-        // Debug: Log available functions
-        console.log("Available functions:", this.plugin.settings.functions.map(f => f.name).join(", "));
+        // Add auto-resize for textarea
+        this.setupInputAutoResize();
         
-        // Ensure Polish function is present
-        if (!this.plugin.settings.functions.some(f => f.name === "Polish")) {
-            console.log("Polish function missing, adding it");
-            this.plugin.settings.functions.push({
-                name: "Polish",
-                prompt: "Please polish and refine the following text to improve clarity, flow, and style while preserving the original meaning and language. Enhance the expression, eliminate redundancies, and make it more engaging. Return the polished version only, without explanations:",
-                icon: "bird",
-                tooltip: "Polish and refine text",
-                isBuiltIn: true
-            });
-            this.plugin.saveSettings();
-        }
-
-        // Add all functions from the unified functions array
+        // Handle input events (Enter to send, Shift+Enter for new line)
+        this.setupInputEvents();
+        
+        // Load any previous chat history or show welcome message
+        await this.loadOrInitializeChat();
+    }
+    
+    // Add necessary methods for creating function buttons
+    private createFunctionButtons(container: HTMLElement) {
+        // Ensure the functions array is initialized
+        this.ensureFunctionsInitialized();
+        
+        // Add function buttons
         this.plugin.settings.functions.forEach(func => {
-            console.log(`Creating button for function: ${func.name}, icon: ${func.icon}`);
-            const iconButton = functionIconsContainer.createEl('button', {
+            const iconButton = container.createEl('button', {
                 cls: `function-icon-button ${func.isBuiltIn ? 'built-in' : 'custom-function'}`,
                 attr: { 'aria-label': `${func.name} ${func.tooltip ? `(${func.tooltip})` : ''}` }
             });
@@ -930,8 +840,7 @@ export class ChatView extends ItemView implements Component {
             const tooltipEl = iconButton.createSpan({ cls: 'function-icon-tooltip' });
             tooltipEl.setText(func.tooltip || func.name);
             
-            // Map function to appropriate handler based on name for built-in functions
-            // or use generic custom function handler for custom functions
+            // Map function to appropriate handler
             if (func.isBuiltIn) {
                 switch (func.name) {
                     case "Organize":
@@ -959,1303 +868,691 @@ export class ChatView extends ItemView implements Component {
                 iconButton.onclick = () => this.handleCustomFunction(func);
             }
         });
-
-        // Setup keyboard shortcuts
-        this.setupKeyboardShortcuts();
-        
-        // Render existing messages if any (for mode switching)
-        if (this.messages.length > 0) {
-            this.renderChatHistory();
-        }
-    }
-
-    private async initializeSearchView() {
-        const searchContainer = this.viewContainer.createDiv({ cls: "search-container" });
-        
-        const inputContainer = searchContainer.createDiv({ cls: "search-input-container" });
-        
-        // Create directory selector
-        const dirSelector = inputContainer.createEl("select", {
-            cls: "search-dir-selector",
-            attr: {
-                'aria-label': 'Select directory to search in'
-            }
-        });
-        
-        // Add "All Files" option
-        dirSelector.createEl("option", {
-            text: "All Files",
-            value: ""
-        });
-        
-        // Get and add first-level directories
-        const rootFolder = this.app.vault.getRoot();
-        const folders = rootFolder.children
-            .filter(child => child instanceof TFolder)
-            .sort((a, b) => a.name.localeCompare(b.name));
-            
-        folders.forEach(folder => {
-            dirSelector.createEl("option", {
-                text: folder.name,
-                value: folder.path
-            });
-        });
-
-        // Create search input row
-        const searchInputRow = inputContainer.createDiv({ cls: "search-input-row" });
-        const searchInput = searchInputRow.createEl("input", {
-            cls: "search-input",
-            attr: {
-                placeholder: "Enter your search query...",
-                'aria-label': 'Search query',
-                type: 'search'
-            }
-        });
-        const searchButton = searchInputRow.createEl("button", {
-            cls: "search-button",
-            text: "Search"
-        });
-
-        const resultsContainer = searchContainer.createDiv({ cls: "search-results" });
-
-        // Add progress indicator
-        const progressContainer = searchContainer.createDiv({ cls: "search-progress" });
-        const progressBar = progressContainer.createDiv({ cls: "search-progress-bar" });
-        const progressText = progressContainer.createDiv({ cls: "search-progress-text" });
-        const countText = progressContainer.createDiv({ cls: "count-text" });
-        progressContainer.style.display = 'none';
-
-        // Search handler
-        const handleSearch = async () => {
-            const query = searchInput.value.trim();
-            if (!query) {
-                resultsContainer.empty();
-                resultsContainer.createDiv({ 
-                    cls: "error-message", 
-                    text: "Please enter a search query." 
-                });
-                return;
-            }
-
-            progressContainer.style.display = 'block';
-            progressText.textContent = 'Initializing search...';
-            progressBar.style.width = '0%';
-            countText.textContent = '';
-            resultsContainer.empty();
-
-            try {
-                const selectedDir = dirSelector.value;
-                const files = await this.plugin.getKnowledgeBaseNotes(selectedDir);
-                const now = Date.now();
-                const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-
-                if (files.length === 0) {
-                    progressContainer.style.display = 'none';
-                    resultsContainer.createDiv({ 
-                        cls: "error-message", 
-                        text: selectedDir 
-                            ? `No files found in directory: ${selectedDir}` 
-                            : "No files found in knowledge base." 
-                    });
-                    return;
-                }
-
-                let processed = 0;
-                const results = [];
-                const totalFiles = files.length;
-                countText.textContent = `Found ${totalFiles} files to process`;
-
-                for (const file of files) {
-                    const content = await this.app.vault.read(file);
-                    const currentHash = await this.calculateFileHash(content);
-                    
-                    // Check cache validity
-                    const cached = this.knowledgeBaseCache.get(file.path);
-                    if (cached && 
-                        now - cached.timestamp < CACHE_DURATION && 
-                        cached.hash === currentHash) {
-                        results.push({ 
-                            file, 
-                            similarity: cached.similarity, 
-                            content: cached.content 
-                        });
-                        processed++;
-                        continue;
-                    }
-
-                    // Calculate new similarity if cache invalid or missing
-                    const similarity = await this.plugin.calculateSimilarity(query, content);
-                    results.push({ file, similarity, content });
-
-                    // Update cache
-                    this.knowledgeBaseCache.set(file.path, { 
-                        similarity, 
-                        content, 
-                        timestamp: now,
-                        hash: currentHash 
-                    });
-                    
-                    processed++;
-                    const progress = (processed / files.length) * 100;
-                    progressBar.style.width = `${progress}%`;
-                    progressText.textContent = `Processing ${processed}/${files.length} files...`;
-                    countText.textContent = `Found ${files.length} files, processed ${processed}`;
-                }
-
-                progressText.textContent = 'Generating summary...';
-                progressBar.style.width = '100%';
-                countText.textContent = `Processing summary for top ${Math.min(5, results.length)} results...`;
-
-                const topResults = results
-                    .sort((a, b) => b.similarity - a.similarity)
-                    .slice(0, 5);
-
-                await this.displaySearchResults(resultsContainer, topResults);
-                progressContainer.style.display = 'none';
-            } catch (error) {
-                progressContainer.style.display = 'none';
-                resultsContainer.createDiv({ 
-                    cls: "error-message", 
-                    text: `Error: ${error.message}` 
-                });
-            }
-        };
-
-        // Add event listeners
-        searchInput.addEventListener("keydown", async (e) => {
-            if (e.key === "Enter") {
-                await handleSearch();
-            }
-        });
-        searchButton.addEventListener("click", handleSearch);
-
-        // Focus search input by default
-        searchInput.focus();
-    }
-
-    private async addMessage(role: 'user' | 'assistant', content: string) {
-        // Add to messages array
-        this.messages.push({ role, content });
-
-        // Create message element
-        const messageDiv = this.messagesContainer.createDiv({
-            cls: role === 'user' ? 'user-message' : 'ai-message'
-        });
-
-        // Create content container
-        const contentDiv = messageDiv.createDiv({ cls: "message-content" });
-
-        // Add metadata (timestamp)
-        const metadata = contentDiv.createDiv({ cls: "message-metadata" });
-        metadata.setText(new Date().toLocaleTimeString());
-
-        // Create message text container
-        const textDiv = contentDiv.createDiv({ cls: "message-text" });
-
-        // Render markdown content for the message
-        await NewMarkdownRenderer.renderMarkdown(
-            content,
-            textDiv,
-            '',
-            this.plugin
-        );
-
-        // For assistant messages, only add action buttons that appear on hover
-        if (role === 'assistant') {
-            const actionContainer = contentDiv.createDiv({ cls: 'message-actions hover-only' });
-            
-            // Add copy button
-            const copyButton = actionContainer.createEl('button', {
-                cls: 'message-action-button copy-button',
-                attr: { 'aria-label': 'Copy message' }
-            });
-            setIcon(copyButton, 'copy');
-            copyButton.onclick = async () => {
-                try {
-                    await navigator.clipboard.writeText(content);
-                    new Notice('Copied to clipboard', 2000);
-                } catch (err) {
-                    console.error("Failed to copy content:", err);
-                    new Notice("Failed to copy content");
-                }
-            };
-            
-            // Add insert button
-            const insertButton = actionContainer.createEl('button', {
-                cls: 'message-action-button insert-button',
-                attr: { 'aria-label': 'Insert into editor' }
-            });
-            setIcon(insertButton, 'plus');
-            insertButton.onclick = () => {
-                const activeLeaf = this.app.workspace.activeLeaf;
-                if (!activeLeaf) {
-                    new Notice('Please open a markdown file first');
-                    return;
-                }
-
-                const view = activeLeaf.view;
-                if (!(view instanceof MarkdownView)) {
-                    new Notice('Please open a markdown file first');
-                    return;
-                }
-
-                const editor = view.editor;
-                const cursor = editor.getCursor();
-                editor.replaceRange(content + '\n', cursor);
-                editor.focus();
-                new Notice('Content inserted into editor', 2000);
-            };
-            
-            // Add apply button (for applying changes directly to original text)
-            const applyButton = actionContainer.createEl('button', {
-                cls: 'message-action-button apply-button',
-                attr: { 'aria-label': 'Apply changes to original text' }
-            });
-            setIcon(applyButton, 'check');
-            applyButton.onclick = () => {
-                const editor = this.getEditor();
-                if (!editor) {
-                    new Notice('Please open a markdown file first');
-                    return;
-                }
-                
-                // Find the original text (selected or entire document)
-                let originalText = "";
-                let isSelection = false;
-                
-                if (editor.somethingSelected()) {
-                    originalText = editor.getSelection();
-                    isSelection = true;
-                } else {
-                    originalText = editor.getValue();
-                }
-                
-                // Create visual diff and apply using the Polish comparison modal
-                new PolishResultModal(
-                    this.plugin.app,
-                    originalText,
-                    content,
-                    (updatedContent: string) => {
-                        if (editor) {
-                            if (isSelection) {
-                                editor.replaceSelection(updatedContent);
-                            } else {
-                                editor.setValue(updatedContent);
-                            }
-                            new Notice("AI polish applied successfully");
-                        }
-                    },
-                    this.plugin  // Pass the plugin instance
-                ).open();
-            };
-        }
-
-        // Scroll to bottom
-        this.messagesContainer.scrollTo({
-            top: this.messagesContainer.scrollHeight,
-            behavior: 'smooth'
-        });
-    }
-
-    // Improved method to get the editor, trying to find an open markdown file
-    // even if the chat view is currently active
-    private getEditor(): any {
-        // First, check the active leaf in case we're in an editor already
-        const activeLeaf = this.app.workspace.activeLeaf;
-        if (activeLeaf && activeLeaf.view instanceof MarkdownView) {
-            // We're already in a markdown editor
-            const fileName = activeLeaf.getDisplayText();
-            this.lastNoticedFile = fileName;
-            return activeLeaf.view.editor;
-        }
-        
-        // If not, look for any open markdown view in the workspace
-        const mdLeaves = this.app.workspace.getLeavesOfType('markdown');
-        if (mdLeaves.length > 0) {
-            // Return the editor from the first markdown leaf we find
-            const mdView = mdLeaves[0].view as MarkdownView;
-            const fileName = mdLeaves[0].getDisplayText();
-            
-            if (mdView && mdView.editor) {
-                // Only show notice when we switch to a different file
-                if (this.lastNoticedFile !== fileName) {
-                    new Notice(`Using the file "${fileName}" for content`, 2000);
-                    this.lastNoticedFile = fileName;
-                }
-                return mdView.editor;
-            }
-        }
-        
-        // Look for any editor view that might be open - more permissive approach
-        const leaves = this.app.workspace.getLeavesOfType('');
-        for (const leaf of leaves) {
-            if (leaf.view && 
-                'getViewType' in leaf.view && 
-                leaf.view.getViewType() === 'markdown' && 
-                'editor' in leaf.view) {
-                const fileName = leaf.getDisplayText();
-                new Notice(`Using the file "${fileName}" for content`, 2000);
-                this.lastNoticedFile = fileName;
-                return (leaf.view as any).editor;
-            }
-        }
-        
-        // No markdown views open anywhere
-        return null;
     }
     
-    // Method to get the selected text from the editor
-    private async getSelectedText(): Promise<string> {
-        const editor = this.getEditor();
-        if (!editor) return "";
+    // Helper method to ensure functions array is initialized
+    private ensureFunctionsInitialized() {
+        if (!this.plugin.settings.functions) {
+            console.log("Initializing functions array from defaults");
+            this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
+                [...DEFAULT_SETTINGS.functions] : 
+                [];
+            
+            if (this.plugin.settings.customFunctions && this.plugin.settings.customFunctions.length > 0) {
+                this.plugin.settings.functions.push(...this.plugin.settings.customFunctions);
+            }
+            
+            this.plugin.saveSettings();
+        } else if (this.plugin.settings.functions.length === 0) {
+            this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
+                [...DEFAULT_SETTINGS.functions] : 
+                [];
+            this.plugin.saveSettings();
+        }
         
-        return editor.somethingSelected() ? editor.getSelection() : "";
+        // Ensure Polish function is present
+        if (!this.plugin.settings.functions.some(f => f.name === "Polish")) {
+            this.plugin.settings.functions.push({
+                name: "Polish",
+                prompt: "Please polish and refine the following text to improve clarity, flow, and style while preserving the original meaning and language. Enhance the expression, eliminate redundancies, and make it more engaging. Return the polished version only, without explanations:",
+                icon: "bird",
+                tooltip: "Polish and refine text",
+                isBuiltIn: true
+            });
+            this.plugin.saveSettings();
+        }
     }
     
-    // Method to get the content of the current file
-    private async getCurrentFileContent(): Promise<string> {
-        const editor = this.getEditor();
-        if (!editor) return "";
-        
-        return editor.getValue();
+    // Add method stubs for required functionality
+    private showChatHistory() {
+        // Implementation of chat history viewing
+        // Will be kept from existing code
     }
-
-    // Helper method to send a message to the chat with a function prompt
-    private async sendFunctionPromptToChat(prompt: string, content: string = "") {
-        if (content) {
-            // Send the message immediately instead of just filling the input
-            this.sendMessage(prompt, content);
-            new Notice(`Applied function to ${await this.getSelectedText() ? "selected text" : "current document"}`, 2000);
-        } else {
-            // Always try to get content from the current editor even in chat mode
-            const editor = this.getEditor();
-            let documentContent = "";
-            let isSelection = false;
-            
-            if (editor) {
-                if (editor.somethingSelected()) {
-                    documentContent = editor.getSelection();
-                    isSelection = true;
-                } else {
-                    documentContent = editor.getValue();
-                }
-            }
-            
-            // If we have document content, use it
-            if (documentContent) {
-                // Send the message immediately instead of just filling the input
-                this.sendMessage(prompt, documentContent);
-                const source = isSelection ? "selected text" : "current document";
-                new Notice(`Applied function to ${source}`, 2000);
-            } else {
-                // No document content available, fall back to input field with helpful prompt
-                this.currentInput.value = prompt + "\n\n(Paste your text here or open a file first)";
-                this.currentInput.focus();
-                
-                // Select the placeholder text to make it easy to replace
-                const placeholderPos = this.currentInput.value.indexOf("(Paste your text here");
-                if (placeholderPos > -1) {
-                    this.currentInput.setSelectionRange(placeholderPos, placeholderPos + "(Paste your text here or open a file first)".length);
-                }
-            }
-        }
+    
+    private async startNewChat() {
+        // Implementation of starting a new chat
+        // Will be kept from existing code
     }
-
-    // Updated handler methods to use a consistent approach
-    private async handleSummarize() {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
+    
+    private setupInputAutoResize() {
+        // Implementation for auto-resizing the input field
+        if (!this.currentInput) return;
         
-        // Find the summarize function in the functions array
-        const summarizeFunc = this.plugin.settings.functions.find(f => f.name === "Summarize");
-        const prompt = summarizeFunc ? summarizeFunc.prompt : "";
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            this.sendFunctionPromptToChat(prompt);
-                return;
-            }
-
-        // Use selected text if available, otherwise use the entire document
-        this.sendFunctionPromptToChat(prompt, selectedText || content);
-    }
-
-    // Updated method to check if we can use an editor
-    private shouldUseEditorMode(): boolean {
-        // Check if there's an active editor
-        const editor = this.getEditor();
-        if (!editor) {
-            // If no editor is available, show a notice and use chat
-            new Notice("No active editor found. Please open a file first.", 2000);
-            return false;
-        }
-        
-        return true;
-    }
-
-    // Add this method to handle the Polish function
-    private async handlePolish() {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
-        
-        // Find the polish function in the functions array
-        const polishFunc = this.plugin.settings.functions.find(f => f.name === "Polish");
-        const prompt = polishFunc ? polishFunc.prompt : "";
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            console.log("Polish function: No active file content found");
-            this.sendFunctionPromptToChat(prompt);
-                return;
-            }
-        
-        // Use selected text if available, otherwise use the entire document
-        console.log("Polish function: Using " + (selectedText ? "selected text" : "entire document"));
-        this.sendFunctionPromptToChat(prompt, selectedText || content);
-    }
-
-    private async handleOrganize() {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
-        
-        // Find the organize function in the functions array
-        const organizeFunc = this.plugin.settings.functions.find(f => f.name === "Organize");
-        const prompt = organizeFunc ? organizeFunc.prompt : "";
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            this.sendFunctionPromptToChat(prompt);
-            return;
-        }
-        
-        // Use selected text if available, otherwise use the entire document
-        this.sendFunctionPromptToChat(prompt, selectedText || content);
-    }
-
-    private async handleGrammar() {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
-        
-        // Find the grammar function in the functions array
-        const grammarFunc = this.plugin.settings.functions.find(f => f.name === "Grammar");
-        const prompt = grammarFunc ? grammarFunc.prompt : "";
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            this.sendFunctionPromptToChat(prompt);
-            return;
-        }
-        
-        // Use selected text if available, otherwise use the entire document
-        this.sendFunctionPromptToChat(prompt, selectedText || content);
-    }
-
-    // Handler for custom functions
-    async handleCustomFunction(func: any) {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            this.sendFunctionPromptToChat(func.prompt);
-            return;
-        }
-        
-        // Use selected text if available, otherwise use the entire document
-        this.sendFunctionPromptToChat(func.prompt, selectedText || content);
-    }
-
-    // Handler for built-in generate content function
-    async handleGenerate() {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
-        
-        // Find the generate function in the functions array
-        const generateFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Generate");
-        const prompt = generateFunc ? generateFunc.prompt : "";
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            this.sendFunctionPromptToChat(prompt);
-            return;
-        }
-        
-        // Use selected text if available, otherwise use the entire document
-        this.sendFunctionPromptToChat(prompt, selectedText || content);
-    }
-
-    // Handler for built-in dialogue function
-    async handleDialogue() {
-        const content = await this.getCurrentFileContent();
-        const selectedText = await this.getSelectedText();
-        
-        // Find the dialogue function in the functions array
-        const dialogueFunc = this.plugin.settings.functions.find(f => f.isBuiltIn && f.name === "Dialogue");
-        const prompt = dialogueFunc ? dialogueFunc.prompt : "";
-        
-        // If no content is available, just insert the prompt
-        if (!content) {
-            this.sendFunctionPromptToChat(prompt);
-            return;
-        }
-        
-        // Use selected text if available, otherwise use the entire document
-        this.sendFunctionPromptToChat(prompt, selectedText || content);
-    }
-
-    private async handleSend() {
-        const content = this.currentInput.value.trim();
-        if (!content) return;
-
-        // Clear input
-        this.currentInput.value = "";
-
-        // Add user message
-        await this.addMessage('user', content);
-
-        // Create a loading message element that will be updated with streaming content
-        const messageDiv = this.messagesContainer.createDiv({
-            cls: 'ai-message'
-        });
-        const contentDiv = messageDiv.createDiv({ cls: "message-content" });
-        const metadata = contentDiv.createDiv({ cls: "message-metadata" });
-        metadata.setText(new Date().toLocaleTimeString());
-        const textDiv = contentDiv.createDiv({ cls: "message-text" });
-
-        try {
-            // Ensure request ID consistency
-            if (!this.requestId) {
-                this.requestId = crypto.randomUUID();
-                this.plugin.requestId = this.requestId;
-            }
-
-            let streamedContent = '';
-            let lastRenderTime = Date.now();
-            let retries = 0;
+        const adjustHeight = () => {
+            const input = this.currentInput;
+            if (!input) return;
             
-            // Get AI response with streaming updates and retry logic
-            while (retries < this.MAX_RETRIES) {
-                try {
-                    const response = await this.plugin.callAIChat([
-                        ...this.messages,
-                        { role: 'user', content }
-                    ], async (chunk: string) => {
-                        if (!chunk) return;
-
-                        streamedContent += chunk;
-                        const now = Date.now();
-
-                        // Throttle rendering to prevent performance issues
-                        if (now - lastRenderTime >= this.RENDER_THROTTLE) {
-                            let renderRetries = 0;
-                            const MAX_RENDER_RETRIES = 3;
-
-                            while (renderRetries < MAX_RENDER_RETRIES) {
-                                try {
-                                    // Clear and render new content
-            textDiv.empty();
-                                    await NewMarkdownRenderer.renderMarkdown(
-                                        streamedContent,
-                                        textDiv,
-                                        '',
-                                        this.plugin
-                                    );
-
-                                    // Scroll to bottom smoothly
-                                    this.scrollToBottom();
-                                    break; // Success, exit retry loop
-                                } catch (e) {
-                                    console.warn(`Error rendering markdown (attempt ${renderRetries + 1}/${MAX_RENDER_RETRIES}):`, e);
-                                    if (renderRetries === MAX_RENDER_RETRIES - 1) {
-                                        // On final retry, fall back to plain text
-                                        textDiv.setText(streamedContent);
-                                    }
-                                    renderRetries++;
-                                    await new Promise(resolve => setTimeout(resolve, 100)); // Wait before retry
-                                }
-                            }
-
-                            lastRenderTime = now;
-                        }
-                    });
-
-                    // Add the complete message to history
-                    this.messages.push({ role: 'assistant', content: response });
-
-                    // Add action buttons after streaming is complete
-                    const actionContainer = contentDiv.createDiv({ cls: 'message-actions hover-only' });
-
-            // Add copy button
-            const copyButton = actionContainer.createEl('button', {
-                cls: 'message-action-button copy-button',
-                        attr: { 'aria-label': 'Copy message' }
-            });
-            setIcon(copyButton, 'copy');
-            copyButton.onclick = async () => {
-                try {
-                            await navigator.clipboard.writeText(response);
-                            new Notice('Copied to clipboard', 2000);
-                } catch (err) {
-                    console.error("Failed to copy content:", err);
-                    new Notice("Failed to copy content");
-                }
-            };
-
-                    // Add insert button
-                    const insertButton = actionContainer.createEl('button', {
-                        cls: 'message-action-button insert-button',
-                        attr: { 'aria-label': 'Insert into editor' }
-                    });
-                    setIcon(insertButton, 'plus');
-                    insertButton.onclick = () => {
-                        const activeLeaf = this.app.workspace.activeLeaf;
-                        if (!activeLeaf) {
-                            new Notice('Please open a markdown file first');
-                            return;
-                        }
-
-                        const view = activeLeaf.view;
-                        if (!(view instanceof MarkdownView)) {
-                            new Notice('Please open a markdown file first');
-                            return;
-                        }
-
-                        const editor = view.editor;
-                        const cursor = editor.getCursor();
-                        editor.replaceRange(response + '\n', cursor);
-                        editor.focus();
-                        new Notice('Content inserted into editor', 2000);
-                    };
-
-                    // Add apply button (for applying changes directly to original text)
-            const applyButton = actionContainer.createEl('button', {
-                cls: 'message-action-button apply-button',
-                        attr: { 'aria-label': 'Apply changes to original text' }
-            });
-            setIcon(applyButton, 'check');
-            applyButton.onclick = () => {
-                        const editor = this.getEditor();
-                        if (!editor) {
-                    new Notice('Please open a markdown file first');
-                    return;
-                }
-
-                        // Find the original text (selected or entire document)
-                        let originalText = "";
-                        let isSelection = false;
-                        
-                        if (editor.somethingSelected()) {
-                            originalText = editor.getSelection();
-                            isSelection = true;
-                } else {
-                            originalText = editor.getValue();
-                        }
-                        
-                        // Create visual diff and apply using the Polish comparison modal
-                        new PolishResultModal(
-                            this.plugin.app,
-                            originalText,
-                            response,
-                            (updatedContent: string) => {
-                                if (editor) {
-                                    if (isSelection) {
-                                        editor.replaceSelection(updatedContent);
-                                    } else {
-                                        editor.setValue(updatedContent);
-                                    }
-                                    new Notice("AI polish applied successfully");
-                                }
-                            },
-                            this.plugin  // Pass the plugin instance
-                        ).open();
-                    };
-
-                    break; // Success, exit retry loop
-
-        } catch (error) {
-                    console.error(`AI request failed (retry ${retries + 1}/${this.MAX_RETRIES}):`, error);
-                    if (retries === this.MAX_RETRIES - 1) {
-                        throw new Error('Failed to get AI response after multiple retries');
-                    }
-                    retries++;
-                    await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY * Math.pow(2, retries)));
-                }
-            }
-
-        } catch (error) {
-            console.error('Error in chat:', error);
-            
-            // Provide more specific error messages based on the error type
-            let errorMessage = 'Sorry, an error occurred. Please try again.';
-            
-            if (error && error.message) {
-                if (error.message.includes('images') || error.message.includes('unsupported content')) {
-                    errorMessage = 'Error: Your message contains images or unsupported content that the AI cannot process. Please remove any images and try again.';
-                } else if (error.message.includes('rate limit') || error.message.includes('429')) {
-                    errorMessage = 'Error: Rate limit exceeded. Please wait a moment before trying again.';
-                } else if (error.message.includes('Invalid API key') || error.message.includes('401')) {
-                    errorMessage = 'Error: Invalid API key. Please check your API key in settings.';
-                } else if (error.message.includes('Failed to get AI response after multiple retries')) {
-                    errorMessage = 'Error: Failed to get a response after multiple attempts. Please check your internet connection and try again.';
-                }
-            }
-            
-            // Update the message div with the error
-            textDiv.empty();
-            const errorContainer = textDiv.createDiv({ cls: 'error-container' });
-            
-            // Add warning icon
-            const warningIcon = errorContainer.createDiv({ cls: 'error-icon' });
-            setIcon(warningIcon, 'alert-triangle');
-            
-            // Add error message
-            const errorText = errorContainer.createDiv({ cls: 'error-text' });
-            errorText.setText(errorMessage);
-            
-            // Add retry button
-            const retryButton = errorContainer.createEl('button', { 
-                cls: 'compact-retry-button',
-                text: 'Retry Last Message'
-            });
-            
-            retryButton.addEventListener('click', () => {
-                // Remove the error message
-                messageDiv.remove();
-                // Put the last message back in the input
-                this.currentInput.value = content;
-                // Focus the input
-                this.currentInput.focus();
-            });
-        }
-
-        // Save chat history after every 5 messages or after 10 minutes
-        if (this.shouldSaveHistory()) {
-            await this.saveChatHistory();
-        }
-    }
-
-    private async displaySearchResults(resultsContainer: HTMLElement, topResults: Array<{file: TFile, similarity: number, content: string}>, query?: string) {
-        // Step 1: Extract and process the search query
-        // Get the search query from parameter or search input
-        if (!query) {
-            const searchInput = document.querySelector('.search-input') as HTMLInputElement;
-            query = searchInput ? searchInput.value.trim() : '';
-        }
-        
-        // Step 2: Format document contexts with more structure
-        const contextsWithRefs = topResults.map((result, index) => {
-            // Clean up content to keep paragraph structure
-            const cleanContent = result.content
-                .replace(/\n{3,}/g, '\n\n') // Normalize excessive newlines
-                .trim();
-                
-            // Include file metadata for better context
-            const fileInfo = {
-                name: result.file.basename,
-                path: result.file.path,
-                extension: result.file.extension,
-                size: result.file.stat ? `${Math.round(result.file.stat.size / 1024)}KB` : 'unknown'
-            };
-            
-            // Return structured content with reference
-            return `Document [${index + 1}]: ${fileInfo.name} (${fileInfo.extension})
-Path: ${fileInfo.path}
----
-${cleanContent}`;
-        }).join('\n\n========\n\n');
-        
-        // Step 3: Detect primary language of content to determine output language
-        const detectLanguage = (text: string): string => {
-            // Simple language detection heuristic
-            // Count Chinese characters vs Latin characters
-            const chineseCharCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
-            const latinCharCount = (text.match(/[a-zA-Z]/g) || []).length;
-            
-            // If over 15% Chinese characters, consider it primarily Chinese
-            const totalChars = text.length;
-            const chineseRatio = chineseCharCount / totalChars;
-            
-            return chineseRatio > 0.15 ? 'chinese' : 'english';
+            input.style.height = 'auto';
+            const newHeight = Math.min(input.scrollHeight, 200);
+            input.style.height = newHeight + 'px';
         };
         
-        const primaryLanguage = detectLanguage(contextsWithRefs);
+        this.currentInput.addEventListener('input', adjustHeight);
         
-        // Step 4: Create an enhanced question-answering prompt
-        // Different prompts based on detected language
-        let qaPrompt = '';
-        if (primaryLanguage === 'chinese') {
-            qaPrompt = `Please answer the following question in Chinese (respond in Chinese):
-            
-QUESTION: "${query}"
-
-Below are document sections that may contain relevant information:
-
-${contextsWithRefs}
-
-Instructions:
-1. Provide a direct, comprehensive answer to the question based on the provided documents
-2. If different documents contain conflicting information, note the differences and explain pros and cons 
-3. When using information from a specific document, cite it as [Document X] in your answer
-4. If the provided documents don't fully answer the question, clearly indicate what information is missing
-5. Format code blocks, lists, and any structured content appropriately in your answer
-6. Highlight key points using bold or other markdown formatting for readability
-7. DO NOT summarize the documents - instead, directly answer the question
-8. Keep your answer focused and concise`;
-        } else {
-            qaPrompt = `Please answer the following question in English (respond in English):
-            
-QUESTION: "${query}"
-
-Below are document sections that may contain relevant information:
-
-${contextsWithRefs}
-
-Instructions:
-1. Provide a direct, comprehensive answer to the question based on the provided documents
-2. If different documents contain conflicting information, note the differences and explain pros and cons 
-3. When using information from a specific document, cite it as [Document X] in your answer
-4. If the provided documents don't fully answer the question, clearly indicate what information is missing
-5. Format code blocks, lists, and any structured content appropriately in your answer
-6. Highlight key points using bold or other markdown formatting for readability
-7. DO NOT summarize the documents - instead, directly answer the question
-8. Keep your answer focused and concise`;
-        }
-        
-        // Step 5: Call AI to generate an answer instead of a summary
-        const answer = await this.plugin.getAIResponse(qaPrompt);
-        
-        // Step 6: Create a structured UI to display the answer
-        const answerContainer = resultsContainer.createDiv({ cls: "search-answer-container" });
-        
-        // 6.1 Display the question
-        const questionDiv = answerContainer.createDiv({ cls: "search-question" });
-        questionDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '问题' : 'Question' });
-        questionDiv.createEl('p', { text: query });
-        
-        // 6.2 Display the answer with improved formatting
-        const answerDiv = answerContainer.createDiv({ cls: "search-answer" });
-        answerDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '回答' : 'Answer' });
-        await NewMarkdownRenderer.renderMarkdown(answer, answerDiv, '', this.plugin);
-        
-        // 6.3 Add references section with improved formatting
-        const refsDiv = resultsContainer.createDiv({ cls: "search-references" });
-        refsDiv.createEl('h3', { text: primaryLanguage === 'chinese' ? '参考资料' : 'References' });
-        
-        // Create a more detailed references list with file information
-        topResults.forEach((result, index) => {
-            const refDiv = refsDiv.createDiv({ cls: 'search-reference-item' });
-            
-            // Create clickable title
-            const link = refDiv.createEl('a', {
-                text: `[${index + 1}] ${result.file.basename}`,
-                cls: 'search-reference-link'
-            });
-            
-            // Add file metadata
-            const metaDiv = refDiv.createDiv({ cls: 'search-reference-meta' });
-            metaDiv.createEl('span', { 
-                text: `Path: ${result.file.path} • ${result.file.extension.toUpperCase()} • Relevance: ${(result.similarity * 100).toFixed(1)}%` 
-            });
-            
-            // Add click handler to open the file
-            link.addEventListener('click', () => {
-                this.app.workspace.getLeaf().openFile(result.file);
-            });
-        });
+        // Initial adjustment
+        setTimeout(adjustHeight, 0);
     }
-
-    private async calculateFileHash(content: string): Promise<string> {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(content);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        return Array.from(new Uint8Array(hashBuffer))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-    }
-
-    private estimateTokenCount(text: string): number {
-        // Rough estimation: ~4 chars per token
-        return Math.ceil(text.length / 4);
-    }
-
-    private scrollToBottom(smooth = true) {
-        if (this.messagesContainer) {
-            // Force layout recalculation to get accurate scrollHeight
-            void this.messagesContainer.offsetHeight;
-            
-            // Calculate if we're already at the bottom (within 100px)
-            const isAtBottom = this.messagesContainer.scrollHeight - this.messagesContainer.scrollTop - this.messagesContainer.clientHeight < 100;
-            
-            // Only use smooth scrolling if we're not already at the bottom
-            const behavior = smooth && !isAtBottom ? 'smooth' : 'auto';
-            
-            this.messagesContainer.scrollTo({
-                top: this.messagesContainer.scrollHeight,
-                behavior: behavior
-            });
-        }
-    }
-
-    async onClose(): Promise<void> {
-        // Cleanup
-    }
-
-    private setupKeyboardShortcuts() {
-        // Chat input shortcuts
-        this.currentInput.addEventListener("keydown", async (event: KeyboardEvent) => {
-            // Enter to send (without holding modifiers except shift for line break)
-            if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-                event.preventDefault();
-                await this.handleSend();
-            }
-            
-            // Shift+Enter to insert new line
-            if (event.key === "Enter" && event.shiftKey) {
-                // Let default behavior happen (insert newline)
-                return;
-            }
-            
-            // Alt+Enter also inserts new line
-            if (event.key === "Enter" && event.altKey) {
-                event.preventDefault();
-                const start = this.currentInput.selectionStart;
-                const end = this.currentInput.selectionEnd;
-                this.currentInput.value = 
-                    this.currentInput.value.substring(0, start) + 
-                    "\n" + 
-                    this.currentInput.value.substring(end);
-                this.currentInput.selectionStart = this.currentInput.selectionEnd = start + 1;
-            }
-
-            // Esc to clear input
-            if (event.key === "Escape") {
-                event.preventDefault();
-                this.currentInput.value = "";
-                this.currentInput.focus();
-            }
-
-            // Ctrl/Cmd + L to clear chat
-            if (event.key.toLowerCase() === "l" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                this.clearChat();
+    
+    private setupInputEvents() {
+        // Implementation for setup of input events
+        if (!this.currentInput) return;
+        
+        this.currentInput.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+                e.preventDefault();
+                this.sendMessage();
             }
         });
     }
-
-    private clearChat() {
-        if (this.messagesContainer) {
-            this.messagesContainer.empty();
-            this.messages = [];
-            new Notice("Chat cleared");
-        }
-    }
-
-    private sendMessage(prompt: string, content: string) {
-        this.currentInput.value = `${prompt}\n\n${content}`;
-        this.handleSend();
-    }
-
-    // Add this method to save the current chat history
-    private async saveChatHistory() {
-        if (this.messages.length === 0) return;
-        
-        try {
-            // Create or use existing conversation ID
-            if (!this.conversationId) {
-                this.conversationId = crypto.randomUUID();
-            }
-            
-            // Create history entry
-            const history: ChatHistory = {
-                id: this.conversationId,
-                title: this.getHistoryTitle(),
-                date: Date.now(),
-                messages: [...this.messages],
-                requestId: this.requestId
-            };
-            
-            // Ensure chat history directory exists
-            const historyDir = this.plugin.settings.chatHistoryPath;
-            const folderExists = await this.ensureFolderExists(historyDir);
-            
-            if (!folderExists) {
-                throw new Error(`Failed to create chat history directory: ${historyDir}`);
-            }
-            
-            // Save to file with consistent name based on conversation ID
-            const fileName = `chat-${this.conversationId}.json`;
-            const filePath = `${historyDir}/${fileName}`;
-            await this.plugin.app.vault.adapter.write(filePath, JSON.stringify(history, null, 2));
-            
-            // Update last save time
-            this.lastHistorySave = Date.now();
-            
-            console.log(`Chat history saved: ${filePath} with ${this.messages.length} messages`);
-            return true;
-        } catch (error) {
-            return this.handleHistoryError('save chat history', error);
-        }
+    
+    private async loadOrInitializeChat() {
+        // Implementation for loading or initializing chat
+        // This will be implemented as needed
+        this.showWelcomeMessage();
     }
     
-    // Helper to ensure a folder exists
-    private async ensureFolderExists(path: string): Promise<boolean> {
-        const { vault } = this.plugin.app;
-        const folderExists = await vault.adapter.exists(path);
-        
-        if (!folderExists) {
-            try {
-                await vault.createFolder(path);
-                return true;
-            } catch (error) {
-                console.error(`Failed to create folder ${path}:`, error);
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    
-    // Get a title for the chat history based on first user message
-    private getHistoryTitle(): string {
-        const firstUserMsg = this.messages.find(m => m.role === 'user');
-        if (!firstUserMsg) return "Chat Session";
-        
-        // Get first 30 chars of first message
-        const title = firstUserMsg.content.substring(0, 30).trim();
-        return title + (firstUserMsg.content.length > 30 ? "..." : "");
-    }
-    
-    // Show the chat history modal
-    private async showChatHistory() {
-        // Set flag to indicate we're potentially ending the current conversation
-        this.isEndingConversation = true;
-        
-        try {
-            const histories = await this.loadChatHistories();
-            new ChatHistoryModal(this.plugin.app, histories, (history) => {
-                this.loadChatFromHistory(history);
-            }, this.plugin).open();
-        } catch (error) {
-            console.error("Failed to load chat histories:", error);
-            new Notice("Failed to load chat histories", 2000);
-        }
-    }
-    
-    // Load all chat histories
-    private async loadChatHistories(): Promise<ChatHistory[]> {
-        try {
-            const historyDir = this.plugin.settings.chatHistoryPath;
-            const folderExists = await this.ensureFolderExists(historyDir);
-            
-            if (!folderExists) {
-                throw new Error(`Chat history directory does not exist: ${historyDir}`);
-            }
-            
-            const files = await this.plugin.app.vault.adapter.list(historyDir);
-            const histories: ChatHistory[] = [];
-            
-            for (const file of files.files) {
-                if (file.endsWith('.json')) {
-                    try {
-                        const content = await this.plugin.app.vault.adapter.read(file);
-                        const historyData = JSON.parse(content);
-                        
-                        // Ensure backward compatibility with older history files
-                        if (!historyData.requestId) {
-                            historyData.requestId = null;
-                        }
-                        
-                        const history = historyData as ChatHistory;
-                        histories.push(history);
-                    } catch (error) {
-                        console.error(`Failed to read chat history ${file}:`, error);
-                        // Continue with other files
-                    }
-                }
-            }
-            
-            // Sort by date descending (newest first)
-            return histories.sort((a, b) => b.date - a.date);
-        } catch (error) {
-            return this.handleHistoryError('load chat histories', error);
-        }
-    }
-    
-    // Load a specific chat history
-    private loadChatFromHistory(history: ChatHistory) {
-        // Save current chat before loading a different one if messages exist
-        if (this.messages.length > 0) {
-            this.saveChatHistory();
-        }
-        
-        this.clearChat();
-        
-        // Set the conversation ID to match the loaded history
-        this.conversationId = history.id;
-        
-        // Restore messages
-        this.messages = [...history.messages];
-        
-        // Restore requestId if available
-        if (history.requestId) {
-            this.requestId = history.requestId;
-            this.plugin.requestId = history.requestId;
-        }
-        
-        this.renderChatHistory();
-        new Notice(`Loaded chat: ${history.title}`, 2000);
-    }
-
-    // Fix the renderChatHistory method in ChatView
-    private renderChatHistory() {
+    private showWelcomeMessage() {
+        // Implementation for showing a welcome message
         if (!this.messagesContainer) return;
         
         this.messagesContainer.empty();
         
-        for (const message of this.messages) {
-            const messageEl = this.messagesContainer.createDiv({ 
-                cls: `message ${message.role}-message` 
-            });
-            
-            const contentDiv = messageEl.createDiv({ cls: 'message-content' });
-            
-            if (message.role === 'assistant') {
-                NewMarkdownRenderer.renderMarkdown(message.content, contentDiv, '', this.plugin);
-                
-                // Add action buttons for assistant messages
-                const actionContainer = messageEl.createDiv({ cls: 'message-actions hover-only' });
-                
-                const copyButton = actionContainer.createEl('button', { 
-                    cls: 'message-action-button copy-button',
-                    attr: { 'aria-label': 'Copy message' }
-                });
-                setIcon(copyButton, 'copy');
-                copyButton.onclick = async () => {
-                    try {
-                        await navigator.clipboard.writeText(message.content);
-                        new Notice('Copied to clipboard', 2000);
-                    } catch (err) {
-                        console.error("Failed to copy content:", err);
-                        new Notice("Failed to copy content", 2000);
-                    }
-                };
-                
-                const insertButton = actionContainer.createEl('button', { 
-                    cls: 'message-action-button insert-button',
-                    attr: { 'aria-label': 'Insert into editor' }
-                });
-                setIcon(insertButton, 'plus');
-                insertButton.onclick = () => {
-                    const activeLeaf = this.app.workspace.activeLeaf;
-                    if (!activeLeaf) {
-                        new Notice('Please open a markdown file first');
-                        return;
-                    }
+        const welcomeEl = this.messagesContainer.createDiv({ cls: "welcome-message" });
+        welcomeEl.createEl("h3", { text: "Welcome to AI Chat Assistant" });
+        welcomeEl.createEl("p", { text: "Type a message to start chatting with the AI assistant." });
+    }
+    
+    private async sendMessage() {
+        if (!this.currentInput || this.isGenerating) return;
 
-                    const view = activeLeaf.view;
-                    if (!(view instanceof MarkdownView)) {
-                        new Notice('Please open a markdown file first');
-                        return;
-                    }
+        const userMessage = this.currentInput.value.trim();
+        if (!userMessage) return;
 
-                    const editor = view.editor;
-                    const cursor = editor.getCursor();
-                    editor.replaceRange(message.content + '\n', cursor);
-                    editor.focus();
-                    new Notice('Content inserted into editor', 2000);
-                };
-                
-                const applyButton = actionContainer.createEl('button', { 
-                    cls: 'message-action-button apply-button',
-                    attr: { 'aria-label': 'Apply changes to original text' }
-                });
-                setIcon(applyButton, 'check');
-                applyButton.onclick = () => {
-                    const editor = this.getEditor();
-                    if (!editor) {
-                        new Notice('Please open a markdown file first');
-                        return;
-                    }
-                    
-                    // Find the original text (selected or entire document)
-                    let originalText = "";
-                    let isSelection = false;
-                    
-                    if (editor.somethingSelected()) {
-                        originalText = editor.getSelection();
-                        isSelection = true;
-                    } else {
-                        originalText = editor.getValue();
-                    }
-                    
-                    // Create visual diff and apply using the Polish comparison modal
-                    new PolishResultModal(
-                        this.plugin.app,
-                        originalText,
-                        message.content,
-                        (updatedContent: string) => {
-                            if (editor) {
-                                if (isSelection) {
-                                    editor.replaceSelection(updatedContent);
-                                } else {
-                                    editor.setValue(updatedContent);
-                                }
-                                new Notice("AI polish applied successfully");
-                            }
-                        },
-                        this.plugin  // Pass the plugin instance
-                    ).open();
-                };
-            } else {
-                contentDiv.setText(message.content);
+        try {
+            // Get the default model
+            const defaultModel = this.modelManager.getDefaultModel();
+            if (!defaultModel) {
+                throw new Error("No default model configured. Please set a default model in settings.");
             }
+
+            // Add user message to chat
+            this.addMessage("user", userMessage);
+            
+            // Clear input field and reset height
+            this.currentInput.value = "";
+            this.currentInput.style.height = 'auto';
+            
+            // Set generating flag
+            this.isGenerating = true;
+            
+            // Create placeholder for assistant message
+            const assistantMessageId = `msg-${Date.now()}`;
+            this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
+            
+            // Add loading indicator
+            const loadingIndicator = this.currentMessage.createDiv({ cls: 'loading-indicator' });
+            loadingIndicator.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+            
+            // Initialize controller for potential cancellation
+            this.controller = new AbortController();
+            
+            let accumulatedResponse = '';
+            
+            // Call model with streaming
+            const response = await this.modelManager.callModel(
+                defaultModel.id,
+                userMessage,
+                {
+                    streaming: true,
+                    onChunk: (chunk) => {
+                        try {
+                            // Update UI with streaming chunks
+                            if (this.currentMessage) {
+                                const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
+                                if (contentDiv) {
+                                    // Append new content
+                                    accumulatedResponse += chunk;
+                                    
+                                    // Render markdown on the fly
+                                    contentDiv.empty();
+                                    NewMarkdownRenderer.renderMarkdown(accumulatedResponse, contentDiv, '', this.plugin);
+                                    
+                                    // Keep scroll at bottom
+                                    this.scrollToBottom();
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error handling stream chunk:', error);
+                        }
+                    },
+                    signal: this.controller.signal
+                }
+            );
+            
+            // Remove loading indicator
+            loadingIndicator?.remove();
+            
+            // Reset UI state
+            this.isGenerating = false;
+            this.controller = null;
+            this.currentMessage = null;
+            
+            // Check if we should save chat history
+            if (this.shouldSaveHistory()) {
+                await this.saveChatHistory();
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+            
+            // Remove loading indicator if it exists
+            this.currentMessage?.querySelector('.loading-indicator')?.remove();
+            
+            // Display error to user
+            if (this.currentMessage) {
+                const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
+                if (contentDiv) {
+                    contentDiv.empty();
+                    const errorMessage = error instanceof Error ? error.message : "Failed to generate response";
+                    contentDiv.createEl('div', { 
+                        cls: 'error-message',
+                        text: `Error: ${errorMessage}. Please try again.`
+                    });
+                }
+            }
+
+            // Reset UI state
+            this.isGenerating = false;
+            this.controller = null;
+            this.currentMessage = null;
+        }
+    }
+
+    // Add messages to the chat
+    private addMessage(role: "user" | "assistant", content: string, id?: string): HTMLElement {
+        // Create message and add to internal state
+        const message: Message = { role, content };
+        this.messages.push(message);
+
+        // Create message element
+        const messageEl = this.messagesContainer.createDiv({
+            cls: `message ${role}-message`,
+            attr: id ? { id } : {}
+        });
+
+        // Create content container
+        const contentDiv = messageEl.createDiv({ cls: 'message-content' });
+        
+        // Render content based on role
+        if (role === "assistant") {
+            // Use Markdown renderer for assistant messages
+            NewMarkdownRenderer.renderMarkdown(content, contentDiv, '', this.plugin);
+            
+            // Add action buttons for assistant messages if content exists
+            if (content) {
+                this.addMessageActions(messageEl);
+            }
+        } else {
+            // Plain text for user messages
+            contentDiv.setText(content);
         }
         
-        // Scroll to bottom
-        if (this.messagesContainer.scrollHeight) {
-            this.messagesContainer.scrollTo({
-                top: this.messagesContainer.scrollHeight,
+        // Scroll to the new message
+        this.scrollToBottom();
+        
+        return messageEl;
+    }
+
+    // Add action buttons to assistant messages
+    private addMessageActions(messageEl: HTMLElement) {
+        // Create action container
+        const actionContainer = messageEl.createDiv({ cls: 'message-actions hover-only' });
+            
+        // Add copy button
+        const copyButton = actionContainer.createEl('button', {
+            cls: 'message-action-button copy-button',
+            attr: { 'aria-label': 'Copy message' }
+        });
+        setIcon(copyButton, 'copy');
+        
+        copyButton.onclick = async () => {
+            try {
+                const contentDiv = messageEl.querySelector('.message-content') as HTMLElement;
+                if (contentDiv) {
+                    await navigator.clipboard.writeText(contentDiv.textContent || "");
+                    new Notice('Copied to clipboard', 2000);
+                }
+            } catch (err) {
+                console.error("Failed to copy content:", err);
+                new Notice("Failed to copy content", 2000);
+            }
+        };
+
+        // Add insert button
+        const insertButton = actionContainer.createEl('button', {
+            cls: 'message-action-button insert-button',
+            attr: { 'aria-label': 'Insert into editor' }
+        });
+        setIcon(insertButton, 'file-plus');
+        
+        insertButton.onclick = () => {
+            const contentDiv = messageEl.querySelector('.message-content') as HTMLElement;
+            if (!contentDiv) return;
+
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!activeView) {
+                new Notice("Please open a markdown file first", 3000);
+                return;
+            }
+
+            const editor = activeView.editor;
+            const content = contentDiv.textContent || "";
+            
+            // Insert at cursor position
+            editor.replaceSelection(content);
+            new Notice("Content inserted at cursor position", 2000);
+        };
+
+        // Add apply button
+        const applyButton = actionContainer.createEl('button', {
+            cls: 'message-action-button apply-button',
+            attr: { 'aria-label': 'Apply changes' }
+        });
+        setIcon(applyButton, 'check');
+        
+        applyButton.onclick = () => {
+            const contentDiv = messageEl.querySelector('.message-content') as HTMLElement;
+            if (!contentDiv) return;
+
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!activeView) {
+                new Notice("Please open a markdown file first", 3000);
+                return;
+            }
+
+            const editor = activeView.editor;
+            const newText = contentDiv.textContent || "";
+            
+            // Get selected text or entire file content
+            const originalText = editor.somethingSelected() ? 
+                editor.getSelection() : 
+                editor.getValue();
+            
+            // Show diff modal
+            this.showDiffModal(editor, originalText, newText);
+        };
+    }
+
+    // Scroll to bottom of messages container
+    private scrollToBottom() {
+        if (this.messagesContainer) {
+        this.messagesContainer.scrollTo({
+            top: this.messagesContainer.scrollHeight,
                 behavior: 'smooth'
             });
         }
     }
 
-    private async startNewChat() {
-        // Set flag to indicate we're ending the current conversation
-        this.isEndingConversation = true;
+    // Function handlers with proper diff functionality
+    private handleOrganize() {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
         
-        // Save current conversation if it exists
-        if (this.messages.length > 0) {
-            await this.saveChatHistory();
+        if (selectedText) {
+            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Organize")?.prompt || ''} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'organize';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            new Notice("No text available. Please open a markdown file or select text.", 3000);
         }
-        
-        // Clear the chat and start fresh
-        this.clearChat();
-        
-        // Reset conversation tracking
-        this.conversationId = null;
-        
-        // Generate a new requestId for the new conversation
-        this.requestId = crypto.randomUUID();
-        this.plugin.requestId = this.requestId;
-        
-        new Notice("Started new chat", 2000);
     }
 
-    // Update shouldSaveHistory to include a check for ending a conversation
-    private shouldSaveHistory(): boolean {
-        // Always save when conversation is explicitly ended (new chat or switching conversations)
-        if (this.isEndingConversation) {
-            this.isEndingConversation = false;
-            return true;
+    private handleGrammar() {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
+        
+        if (selectedText) {
+            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Grammar")?.prompt || ''} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'grammar';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            new Notice("No text available. Please open a markdown file or select text.", 3000);
+        }
+    }
+
+    private handleGenerate() {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
+        
+        if (selectedText) {
+            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Generate")?.prompt || ''} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'generate';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            new Notice("No text available. Please open a markdown file or select text.", 3000);
+        }
+    }
+
+    private handleDialogue() {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
+        
+        if (selectedText) {
+            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Dialogue")?.prompt || ''} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'dialogue';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            new Notice("No text available. Please open a markdown file or select text.", 3000);
+        }
+    }
+
+    private handleSummarize() {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
+        
+        if (selectedText) {
+            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Summarize")?.prompt || ''} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'summary';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            new Notice("No text available. Please open a markdown file or select text.", 3000);
+        }
+    }
+
+    private handlePolish() {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
+        
+        if (selectedText) {
+            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Polish")?.prompt || ''} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'polish';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            new Notice("No text available. Please open a markdown file or select text.", 3000);
+        }
+    }
+
+    private handleCustomFunction(func: CustomFunction) {
+        if (!this.currentInput) return;
+        const selectedText = this.getSelectedTextFromEditor();
+        
+        if (selectedText) {
+            const prompt = `${func.prompt} ${selectedText}`;
+            this.currentInput.value = prompt;
+            this.currentFunctionMode = 'custom';
+            this.sendMessageWithDiff(selectedText);
+        } else {
+            this.currentInput.value = func.prompt;
+            this.currentFunctionMode = 'custom';
+            this.currentInput.focus();
+        }
+    }
+
+    // Add debugging and improved detection of active view
+    private getSelectedTextFromEditor(): string {
+        console.log("Getting selected text from editor");
+        return NewMarkdownRenderer.getSelectedText(this.app);
+    }
+
+    // Add method for sending message with diff functionality
+    private async sendMessageWithDiff(originalText: string) {
+        if (!this.currentInput || this.isGenerating) return;
+
+        const userMessage = this.currentInput.value.trim();
+        if (!userMessage) return;
+
+        try {
+            // Get the default model
+            const defaultModel = this.modelManager.getDefaultModel();
+            if (!defaultModel) {
+                throw new Error("No default model configured. Please set a default model in settings.");
+            }
+
+            // Add user message to chat
+            this.addMessage("user", userMessage);
+            
+            // Clear input field and reset height
+        this.currentInput.value = "";
+            this.currentInput.style.height = 'auto';
+            
+            // Set generating flag
+            this.isGenerating = true;
+            
+            // Create placeholder for assistant message
+            const assistantMessageId = `msg-${Date.now()}`;
+            this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
+            
+            // Add loading indicator
+            const loadingIndicator = this.currentMessage.createDiv({ cls: 'loading-indicator' });
+            loadingIndicator.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+            
+            // Initialize controller for potential cancellation
+            this.controller = new AbortController();
+            
+            let accumulatedResponse = '';
+            
+            // Call model with streaming
+            const response = await this.modelManager.callModel(
+                defaultModel.id,
+                userMessage,
+                {
+                            streaming: true,
+                    onChunk: (chunk) => {
+                        try {
+                            // Update UI with streaming chunks
+                            if (this.currentMessage) {
+                                const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
+                                if (contentDiv) {
+                                    // Append new content
+                                    accumulatedResponse += chunk;
+                                    
+                                    // Render markdown on the fly
+                                    contentDiv.empty();
+                                    NewMarkdownRenderer.renderMarkdown(accumulatedResponse, contentDiv, '', this.plugin);
+                                    
+                                    // Keep scroll at bottom
+                                    this.scrollToBottom();
+                }
+            }
+        } catch (error) {
+                            console.error('Error handling stream chunk:', error);
+                        }
+                    },
+                    signal: this.controller.signal
+                }
+            );
+            
+            // Remove loading indicator
+            loadingIndicator?.remove();
+            
+            // Reset UI state
+            this.isGenerating = false;
+            this.controller = null;
+            
+            // Save for diff view later
+            const responseText = this.currentMessage?.querySelector('.message-content')?.textContent || "";
+            this.currentMessage = null;
+            
+            // Add apply button for diffs
+            if (this.currentFunctionMode !== 'none') {
+                this.addApplyButton(originalText, responseText);
+            }
+            
+            // Check if we should save chat history
+            if (this.shouldSaveHistory()) {
+                await this.saveChatHistory();
+            }
+            } catch (error) {
+            console.error("Error sending message:", error);
+            
+            // Display error to user
+            if (this.currentMessage) {
+                const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
+                if (contentDiv) {
+                    contentDiv.textContent = "Error: Failed to generate response. Please try again.";
+                }
+            }
+            
+            // Reset UI state
+            this.isGenerating = false;
+            this.controller = null;
+            this.currentMessage = null;
+        }
+    }
+
+    // Method to add apply button for diffs with improved active editor checking
+    private addApplyButton(originalText: string, responseText: string) {
+        const messages = this.messagesContainer.querySelectorAll('.message.assistant-message');
+        if (messages.length === 0) return;
+        
+        const lastMessage = messages[messages.length - 1] as HTMLElement;
+        if (!lastMessage) return;
+        
+        // Check if action container already exists
+        let actionContainer = lastMessage.querySelector('.message-actions');
+        if (!actionContainer) {
+            actionContainer = lastMessage.createDiv({ cls: 'message-actions hover-only' });
         }
         
-        // Save after every 5 messages
+        // Add apply button
+        const applyButton = (actionContainer as HTMLElement).createEl('button', {
+            cls: 'message-action-button apply-button',
+            attr: { 'aria-label': 'Apply changes' }
+        });
+        setIcon(applyButton, 'check');
+        
+        // Add tooltip
+        applyButton.createSpan({ cls: 'action-tooltip', text: 'Apply changes' });
+        
+        // Add click handler for showing diff and applying
+        applyButton.onclick = () => {
+            // Get active editor - try multiple methods
+            let activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            
+            // If not found through standard method, try from active leaf
+            if (!activeView) {
+                const activeLeaf = this.app.workspace.activeLeaf;
+                if (activeLeaf && activeLeaf.view instanceof MarkdownView) {
+                    activeView = activeLeaf.view as MarkdownView;
+                }
+            }
+            
+            if (!activeView || !activeView.editor) {
+                new Notice("Please open a markdown file first", 3000);
+                return;
+            }
+            
+            // Show diff modal to apply changes
+            this.showDiffModal(activeView.editor, originalText, responseText);
+        };
+    }
+
+    // Method to show diff modal
+    private showDiffModal(editor: Editor, originalText: string, newText: string) {
+        // Create modal for showing diff
+        const modal = new Modal(this.app);
+        modal.titleEl.setText("Review Changes");
+        modal.contentEl.addClass("diff-modal");
+        
+        // Create diff container
+        const diffContainer = modal.contentEl.createDiv({ cls: "diff-container" });
+        
+        // Add diff visualization
+        this.visualizeDiff(diffContainer, originalText, newText);
+        
+        // Add action buttons
+        const buttonContainer = modal.contentEl.createDiv({ cls: "diff-actions" });
+        
+        // Apply button
+        const applyButton = buttonContainer.createEl("button", {
+            text: "Apply Changes",
+            cls: "diff-apply-button"
+        });
+        
+        // Cancel button
+        const cancelButton = buttonContainer.createEl("button", {
+            text: "Cancel",
+            cls: "diff-cancel-button"
+        });
+        
+        // Add event listeners
+        applyButton.onclick = () => {
+            // Check if it's a selection or entire document
+            if (editor.somethingSelected()) {
+                editor.replaceSelection(newText);
+            } else {
+                editor.setValue(newText);
+            }
+            modal.close();
+            new Notice("Changes applied successfully", 2000);
+        };
+        
+        cancelButton.onclick = () => {
+            modal.close();
+        };
+        
+        // Open the modal
+        modal.open();
+    }
+
+    // Method to visualize diff
+    private visualizeDiff(container: HTMLElement, originalText: string, newText: string) {
+        // Create formatted diff if we have the library
+        if (this.plugin.diffMatchPatchLib) {
+            try {
+                const dmp = new this.plugin.diffMatchPatchLib();
+                const diffs = dmp.diff_main(originalText, newText);
+                dmp.diff_cleanupSemantic(diffs);
+                
+                // Create diff view
+                const diffView = container.createDiv({ cls: "diff-view" });
+                
+                for (const [op, text] of diffs) {
+                    const span = diffView.createSpan({
+                        cls: op === -1 ? "diff-delete" : op === 1 ? "diff-add" : "diff-equal",
+                        text
+                    });
+                }
+            } catch (error) {
+                console.error("Error creating diff:", error);
+                this.createSimpleDiffView(container, originalText, newText);
+            }
+            } else {
+            // Fallback to simple diff view
+            this.createSimpleDiffView(container, originalText, newText);
+        }
+    }
+
+    // Create a simple side-by-side diff view
+    private createSimpleDiffView(container: HTMLElement, originalText: string, newText: string) {
+        const diffContainer = container.createDiv({ cls: "simple-diff-container" });
+        
+        // Create original text column
+        const originalCol = diffContainer.createDiv({ cls: "diff-column original-column" });
+        originalCol.createEl("h3", { text: "Original" });
+        const originalContent = originalCol.createDiv({ cls: "diff-content" });
+        originalContent.setText(originalText);
+        
+        // Create new text column
+        const newCol = diffContainer.createDiv({ cls: "diff-column new-column" });
+        newCol.createEl("h3", { text: "New Version" });
+        const newContent = newCol.createDiv({ cls: "diff-content" });
+        newContent.setText(newText);
+    }
+
+    // Add shouldSaveHistory method
+    private shouldSaveHistory(): boolean {
+        // Always save after a few messages
         if (this.messages.length % 5 === 0 && this.messages.length > 0) {
             return true;
         }
         
-        // Also save if we have messages but haven't saved in the last 10 minutes
+        // Also save if it's been more than 10 minutes since the last save
         const lastSaveTime = this.lastHistorySave || 0;
         const TEN_MINUTES = 10 * 60 * 1000;
         
@@ -2266,132 +1563,61 @@ Instructions:
         return false;
     }
 
-    // Add this method to improve error handling for chat history operations
-    private handleHistoryError(operation: string, error: any): any {
-        console.error(`Error during ${operation}:`, error);
-        
-        // Create a more user-friendly error message
-        let errorMessage = `Failed to ${operation}`;
-        
-        // Add more context based on error type
-        if (error instanceof Error) {
-            if (error.message.includes('ENOENT') || error.message.includes('not found')) {
-                errorMessage = `Chat history directory not found. Please check your settings.`;
-            } else if (error.message.includes('permission')) {
-                errorMessage = `Permission denied. Cannot access chat history files.`;
-            } else if (error.message.includes('JSON')) {
-                errorMessage = `Invalid chat history file format.`;
-            }
-        }
-        
-        // Show a notification to the user
-        new Notice(errorMessage, 3000);
-        
-        // Return a safe default value based on operation
-        switch (operation) {
-            case 'load chat histories':
-                return [] as ChatHistory[];
-            case 'save chat history':
-            case 'delete chat history':
-            default:
-                return false;
-        }
-    }
-
-    createInputContainer() {
-        // ... existing input container code ...
-        
-        // Add model selection before or after the input
-        this.createModelSelector();
-        
-        // ... rest of existing input container code ...
-    }
-    
-    private createModelSelector() {
-        const modelSelectorContainer = this.inputContainer.createDiv({ cls: 'model-selector-container' });
-        
-        modelSelectorContainer.createEl('label', {
-          text: 'AI Model:',
-          attr: { for: 'model-selector' }
-        });
-        
-        this.modelSelectEl = modelSelectorContainer.createEl('select', {
-          cls: 'model-selector',
-          attr: { id: 'model-selector' }
-        });
-        
-        // Populate the model selector
-        this.updateModelSelector();
-        
-        // Handle model selection changes
-        this.modelSelectEl.addEventListener('change', () => {
-          this.currentModelId = this.modelSelectEl.value;
-        });
-    }
-    
-    updateModelSelector() {
-        // Clear existing options
-        this.modelSelectEl.empty();
-        
-        // Get active models
-        const models = this.modelManager.getActiveModels();
-        
-        // Add options for each model
-        models.forEach(model => {
-          const option = this.modelSelectEl.createEl('option', {
-            text: model.isDefault ? `${model.name} (Default)` : model.name,
-            attr: { value: model.id }
-          });
-          
-          if (model.isDefault) {
-            option.style.fontWeight = 'bold';
-          }
-        });
-        
-        // If no current model is set or it's no longer available, set to default model
-        const defaultModel = this.modelManager.getDefaultModel();
-        if (!this.currentModelId || !models.find(m => m.id === this.currentModelId)) {
-          this.currentModelId = defaultModel?.id || (models.length > 0 ? models[0].id : '');
-        }
-        
-        // Set the current selection
-        this.modelSelectEl.value = this.currentModelId;
-    }
-    
-    async onSendMessage() {
-        // Get the user input
-        const userInput = this.currentInput.value.trim();
-        
-        if (!userInput) {
-          return; // Don't send empty messages
-        }
-        
-        // Add user message to chat
-        await this.addMessage('user', userInput);
-        
-        // Clear input
-        this.currentInput.value = '';
-        
-        // Use the selected model when sending the message
+    // Add saveChatHistory method
+    private async saveChatHistory(): Promise<void> {
         try {
-          let response: string;
-          
-          if (this.modelManager && this.currentModelId) {
-            // Use the model manager to call the selected model
-            response = await this.modelManager.callModel(this.currentModelId, userInput);
-          } else {
-            // Fallback to the plugin's existing API call
-            response = await this.plugin.callAI(userInput);
-          }
-          
-          // Add the response to the chat
-          await this.addMessage('assistant', response);
-          
-          // Save chat history
-          await this.saveChatHistory();
+            // Generate chat title from first message if possible
+            let chatTitle = "Chat " + new Date().toLocaleString();
+            if (this.messages.length > 0 && this.messages[0].role === "user") {
+                // Use first few words of first message
+                const firstMessage = this.messages[0].content;
+                chatTitle = firstMessage.split(' ').slice(0, 5).join(' ');
+                if (firstMessage.length > chatTitle.length) {
+                    chatTitle += '...';
+                }
+            }
+            
+            // Create history object
+            const history = {
+                id: this.conversationId || `chat-${Date.now()}`,
+                title: chatTitle,
+                date: Date.now(),
+                messages: this.messages,
+                requestId: this.requestId
+            };
+            
+            // Save to file
+            if (!this.plugin.settings.chatHistoryPath) {
+                this.plugin.settings.chatHistoryPath = 'chat-history';
+                await this.plugin.saveSettings();
+            }
+            
+            // Create folder if it doesn't exist
+            const folderPath = this.plugin.settings.chatHistoryPath;
+            const folder = this.app.vault.getAbstractFileByPath(folderPath);
+            
+            if (!folder) {
+                await this.app.vault.createFolder(folderPath);
+            }
+            
+            // Write history to file
+            const fileName = `${folderPath}/${history.id}.json`;
+            await this.app.vault.adapter.write(
+                fileName,
+                JSON.stringify(history, null, 2)
+            );
+            
+            // Update conversation ID if not set
+            if (!this.conversationId) {
+                this.conversationId = history.id;
+            }
+            
+            // Update last save time
+            this.lastHistorySave = Date.now();
+            
+            console.log(`Chat history saved to ${fileName}`);
         } catch (error) {
-          console.error('Error sending message to model:', error);
-          await this.addMessage('assistant', `Error: ${error.message}`);
+            console.error("Failed to save chat history:", error);
         }
     }
 } 

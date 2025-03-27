@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { Component, MarkdownView, Notice, App, Plugin, TFile } from 'obsidian';
+import { Component, MarkdownView, Notice, App, Plugin, TFile, Editor } from 'obsidian';
 
 export class MarkdownRenderer extends Component {
     private container: HTMLElement;
@@ -64,5 +64,61 @@ export class MarkdownRenderer extends Component {
             console.error("Error getting file content:", error);
             return null;
         }
+    }
+
+    /**
+     * Get the active editor and selected text
+     * @returns Object containing the editor and selected text, or null if no editor is found
+     */
+    static getActiveEditorAndSelection(app: App): { editor: Editor; selectedText: string } | null {
+        try {
+            // Try to get all markdown views
+            const markdownViews = app.workspace.getLeavesOfType('markdown')
+                .map(leaf => leaf.view as MarkdownView)
+                .filter(view => view instanceof MarkdownView);
+            
+            // First try the active view
+            let activeView: MarkdownView | null = app.workspace.getActiveViewOfType(MarkdownView);
+            
+            // If no active markdown view or no selection, try to find one with selection
+            if (!activeView || !activeView.editor.somethingSelected()) {
+                const viewWithSelection = markdownViews.find(view => view.editor.somethingSelected());
+                activeView = viewWithSelection || null;
+            }
+            
+            // If we found a view with an editor
+            if (activeView && activeView.editor) {
+                const selection = activeView.editor.getSelection();
+                if (selection && selection.trim().length > 0) {
+                    return {
+                        editor: activeView.editor,
+                        selectedText: selection
+                    };
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error("Error getting active editor and selection:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Get the selected text from the active editor
+     * @returns The selected text, or empty string if no selection
+     */
+    static getSelectedText(app: App): string {
+        const result = this.getActiveEditorAndSelection(app);
+        return result?.selectedText || "";
+    }
+
+    /**
+     * Get the active editor
+     * @returns The active editor, or null if no editor is found
+     */
+    static getActiveEditor(app: App): Editor | null {
+        const result = this.getActiveEditorAndSelection(app);
+        return result?.editor || null;
     }
 } 

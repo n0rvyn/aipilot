@@ -115,9 +115,37 @@ export class DebatePanel extends ItemView {
       attr: { id: 'debate-mode' }
     });
     
-    this.modeSelectEl.createEl('option', { text: 'Debate (Pro vs Con)', attr: { value: 'debate' } });
-    this.modeSelectEl.createEl('option', { text: 'Six Thinking Hats', attr: { value: 'sixHats' } });
-    this.modeSelectEl.createEl('option', { text: 'Roundtable Discussion', attr: { value: 'roundtable' } });
+    // Basic Debate Types
+    const basicGroup = this.modeSelectEl.createEl('optgroup', { attr: { label: 'Basic Debate Types' }});
+    basicGroup.createEl('option', { text: 'Debate (Pro vs Con)', attr: { value: 'debate' } });
+    basicGroup.createEl('option', { text: 'Six Thinking Hats', attr: { value: 'sixHats' } });
+    basicGroup.createEl('option', { text: 'Roundtable Discussion', attr: { value: 'roundtable' } });
+    
+    // Strategic Thinking Models
+    const strategicGroup = this.modeSelectEl.createEl('optgroup', { attr: { label: 'Strategic Thinking Models' }});
+    strategicGroup.createEl('option', { text: 'SMART Goals', attr: { value: 'smart' } });
+    strategicGroup.createEl('option', { text: 'OKR Framework', attr: { value: 'okr' } });
+    strategicGroup.createEl('option', { text: 'SWOT Analysis', attr: { value: 'swot' } });
+    strategicGroup.createEl('option', { text: 'PEST Analysis', attr: { value: 'pest' } });
+    
+    // Problem Finding Models
+    const problemGroup = this.modeSelectEl.createEl('optgroup', { attr: { label: 'Problem Finding Models' }});
+    problemGroup.createEl('option', { text: 'Pre-Mortem Analysis', attr: { value: 'premortem' } });
+    problemGroup.createEl('option', { text: '5 Whys Method', attr: { value: 'fivewhys' } });
+    problemGroup.createEl('option', { text: 'Fishbone Diagram', attr: { value: 'fishbone' } });
+    problemGroup.createEl('option', { text: 'Rubber Duck Debugging', attr: { value: 'rubberduck' } });
+    
+    // Creative Thinking Models
+    const creativeGroup = this.modeSelectEl.createEl('optgroup', { attr: { label: 'Creative Thinking Models' }});
+    creativeGroup.createEl('option', { text: 'SCAMPER Method', attr: { value: 'scamper' } });
+    creativeGroup.createEl('option', { text: 'Lateral Thinking', attr: { value: 'lateralthinking' } });
+    creativeGroup.createEl('option', { text: 'PMI Analysis', attr: { value: 'pmi' } });
+    creativeGroup.createEl('option', { text: 'Double Diamond', attr: { value: 'doublediamond' } });
+    
+    // Learning Models
+    const learningGroup = this.modeSelectEl.createEl('optgroup', { attr: { label: 'Learning Models' }});
+    learningGroup.createEl('option', { text: 'Feynman Technique', attr: { value: 'feynman' } });
+    learningGroup.createEl('option', { text: 'GROW Model', attr: { value: 'grow' } });
     
     this.modeSelectEl.addEventListener('change', () => this.onModeChange());
     
@@ -591,6 +619,20 @@ export class DebatePanel extends ItemView {
       case 'debate': return 'Debate (Pro vs Con)';
       case 'sixHats': return 'Six Thinking Hats';
       case 'roundtable': return 'Roundtable Discussion';
+      case 'smart': return 'SMART Goals Framework';
+      case 'okr': return 'OKR (Objectives & Key Results)';
+      case 'swot': return 'SWOT Analysis';
+      case 'pest': return 'PEST Analysis';
+      case 'premortem': return 'Pre-Mortem Analysis';
+      case 'fivewhys': return '5 Whys Root Cause Analysis';
+      case 'fishbone': return 'Fishbone Diagram (Cause & Effect)';
+      case 'rubberduck': return 'Rubber Duck Debugging';
+      case 'scamper': return 'SCAMPER Method';
+      case 'lateralthinking': return 'Lateral Thinking';
+      case 'pmi': return 'PMI (Plus-Minus-Interesting)';
+      case 'doublediamond': return 'Double Diamond Design Process';
+      case 'feynman': return 'Feynman Technique';
+      case 'grow': return 'GROW Coaching Model';
       default: return mode;
     }
   }
