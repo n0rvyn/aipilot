@@ -168,7 +168,6 @@ var MarkdownRenderer = class extends import_obsidian.Component {
 // src/ChatView.ts
 var VIEW_TYPE_CHAT = "chat-view";
 var ChatView = class extends import_obsidian2.ItemView {
-  // No more search mode, only chat
   constructor(leaf, plugin, modelManager) {
     super(leaf);
     this.messages = [];
@@ -182,6 +181,8 @@ var ChatView = class extends import_obsidian2.ItemView {
     this.isEndingConversation = false;
     this.currentFunctionMode = "none";
     this.currentMode = "chat";
+    // No more search mode, only chat
+    this.originalText = null;
     this.plugin = plugin;
     this.modelManager = modelManager;
     this.requestId = plugin.requestId;
@@ -271,7 +272,6 @@ var ChatView = class extends import_obsidian2.ItemView {
   // Helper method to ensure functions array is initialized
   ensureFunctionsInitialized() {
     if (!this.plugin.settings.functions) {
-      console.log("Initializing functions array from defaults");
       this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? [...DEFAULT_SETTINGS.functions] : [];
       if (this.plugin.settings.customFunctions && this.plugin.settings.customFunctions.length > 0) {
         this.plugin.settings.functions.push(...this.plugin.settings.customFunctions);
@@ -511,220 +511,365 @@ var ChatView = class extends import_obsidian2.ItemView {
   }
   // Function handlers with proper diff functionality
   handleOrganize() {
-    var _a;
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    if (selectedText) {
-      const prompt = `${((_a = this.plugin.settings.functions.find((f) => f.name === "Organize")) == null ? void 0 : _a.prompt) || ""} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "organize";
-      this.sendMessageWithDiff(selectedText);
-    } else {
-      new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
-    }
+    return __async(this, null, function* () {
+      try {
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          new import_obsidian2.Notice("Please select text to organize.");
+          return;
+        }
+        const func = this.plugin.settings.functions.find((f) => f.name === "Organize");
+        if (!func) {
+          new import_obsidian2.Notice("Organize function not found in settings.");
+          return;
+        }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "organize");
+      } catch (error) {
+        new import_obsidian2.Notice(`Error in Organize function: ${error.message || "Unknown error"}`);
+      }
+    });
   }
   handleGrammar() {
-    var _a;
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    if (selectedText) {
-      const prompt = `${((_a = this.plugin.settings.functions.find((f) => f.name === "Grammar")) == null ? void 0 : _a.prompt) || ""} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "grammar";
-      this.sendMessageWithDiff(selectedText);
-    } else {
-      new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
-    }
+    return __async(this, null, function* () {
+      try {
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          new import_obsidian2.Notice("Please select text to check for grammar.");
+          return;
+        }
+        const func = this.plugin.settings.functions.find((f) => f.name === "Grammar");
+        if (!func) {
+          new import_obsidian2.Notice("Grammar function not found in settings.");
+          return;
+        }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "grammar");
+      } catch (error) {
+        new import_obsidian2.Notice(`Error in Grammar function: ${error.message || "Unknown error"}`);
+      }
+    });
   }
   handleGenerate() {
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    console.log("Generate function called with selected text:", selectedText ? selectedText.substring(0, 50) + "..." : "none");
-    if (selectedText) {
+    return __async(this, null, function* () {
       try {
-        const generateFunc = this.plugin.settings.functions.find((f) => f.name === "Generate");
-        const prompt = generateFunc ? generateFunc.prompt : "Generate content based on the following prompt:";
-        const fullPrompt = `${prompt} ${selectedText}`;
-        console.log("Generate prompt prepared:", fullPrompt.substring(0, 50) + "...");
-        this.currentInput.value = fullPrompt;
-        this.currentFunctionMode = "generate";
-        console.log("Sending message with diff...");
-        this.sendMessageWithDiff(selectedText);
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          new import_obsidian2.Notice("Please select text to generate content for.");
+          return;
+        }
+        const func = this.plugin.settings.functions.find((f) => f.name === "Generate");
+        if (!func) {
+          new import_obsidian2.Notice("Generate function not found in settings.");
+          return;
+        }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "generate");
       } catch (error) {
-        console.error("Error in handleGenerate:", error);
-        new import_obsidian2.Notice("Error processing generate request. Check console for details.", 3e3);
+        new import_obsidian2.Notice(`Error in Generate function: ${error.message || "Unknown error"}`);
       }
-    } else {
-      new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
-    }
+    });
   }
   handleDialogue() {
-    var _a;
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    if (selectedText) {
-      const prompt = `${((_a = this.plugin.settings.functions.find((f) => f.name === "Dialogue")) == null ? void 0 : _a.prompt) || ""} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "dialogue";
-      this.sendMessageWithDiff(selectedText);
-    } else {
-      new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
-    }
+    return __async(this, null, function* () {
+      try {
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          new import_obsidian2.Notice("Please select text to start a dialogue with.");
+          return;
+        }
+        const func = this.plugin.settings.functions.find((f) => f.name === "Dialogue");
+        if (!func) {
+          new import_obsidian2.Notice("Dialogue function not found in settings.");
+          return;
+        }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "dialogue");
+      } catch (error) {
+        new import_obsidian2.Notice(`Error in Dialogue function: ${error.message || "Unknown error"}`);
+      }
+    });
   }
   handleSummarize() {
-    var _a;
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    if (selectedText) {
-      const prompt = `${((_a = this.plugin.settings.functions.find((f) => f.name === "Summarize")) == null ? void 0 : _a.prompt) || ""} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "summary";
-      this.sendMessageWithDiff(selectedText);
-    } else {
-      new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
-    }
+    return __async(this, null, function* () {
+      try {
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          new import_obsidian2.Notice("Please select text to summarize.");
+          return;
+        }
+        const func = this.plugin.settings.functions.find((f) => f.name === "Summarize");
+        if (!func) {
+          new import_obsidian2.Notice("Summarize function not found in settings.");
+          return;
+        }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "summary");
+      } catch (error) {
+        new import_obsidian2.Notice(`Error in Summarize function: ${error.message || "Unknown error"}`);
+      }
+    });
   }
   handlePolish() {
-    var _a;
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    if (selectedText) {
-      const prompt = `${((_a = this.plugin.settings.functions.find((f) => f.name === "Polish")) == null ? void 0 : _a.prompt) || ""} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "polish";
-      this.sendMessageWithDiff(selectedText);
-    } else {
-      new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
-    }
+    return __async(this, null, function* () {
+      try {
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          new import_obsidian2.Notice("Please select text to polish.");
+          return;
+        }
+        const func = this.plugin.settings.functions.find((f) => f.name === "Polish");
+        if (!func) {
+          new import_obsidian2.Notice("Polish function not found in settings.");
+          return;
+        }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "polish");
+      } catch (error) {
+        new import_obsidian2.Notice(`Error in Polish function: ${error.message || "Unknown error"}`);
+      }
+    });
   }
   handleCustomFunction(func) {
-    if (!this.currentInput) return;
-    const selectedText = this.getSelectedTextFromEditor();
-    if (selectedText) {
-      const prompt = `${func.prompt} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "custom";
-      this.sendMessageWithDiff(selectedText);
-    } else {
-      this.currentInput.value = func.prompt;
-      this.currentFunctionMode = "custom";
-      this.currentInput.focus();
-    }
-  }
-  // Add debugging and improved detection of active view
-  getSelectedTextFromEditor() {
-    console.log("Getting selected text from editor");
-    let selectedText = "";
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
-    if (activeView && activeView.editor) {
-      const editor = activeView.editor;
-      if (editor.somethingSelected()) {
-        selectedText = editor.getSelection();
-        if (selectedText && selectedText.trim().length > 0) {
-          return selectedText;
-        }
-      }
-    }
-    if (!selectedText || selectedText.trim().length === 0) {
-      const markdownViews = this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view).filter((view) => view instanceof import_obsidian2.MarkdownView);
-      for (const view of markdownViews) {
-        if (view.editor && view.editor.somethingSelected()) {
-          selectedText = view.editor.getSelection();
-          if (selectedText && selectedText.trim().length > 0) {
-            return selectedText;
+    return __async(this, null, function* () {
+      try {
+        const selectedText = MarkdownRenderer.getSelectedText(this.app);
+        if (!selectedText) {
+          if (this.currentInput) {
+            this.currentInput.value = func.prompt;
+            this.currentInput.focus();
+          } else {
+            new import_obsidian2.Notice("Chat input not available.");
           }
+          return;
         }
+        const fullPrompt = `${func.prompt}${selectedText}`;
+        this.originalText = selectedText;
+        yield this.sendMessageWithDiff(fullPrompt, "custom");
+      } catch (error) {
+        new import_obsidian2.Notice(`Error in Custom function: ${error.message || "Unknown error"}`);
       }
-    }
-    return selectedText;
+    });
   }
   // Add method for sending message with diff functionality
-  sendMessageWithDiff(originalText) {
+  sendMessageWithDiff(userMessage, mode = "none") {
     return __async(this, null, function* () {
-      var _a, _b;
-      console.log("sendMessageWithDiff called with mode:", this.currentFunctionMode);
-      if (!this.currentInput) {
-        console.error("sendMessageWithDiff failed: currentInput is null");
-        return;
-      }
-      if (this.isGenerating) {
-        console.log("sendMessageWithDiff: already generating, ignoring request");
-        return;
-      }
-      const userMessage = this.currentInput.value.trim();
-      if (!userMessage) {
-        console.error("sendMessageWithDiff failed: userMessage is empty");
-        return;
-      }
-      console.log("sendMessageWithDiff proceeding with message:", userMessage.substring(0, 50) + "...");
-      this.currentInput.value = "";
-      this.currentInput.style.height = "auto";
-      const userMessageEl = this.addMessage("user", userMessage);
-      this.isGenerating = true;
-      if (this.currentInput) {
-        this.currentInput.disabled = true;
-      }
-      const loadingEl = this.messagesContainer.createDiv({ cls: "ai-message" });
-      loadingEl.addClass("loading");
-      const loadingIndicator = loadingEl.createDiv({ cls: "loading-indicator" });
-      const dot1 = loadingIndicator.createSpan({ cls: "dot" });
-      const dot2 = loadingIndicator.createSpan({ cls: "dot" });
-      const dot3 = loadingIndicator.createSpan({ cls: "dot" });
-      this.scrollToBottom();
       try {
-        const defaultModel = this.modelManager.getDefaultModel();
-        if (!defaultModel) {
-          throw new Error("No default model configured. Please set a default model in settings.");
+        if (this.isGenerating) {
+          new import_obsidian2.Notice("Already generating a response. Please wait.");
+          return;
         }
-        this.addMessage("user", userMessage);
-        const assistantMessageId = `msg-${Date.now()}`;
-        this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
-        this.controller = new AbortController();
-        let accumulatedResponse = "";
-        const response = yield this.modelManager.callModel(
-          defaultModel.id,
-          userMessage,
-          {
-            streaming: true,
-            onChunk: (chunk) => {
-              try {
-                if (this.currentMessage) {
-                  const contentDiv = this.currentMessage.querySelector(".message-content");
-                  if (contentDiv) {
-                    accumulatedResponse += chunk;
-                    contentDiv.empty();
-                    MarkdownRenderer.renderMarkdown(accumulatedResponse, contentDiv, "", this.plugin);
-                    this.scrollToBottom();
-                  }
-                }
-              } catch (error) {
-                console.error("Error handling stream chunk:", error);
-              }
-            },
-            signal: this.controller.signal
+        if (!this.currentInput) {
+          new import_obsidian2.Notice("Chat input not available.");
+          return;
+        }
+        if (!userMessage || userMessage.trim().length === 0) {
+          new import_obsidian2.Notice("Please enter a message.");
+          return;
+        }
+        this.currentFunctionMode = mode;
+        this.currentInput.value = "";
+        this.currentInput.style.height = "auto";
+        const userMessageEl = this.addMessage("user", userMessage);
+        this.isGenerating = true;
+        if (this.currentInput) {
+          this.currentInput.disabled = true;
+        }
+        const loadingEl = this.messagesContainer.createDiv({ cls: "ai-message" });
+        loadingEl.addClass("loading");
+        const loadingIndicator = loadingEl.createDiv({ cls: "loading-indicator" });
+        const dot1 = loadingIndicator.createSpan({ cls: "dot" });
+        const dot2 = loadingIndicator.createSpan({ cls: "dot" });
+        const dot3 = loadingIndicator.createSpan({ cls: "dot" });
+        this.scrollToBottom();
+        try {
+          const defaultModel = this.modelManager.getDefaultModel();
+          if (!defaultModel) {
+            throw new Error("No default model configured. Please set a default model in settings.");
           }
-        );
-        this.isGenerating = false;
-        this.controller = null;
-        const responseText = ((_b = (_a = this.currentMessage) == null ? void 0 : _a.querySelector(".message-content")) == null ? void 0 : _b.textContent) || "";
-        this.currentMessage = null;
-        if (this.currentFunctionMode !== "none") {
-          this.addApplyButton(originalText, responseText);
-        }
-        if (this.shouldSaveHistory()) {
-          yield this.saveChatHistory();
+          const assistantMessageId = `msg-${Date.now()}`;
+          this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
+          this.controller = new AbortController();
+          let accumulatedResponse = "";
+          const response = yield this.modelManager.callModel(
+            defaultModel.id,
+            userMessage,
+            {
+              streaming: true,
+              onChunk: (chunk) => {
+                try {
+                  if (this.currentMessage) {
+                    const contentDiv = this.currentMessage.querySelector(".message-content");
+                    if (contentDiv) {
+                      accumulatedResponse += chunk;
+                      contentDiv.empty();
+                      MarkdownRenderer.renderMarkdown(accumulatedResponse, contentDiv, "", this.plugin);
+                      this.scrollToBottom();
+                    }
+                  }
+                } catch (error) {
+                }
+              },
+              signal: this.controller.signal
+            }
+          );
+          this.isGenerating = false;
+          this.controller = null;
+          if (this.currentInput) {
+            this.currentInput.disabled = false;
+          }
+          loadingEl.remove();
+          const responseText = accumulatedResponse;
+          if (mode !== "none" && this.originalText) {
+            this.addApplyButton(this.originalText, responseText);
+            this.originalText = null;
+          }
+          if (this.shouldSaveHistory()) {
+            yield this.saveChatHistory();
+          }
+          this.currentMessage = null;
+        } catch (error) {
+          if (this.currentMessage) {
+            const contentDiv = this.currentMessage.querySelector(".message-content");
+            if (contentDiv) {
+              contentDiv.textContent = `Error: ${error.message || "Failed to generate response"}. Please try again.`;
+            }
+          }
+          loadingEl.remove();
+          this.isGenerating = false;
+          this.controller = null;
+          if (this.currentInput) {
+            this.currentInput.disabled = false;
+          }
+          this.originalText = null;
+          this.currentMessage = null;
         }
       } catch (error) {
-        console.error("Error sending message:", error);
-        if (this.currentMessage) {
-          const contentDiv = this.currentMessage.querySelector(".message-content");
-          if (contentDiv) {
-            contentDiv.textContent = "Error: Failed to generate response. Please try again.";
+        new import_obsidian2.Notice(`Error sending message: ${error.message || "Unknown error"}`);
+        this.isGenerating = false;
+        this.originalText = null;
+      }
+    });
+  }
+  // Method to show diff modal
+  showDiffModal(editor, originalText, newText) {
+    if (!this.plugin.diffMatchPatchLib) {
+      new import_obsidian2.Notice("Diff library not loaded. Cannot show diff view.", 3e3);
+      return;
+    }
+    const dmp = new this.plugin.diffMatchPatchLib();
+    const diffs = dmp.diff_main(originalText, newText);
+    dmp.diff_cleanupSemantic(diffs);
+    const diffHtml = this.visualizeDiff(diffs);
+    const modal = new import_obsidian2.Modal(this.app);
+    modal.titleEl.setText("Review Changes");
+    modal.contentEl.addClass("diff-view-modal");
+    const contentContainer = modal.contentEl.createDiv({ cls: "diff-container" });
+    const diffContent = contentContainer.createDiv({ cls: "diff-content" });
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = diffHtml;
+    while (tempDiv.firstChild) {
+      diffContent.appendChild(tempDiv.firstChild);
+    }
+    const buttonContainer = modal.contentEl.createDiv({ cls: "diff-buttons" });
+    const applyButton = buttonContainer.createEl("button", {
+      text: "Apply Changes",
+      cls: "diff-apply-button"
+    });
+    const cancelButton = buttonContainer.createEl("button", {
+      text: "Cancel",
+      cls: "diff-cancel-button"
+    });
+    applyButton.addEventListener("click", () => {
+      editor.replaceSelection(newText);
+      new import_obsidian2.Notice("Changes applied", 2e3);
+      modal.close();
+    });
+    cancelButton.addEventListener("click", () => {
+      modal.close();
+    });
+    modal.open();
+  }
+  // Add method to visualize diff
+  visualizeDiff(diffs) {
+    const DIFF_DELETE = -1;
+    const DIFF_INSERT = 1;
+    const DIFF_EQUAL = 0;
+    let html = "";
+    for (let i = 0; i < diffs.length; i++) {
+      const [op, text] = diffs[i];
+      const safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+      switch (op) {
+        case DIFF_INSERT:
+          html += '<span class="diff-add">' + safeText + "</span>";
+          break;
+        case DIFF_DELETE:
+          html += '<span class="diff-delete">' + safeText + "</span>";
+          break;
+        case DIFF_EQUAL:
+          html += '<span class="diff-equal">' + safeText + "</span>";
+          break;
+      }
+    }
+    return html;
+  }
+  // Add shouldSaveHistory method
+  shouldSaveHistory() {
+    if (this.messages.length % 5 === 0 && this.messages.length > 0) {
+      return true;
+    }
+    const lastSaveTime = this.lastHistorySave || 0;
+    const TEN_MINUTES = 10 * 60 * 1e3;
+    if (this.messages.length > 0 && Date.now() - lastSaveTime > TEN_MINUTES) {
+      return true;
+    }
+    return false;
+  }
+  // Add saveChatHistory method
+  saveChatHistory() {
+    return __async(this, null, function* () {
+      try {
+        let chatTitle = "Chat " + (/* @__PURE__ */ new Date()).toLocaleString();
+        if (this.messages.length > 0 && this.messages[0].role === "user") {
+          const firstMessage = this.messages[0].content;
+          chatTitle = firstMessage.split(" ").slice(0, 5).join(" ");
+          if (firstMessage.length > chatTitle.length) {
+            chatTitle += "...";
           }
         }
-        this.isGenerating = false;
-        this.controller = null;
-        this.currentMessage = null;
+        const history = {
+          id: this.conversationId || `chat-${Date.now()}`,
+          title: chatTitle,
+          date: Date.now(),
+          messages: this.messages,
+          requestId: this.requestId
+        };
+        if (!this.plugin.settings.chatHistoryPath) {
+          this.plugin.settings.chatHistoryPath = "chat-history";
+          yield this.plugin.saveSettings();
+        }
+        const folderPath = this.plugin.settings.chatHistoryPath;
+        const folder = this.app.vault.getAbstractFileByPath(folderPath);
+        if (!folder) {
+          yield this.app.vault.createFolder(folderPath);
+        }
+        const fileName = `${folderPath}/${history.id}.json`;
+        yield this.app.vault.adapter.write(
+          fileName,
+          JSON.stringify(history, null, 2)
+        );
+        if (!this.conversationId) {
+          this.conversationId = history.id;
+        }
+        this.lastHistorySave = Date.now();
+      } catch (error) {
+        console.error("Failed to save chat history:", error);
       }
     });
   }
@@ -754,7 +899,6 @@ var ChatView = class extends import_obsidian2.ItemView {
         yield navigator.clipboard.writeText(responseText);
         new import_obsidian2.Notice("Copied to clipboard", 2e3);
       } catch (err) {
-        console.error("Failed to copy content:", err);
         new import_obsidian2.Notice("Failed to copy content", 2e3);
       }
     });
@@ -833,131 +977,6 @@ var ChatView = class extends import_obsidian2.ItemView {
       return markdownViews[0].editor;
     }
     return null;
-  }
-  // Method to show diff modal
-  showDiffModal(editor, originalText, newText) {
-    const modal = new import_obsidian2.Modal(this.app);
-    modal.titleEl.setText("Review Changes");
-    modal.contentEl.addClass("diff-modal");
-    const diffContainer = modal.contentEl.createDiv({ cls: "diff-container" });
-    this.visualizeDiff(diffContainer, originalText, newText);
-    const buttonContainer = modal.contentEl.createDiv({ cls: "diff-actions" });
-    const applyButton = buttonContainer.createEl("button", {
-      text: "Apply Changes",
-      cls: "diff-apply-button"
-    });
-    const cancelButton = buttonContainer.createEl("button", {
-      text: "Cancel",
-      cls: "diff-cancel-button"
-    });
-    applyButton.onclick = () => {
-      if (editor.somethingSelected()) {
-        editor.replaceSelection(newText);
-      } else {
-        editor.setValue(newText);
-      }
-      modal.close();
-      new import_obsidian2.Notice("Changes applied successfully", 2e3);
-    };
-    cancelButton.onclick = () => {
-      modal.close();
-    };
-    modal.open();
-  }
-  // Method to visualize diff
-  visualizeDiff(container, originalText, newText) {
-    if (this.plugin.diffMatchPatchLib) {
-      try {
-        const diffs = this.plugin.diffMatchPatchLib.diff_main(originalText, newText);
-        this.plugin.diffMatchPatchLib.diff_cleanupSemantic(diffs);
-        const diffView = container.createDiv({ cls: "diff-view" });
-        for (const [op, text] of diffs) {
-          if (!text) continue;
-          const span = document.createElement("span");
-          if (op === -1) {
-            span.className = "diff-delete";
-          } else if (op === 1) {
-            span.className = "diff-add";
-          } else {
-            span.className = "diff-equal";
-          }
-          span.textContent = text;
-          diffView.appendChild(span);
-        }
-      } catch (error) {
-        console.error("Error creating diff:", error);
-        this.createSimpleDiffView(container, originalText, newText);
-      }
-    } else {
-      this.createSimpleDiffView(container, originalText, newText);
-    }
-  }
-  // Create a simple side-by-side diff view
-  createSimpleDiffView(container, originalText, newText) {
-    const diffContainer = container.createDiv({ cls: "simple-diff-container" });
-    const originalCol = diffContainer.createDiv({ cls: "diff-column original-column" });
-    originalCol.createEl("h3", { text: "Original" });
-    const originalContent = originalCol.createDiv({ cls: "diff-content" });
-    originalContent.setText(originalText);
-    const newCol = diffContainer.createDiv({ cls: "diff-column new-column" });
-    newCol.createEl("h3", { text: "New Version" });
-    const newContent = newCol.createDiv({ cls: "diff-content" });
-    newContent.setText(newText);
-  }
-  // Add shouldSaveHistory method
-  shouldSaveHistory() {
-    if (this.messages.length % 5 === 0 && this.messages.length > 0) {
-      return true;
-    }
-    const lastSaveTime = this.lastHistorySave || 0;
-    const TEN_MINUTES = 10 * 60 * 1e3;
-    if (this.messages.length > 0 && Date.now() - lastSaveTime > TEN_MINUTES) {
-      return true;
-    }
-    return false;
-  }
-  // Add saveChatHistory method
-  saveChatHistory() {
-    return __async(this, null, function* () {
-      try {
-        let chatTitle = "Chat " + (/* @__PURE__ */ new Date()).toLocaleString();
-        if (this.messages.length > 0 && this.messages[0].role === "user") {
-          const firstMessage = this.messages[0].content;
-          chatTitle = firstMessage.split(" ").slice(0, 5).join(" ");
-          if (firstMessage.length > chatTitle.length) {
-            chatTitle += "...";
-          }
-        }
-        const history = {
-          id: this.conversationId || `chat-${Date.now()}`,
-          title: chatTitle,
-          date: Date.now(),
-          messages: this.messages,
-          requestId: this.requestId
-        };
-        if (!this.plugin.settings.chatHistoryPath) {
-          this.plugin.settings.chatHistoryPath = "chat-history";
-          yield this.plugin.saveSettings();
-        }
-        const folderPath = this.plugin.settings.chatHistoryPath;
-        const folder = this.app.vault.getAbstractFileByPath(folderPath);
-        if (!folder) {
-          yield this.app.vault.createFolder(folderPath);
-        }
-        const fileName = `${folderPath}/${history.id}.json`;
-        yield this.app.vault.adapter.write(
-          fileName,
-          JSON.stringify(history, null, 2)
-        );
-        if (!this.conversationId) {
-          this.conversationId = history.id;
-        }
-        this.lastHistorySave = Date.now();
-        console.log(`Chat history saved to ${fileName}`);
-      } catch (error) {
-        console.error("Failed to save chat history:", error);
-      }
-    });
   }
 };
 
@@ -2630,7 +2649,24 @@ var DebatePanel = class extends import_obsidian3.ItemView {
       cls: "debate-config-toggle",
       attr: { title: "Toggle configuration panel" }
     });
-    this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    const svgEl = this.configToggleButton.createSvg("svg", {
+      attr: {
+        xmlns: "http://www.w3.org/2000/svg",
+        width: "18",
+        height: "18",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round"
+      }
+    });
+    svgEl.createSvg("polyline", {
+      attr: {
+        points: "18 15 12 9 6 15"
+      }
+    });
     this.configToggleButton.addEventListener("click", () => this.toggleConfigPanel());
     const configContentEl = this.configPanelEl.createDiv({ cls: "debate-config-content" });
     const topicWrapperEl = configContentEl.createDiv({ cls: "config-input-wrapper" });
@@ -2773,10 +2809,46 @@ var DebatePanel = class extends import_obsidian3.ItemView {
     this.isConfigPanelCollapsed = !this.isConfigPanelCollapsed;
     if (this.isConfigPanelCollapsed) {
       this.configPanelEl.addClass("collapsed");
-      this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+      this.configToggleButton.empty();
+      const svgEl = this.configToggleButton.createSvg("svg", {
+        attr: {
+          xmlns: "http://www.w3.org/2000/svg",
+          width: "18",
+          height: "18",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          "stroke-width": "2",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round"
+        }
+      });
+      svgEl.createSvg("polyline", {
+        attr: {
+          points: "6 9 12 15 18 9"
+        }
+      });
     } else {
       this.configPanelEl.removeClass("collapsed");
-      this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+      this.configToggleButton.empty();
+      const svgEl = this.configToggleButton.createSvg("svg", {
+        attr: {
+          xmlns: "http://www.w3.org/2000/svg",
+          width: "18",
+          height: "18",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          "stroke-width": "2",
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round"
+        }
+      });
+      svgEl.createSvg("polyline", {
+        attr: {
+          points: "18 15 12 9 6 15"
+        }
+      });
     }
     this.containerEl.style.display = "none";
     setTimeout(() => {
@@ -5066,7 +5138,7 @@ function getIcon(iconName) {
     const tempEl = document.createElement("div");
     (0, import_obsidian9.setIcon)(tempEl, iconName);
     const svgElement = tempEl.firstElementChild;
-    return svgElement ? svgElement.outerHTML : null;
+    return svgElement ? svgElement.cloneNode(true) : null;
   } catch (e) {
     console.error(`Failed to get icon: ${iconName}`, e);
     return null;
@@ -5089,7 +5161,6 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
   }
   onload() {
     return __async(this, null, function* () {
-      console.log("Loading AIPilot plugin");
       yield this.loadSettings();
       this.migrateLegacyAPIKey();
       this.migrateEmbeddingConfig();
@@ -5247,7 +5318,6 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
   }
   migrateLegacyAPIKey() {
     if (this.settings.apiKey && this.settings.model && (!this.settings.models || this.settings.models.length === 0)) {
-      console.log("Migrating legacy API key to models system");
       this.settings.models.push({
         name: "Default Model",
         modelName: this.settings.model,
@@ -5261,7 +5331,6 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
   }
   migrateEmbeddingConfig() {
     if (this.settings.embeddingModels && (!this.settings.embeddingModels || !this.settings.embeddingModels.length)) {
-      console.log("Migrating legacy embedding configuration");
       this.settings.embeddingModels = [
         {
           id: "default-openai-embedding",
@@ -5278,32 +5347,27 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
     return __async(this, null, function* () {
       try {
         if (typeof window.diff_match_patch === "function") {
-          this.diffMatchPatchLib = new window.diff_match_patch();
-          console.log("Successfully loaded diff_match_patch from window");
+          this.diffMatchPatchLib = window.diff_match_patch;
           return;
         }
-        return new Promise((resolve) => {
-          const script = document.createElement("script");
-          script.src = "https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js";
-          script.async = true;
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js";
+        script.async = true;
+        const loadPromise = new Promise((resolve, reject) => {
           script.onload = () => {
             if (typeof window.diff_match_patch === "function") {
-              this.diffMatchPatchLib = new window.diff_match_patch();
-              console.log("Successfully loaded diff_match_patch from CDN");
+              this.diffMatchPatchLib = window.diff_match_patch;
               resolve();
             } else {
-              console.error("diff_match_patch loaded but constructor not found");
-              resolve();
+              reject(new Error("Failed to load diff_match_patch library"));
             }
           };
-          script.onerror = () => {
-            console.error("Failed to load diff_match_patch from CDN");
-            resolve();
-          };
-          document.head.appendChild(script);
+          script.onerror = () => reject(new Error("Failed to load diff_match_patch library"));
         });
-      } catch (e) {
-        console.error("Error loading diff_match_patch library:", e);
+        document.head.appendChild(script);
+        yield loadPromise;
+      } catch (error) {
+        console.error("Error loading diff_match_patch library:", error);
       }
     });
   }
@@ -6171,11 +6235,7 @@ var CustomFunctionModal = class extends import_obsidian9.Modal {
       });
       const svgIcon = getIcon(icon.name);
       if (svgIcon) {
-        const tempEl = document.createElement("div");
-        tempEl.innerHTML = svgIcon;
-        while (tempEl.firstChild) {
-          iconBtn.appendChild(tempEl.firstChild);
-        }
+        iconBtn.appendChild(svgIcon);
       } else {
         iconBtn.textContent = icon.name.charAt(0).toUpperCase();
       }
@@ -6258,11 +6318,7 @@ var CustomFunctionModal = class extends import_obsidian9.Modal {
     }
     const svgIcon = getIcon(iconName);
     if (svgIcon) {
-      const tempEl = document.createElement("div");
-      tempEl.innerHTML = svgIcon;
-      while (tempEl.firstChild) {
-        this.iconPreviewEl.appendChild(tempEl.firstChild);
-      }
+      this.iconPreviewEl.appendChild(svgIcon);
     } else {
       this.iconPreviewEl.setText(`Icon not found: ${iconName}`);
     }

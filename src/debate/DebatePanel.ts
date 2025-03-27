@@ -78,7 +78,24 @@ export class DebatePanel extends ItemView {
       cls: 'debate-config-toggle',
       attr: { title: 'Toggle configuration panel' }
     });
-    this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    const svgEl = this.configToggleButton.createSvg('svg', {
+      attr: {
+        xmlns: "http://www.w3.org/2000/svg",
+        width: "18",
+        height: "18",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        'stroke-width': "2",
+        'stroke-linecap': "round",
+        'stroke-linejoin': "round"
+      }
+    });
+    svgEl.createSvg('polyline', {
+      attr: {
+        points: "18 15 12 9 6 15"
+      }
+    });
     
     this.configToggleButton.addEventListener('click', () => this.toggleConfigPanel());
     
@@ -262,10 +279,46 @@ export class DebatePanel extends ItemView {
     
     if (this.isConfigPanelCollapsed) {
       this.configPanelEl.addClass('collapsed');
-      this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+      this.configToggleButton.empty();
+      const svgEl = this.configToggleButton.createSvg('svg', {
+        attr: {
+          xmlns: "http://www.w3.org/2000/svg",
+          width: "18",
+          height: "18",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          'stroke-width': "2",
+          'stroke-linecap': "round",
+          'stroke-linejoin': "round"
+        }
+      });
+      svgEl.createSvg('polyline', {
+        attr: {
+          points: "6 9 12 15 18 9"
+        }
+      });
     } else {
       this.configPanelEl.removeClass('collapsed');
-      this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+      this.configToggleButton.empty();
+      const svgEl = this.configToggleButton.createSvg('svg', {
+        attr: {
+          xmlns: "http://www.w3.org/2000/svg",
+          width: "18",
+          height: "18",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          'stroke-width': "2",
+          'stroke-linecap': "round",
+          'stroke-linejoin': "round"
+        }
+      });
+      svgEl.createSvg('polyline', {
+        attr: {
+          points: "18 15 12 9 6 15"
+        }
+      });
     }
     
     // Force a re-layout

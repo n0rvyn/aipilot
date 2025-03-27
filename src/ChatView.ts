@@ -725,6 +725,14 @@ interface ChatHistory {
     pinned?: boolean;
 }
 
+// Define an interface for the editorInfo object
+interface EditorInfo {
+    viewLeaf: WorkspaceLeaf | null;
+    viewType: string;
+    hasSelection: boolean;
+    selectionText: string | null;
+}
+
 export class ChatView extends ItemView implements Component {
     plugin: AIPilot;
     modelManager: ModelManager;
@@ -744,6 +752,7 @@ export class ChatView extends ItemView implements Component {
     isEndingConversation: boolean = false;
     currentFunctionMode: FunctionMode = 'none';
     currentMode: 'chat' = 'chat'; // No more search mode, only chat
+    originalText: string | null = null;
 
     constructor(leaf: WorkspaceLeaf, plugin: AIPilot, modelManager: ModelManager) {
         super(leaf);
@@ -873,7 +882,7 @@ export class ChatView extends ItemView implements Component {
     // Helper method to ensure functions array is initialized
     private ensureFunctionsInitialized() {
         if (!this.plugin.settings.functions) {
-            console.log("Initializing functions array from defaults");
+            // Initializing functions array from defaults (removed console.log)
             this.plugin.settings.functions = DEFAULT_SETTINGS.functions ? 
                 [...DEFAULT_SETTINGS.functions] : 
                 [];
@@ -1224,554 +1233,459 @@ export class ChatView extends ItemView implements Component {
     }
 
     // Function handlers with proper diff functionality
-    private handleOrganize() {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        if (selectedText) {
-            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Organize")?.prompt || ''} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'organize';
-            this.sendMessageWithDiff(selectedText);
-        } else {
-            new Notice("No text available. Please open a markdown file or select text.", 3000);
-        }
-    }
-
-    private handleGrammar() {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        if (selectedText) {
-            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Grammar")?.prompt || ''} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'grammar';
-            this.sendMessageWithDiff(selectedText);
-        } else {
-            new Notice("No text available. Please open a markdown file or select text.", 3000);
-        }
-    }
-
-    private handleGenerate() {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        console.log("Generate function called with selected text:", selectedText ? selectedText.substring(0, 50) + "..." : "none");
-        
-        if (selectedText) {
-            try {
-                // Find the generate prompt
-                const generateFunc = this.plugin.settings.functions.find(f => f.name === "Generate");
-                const prompt = generateFunc ? generateFunc.prompt : "Generate content based on the following prompt:";
-                
-                // Create the full prompt with selected text
-                const fullPrompt = `${prompt} ${selectedText}`;
-                console.log("Generate prompt prepared:", fullPrompt.substring(0, 50) + "...");
-                
-                // Set input value
-                this.currentInput.value = fullPrompt;
-                
-                // Set function mode
-                this.currentFunctionMode = 'generate';
-                
-                // Directly call sendMessageWithDiff to auto-send
-                console.log("Sending message with diff...");
-                this.sendMessageWithDiff(selectedText);
-            } catch (error) {
-                console.error("Error in handleGenerate:", error);
-                new Notice("Error processing generate request. Check console for details.", 3000);
+    async handleOrganize() {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                new Notice("Please select text to organize.");
+                return;
             }
-        } else {
-            new Notice("No text available. Please open a markdown file or select text.", 3000);
+            
+            // Get the function from settings
+            const func = this.plugin.settings.functions.find(f => f.name === "Organize");
+            if (!func) {
+                new Notice("Organize function not found in settings.");
+                return;
+            }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "organize" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Organize function: ${error.message || "Unknown error"}`);
         }
     }
 
-    private handleDialogue() {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        if (selectedText) {
-            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Dialogue")?.prompt || ''} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'dialogue';
-            this.sendMessageWithDiff(selectedText);
-        } else {
-            new Notice("No text available. Please open a markdown file or select text.", 3000);
+    async handleGrammar() {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                new Notice("Please select text to check for grammar.");
+                return;
+            }
+            
+            // Get the function from settings
+            const func = this.plugin.settings.functions.find(f => f.name === "Grammar");
+            if (!func) {
+                new Notice("Grammar function not found in settings.");
+                return;
+            }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "grammar" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Grammar function: ${error.message || "Unknown error"}`);
         }
     }
 
-    private handleSummarize() {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        if (selectedText) {
-            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Summarize")?.prompt || ''} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'summary';
-            this.sendMessageWithDiff(selectedText);
-        } else {
-            new Notice("No text available. Please open a markdown file or select text.", 3000);
+    async handleGenerate() {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                new Notice("Please select text to generate content for.");
+                return;
+            }
+            
+            // Get the function from settings
+            const func = this.plugin.settings.functions.find(f => f.name === "Generate");
+            if (!func) {
+                new Notice("Generate function not found in settings.");
+                return;
+            }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "generate" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Generate function: ${error.message || "Unknown error"}`);
         }
     }
 
-    private handlePolish() {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        if (selectedText) {
-            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Polish")?.prompt || ''} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'polish';
-            this.sendMessageWithDiff(selectedText);
-        } else {
-            new Notice("No text available. Please open a markdown file or select text.", 3000);
+    async handleDialogue() {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                new Notice("Please select text to start a dialogue with.");
+                return;
+            }
+            
+            // Get the function from settings
+            const func = this.plugin.settings.functions.find(f => f.name === "Dialogue");
+            if (!func) {
+                new Notice("Dialogue function not found in settings.");
+                return;
+            }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "dialogue" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Dialogue function: ${error.message || "Unknown error"}`);
         }
     }
 
-    private handleCustomFunction(func: CustomFunction) {
-        if (!this.currentInput) return;
-        const selectedText = this.getSelectedTextFromEditor();
-        
-        if (selectedText) {
-            const prompt = `${func.prompt} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'custom';
-            this.sendMessageWithDiff(selectedText);
-        } else {
-            this.currentInput.value = func.prompt;
-            this.currentFunctionMode = 'custom';
-            this.currentInput.focus();
+    async handleSummarize() {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                new Notice("Please select text to summarize.");
+                return;
+            }
+            
+            // Get the function from settings
+            const func = this.plugin.settings.functions.find(f => f.name === "Summarize");
+            if (!func) {
+                new Notice("Summarize function not found in settings.");
+                return;
+            }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "summary" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Summarize function: ${error.message || "Unknown error"}`);
         }
     }
 
-    // Add debugging and improved detection of active view
-    private getSelectedTextFromEditor(): string {
-        console.log("Getting selected text from editor");
-        
-        // Try to get the active editor first
-        let selectedText = "";
-        
-        // Try the standard method first
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (activeView && activeView.editor) {
-            const editor = activeView.editor;
-            if (editor.somethingSelected()) {
-                selectedText = editor.getSelection();
-                if (selectedText && selectedText.trim().length > 0) {
-                    return selectedText;
+    async handlePolish() {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                new Notice("Please select text to polish.");
+                return;
+            }
+            
+            // Get the function from settings
+            const func = this.plugin.settings.functions.find(f => f.name === "Polish");
+            if (!func) {
+                new Notice("Polish function not found in settings.");
+                return;
+            }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "polish" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Polish function: ${error.message || "Unknown error"}`);
+        }
+    }
+
+    async handleCustomFunction(func: CustomFunction) {
+        try {
+            // Get selected text from editor
+            const selectedText = NewMarkdownRenderer.getSelectedText(this.app);
+            
+            if (!selectedText) {
+                // Preserve original behavior - set prompt in input field and focus
+                if (this.currentInput) {
+                    this.currentInput.value = func.prompt;
+                    this.currentInput.focus();
+                } else {
+                    new Notice("Chat input not available.");
                 }
+                return;
             }
+            
+            // Prepare the prompt
+            const fullPrompt = `${func.prompt}${selectedText}`;
+            
+            // Store original text and call sendMessageWithDiff
+            this.originalText = selectedText;
+            await this.sendMessageWithDiff(fullPrompt, "custom" as FunctionMode);
+        } catch (error) {
+            new Notice(`Error in Custom function: ${error.message || "Unknown error"}`);
         }
-        
-        // If no selection found, try additional methods
-        if (!selectedText || selectedText.trim().length === 0) {
-            // Look through all markdown leaves to find one with a selection
-            const markdownViews = this.app.workspace.getLeavesOfType('markdown')
-                .map(leaf => leaf.view as MarkdownView)
-                .filter(view => view instanceof MarkdownView);
-                
-            for (const view of markdownViews) {
-                if (view.editor && view.editor.somethingSelected()) {
-                    selectedText = view.editor.getSelection();
-                    if (selectedText && selectedText.trim().length > 0) {
-                        return selectedText;
-                    }
-                }
-            }
-        }
-        
-        return selectedText;
     }
 
     // Add method for sending message with diff functionality
-    private async sendMessageWithDiff(originalText: string) {
-        console.log("sendMessageWithDiff called with mode:", this.currentFunctionMode);
-        
-        if (!this.currentInput) {
-            console.error("sendMessageWithDiff failed: currentInput is null");
-            return;
-        }
-        
-        if (this.isGenerating) {
-            console.log("sendMessageWithDiff: already generating, ignoring request");
-            return;
-        }
-
-        const userMessage = this.currentInput.value.trim();
-        if (!userMessage) {
-            console.error("sendMessageWithDiff failed: userMessage is empty");
-            return;
-        }
-        
-        console.log("sendMessageWithDiff proceeding with message:", userMessage.substring(0, 50) + "...");
-
-        // Clear input and reset height
-        this.currentInput.value = '';
-        this.currentInput.style.height = 'auto';
-
-        // Create and add user message to UI
-        const userMessageEl = this.addMessage("user", userMessage);
-
-        // Disable input during generation
-        this.isGenerating = true;
-        if (this.currentInput) {
-            this.currentInput.disabled = true;
-        }
-
-        // Add loading indicator
-        const loadingEl = this.messagesContainer.createDiv({ cls: 'ai-message' });
-        loadingEl.addClass('loading');
-        const loadingIndicator = loadingEl.createDiv({ cls: 'loading-indicator' });
-        
-        // Create loading dots safely using createSpan instead of innerHTML
-        const dot1 = loadingIndicator.createSpan({ cls: 'dot' });
-        const dot2 = loadingIndicator.createSpan({ cls: 'dot' });
-        const dot3 = loadingIndicator.createSpan({ cls: 'dot' });
-        
-        this.scrollToBottom();
-
+    async sendMessageWithDiff(userMessage: string, mode: FunctionMode = 'none'): Promise<void> {
         try {
-            // Get the default model
-            const defaultModel = this.modelManager.getDefaultModel();
-            if (!defaultModel) {
-                throw new Error("No default model configured. Please set a default model in settings.");
+            // If already generating, don't allow another generation
+            if (this.isGenerating) {
+                new Notice("Already generating a response. Please wait.");
+                return;
+            }
+            
+            // Check for valid input
+            if (!this.currentInput) {
+                new Notice("Chat input not available.");
+                return;
+            }
+            
+            // Check for empty message
+            if (!userMessage || userMessage.trim().length === 0) {
+                new Notice("Please enter a message.");
+                return;
+            }
+            
+            // Set current function mode for context
+            this.currentFunctionMode = mode;
+            
+            // Clear input and reset height
+            this.currentInput.value = '';
+            this.currentInput.style.height = 'auto';
+
+            // Create and add user message to UI
+            const userMessageEl = this.addMessage("user", userMessage);
+
+            // Disable input during generation
+            this.isGenerating = true;
+            if (this.currentInput) {
+                this.currentInput.disabled = true;
             }
 
-            // Add user message to chat
-            this.addMessage("user", userMessage);
+            // Add loading indicator
+            const loadingEl = this.messagesContainer.createDiv({ cls: 'ai-message' });
+            loadingEl.addClass('loading');
+            const loadingIndicator = loadingEl.createDiv({ cls: 'loading-indicator' });
             
-            // Create placeholder for assistant message
-            const assistantMessageId = `msg-${Date.now()}`;
-            this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
+            // Create loading dots safely using createSpan instead of innerHTML
+            const dot1 = loadingIndicator.createSpan({ cls: 'dot' });
+            const dot2 = loadingIndicator.createSpan({ cls: 'dot' });
+            const dot3 = loadingIndicator.createSpan({ cls: 'dot' });
             
-            // Initialize controller for potential cancellation
-            this.controller = new AbortController();
-            
-            let accumulatedResponse = '';
-            
-            // Call model with streaming
-            const response = await this.modelManager.callModel(
-                defaultModel.id,
-                userMessage,
-                {
-                    streaming: true,
-                    onChunk: (chunk) => {
-                        try {
-                            // Update UI with streaming chunks
-                            if (this.currentMessage) {
-                                const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
-                                if (contentDiv) {
-                                    // Append new content
-                                    accumulatedResponse += chunk;
-                                    
-                                    // Render markdown on the fly
-                                    contentDiv.empty();
-                                    NewMarkdownRenderer.renderMarkdown(accumulatedResponse, contentDiv, '', this.plugin);
-                                    
-                                    // Keep scroll at bottom
-                                    this.scrollToBottom();
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error handling stream chunk:', error);
-                        }
-                    },
-                    signal: this.controller.signal
+            this.scrollToBottom();
+
+            try {
+                // Get the default model
+                const defaultModel = this.modelManager.getDefaultModel();
+                if (!defaultModel) {
+                    throw new Error("No default model configured. Please set a default model in settings.");
                 }
-            );
-            
-            // Reset UI state
-            this.isGenerating = false;
-            this.controller = null;
-            
-            // Save for diff view later
-            const responseText = this.currentMessage?.querySelector('.message-content')?.textContent || "";
-            this.currentMessage = null;
-            
-            // Add apply button for diffs
-            if (this.currentFunctionMode !== 'none') {
-                this.addApplyButton(originalText, responseText);
-            }
-            
-            // Check if we should save chat history
-            if (this.shouldSaveHistory()) {
-                await this.saveChatHistory();
+
+                // Create placeholder for assistant message
+                const assistantMessageId = `msg-${Date.now()}`;
+                this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
+                
+                // Initialize controller for potential cancellation
+                this.controller = new AbortController();
+                
+                let accumulatedResponse = '';
+                
+                // Call model with streaming
+                const response = await this.modelManager.callModel(
+                    defaultModel.id,
+                    userMessage,
+                    {
+                        streaming: true,
+                        onChunk: (chunk) => {
+                            try {
+                                // Update UI with streaming chunks
+                                if (this.currentMessage) {
+                                    const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
+                                    if (contentDiv) {
+                                        // Append new content
+                                        accumulatedResponse += chunk;
+                                        
+                                        // Render markdown on the fly
+                                        contentDiv.empty();
+                                        NewMarkdownRenderer.renderMarkdown(accumulatedResponse, contentDiv, '', this.plugin);
+                                        
+                                        // Keep scroll at bottom
+                                        this.scrollToBottom();
+                                    }
+                                }
+                            } catch (error) {
+                                // Silent error handling for chunks
+                            }
+                        },
+                        signal: this.controller.signal
+                    }
+                );
+                
+                // Reset UI state
+                this.isGenerating = false;
+                this.controller = null;
+                
+                // Enable input
+                if (this.currentInput) {
+                    this.currentInput.disabled = false;
+                }
+                
+                // Remove loading element
+                loadingEl.remove();
+                
+                // Save for diff view later
+                const responseText = accumulatedResponse;
+                
+                // Add apply button for diffs if we're in a function mode and have original text
+                if (mode !== 'none' && this.originalText) {
+                    this.addApplyButton(this.originalText, responseText);
+                    // Clear originalText after use
+                    this.originalText = null;
+                }
+                
+                // Check if we should save chat history
+                if (this.shouldSaveHistory()) {
+                    await this.saveChatHistory();
+                }
+                
+                // Reset current message
+                this.currentMessage = null;
+                
+            } catch (error) {
+                // Handle error and display to user
+                if (this.currentMessage) {
+                    const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
+                    if (contentDiv) {
+                        contentDiv.textContent = `Error: ${error.message || "Failed to generate response"}. Please try again.`;
+                    }
+                }
+                
+                // Remove loading element
+                loadingEl.remove();
+                
+                // Reset UI state
+                this.isGenerating = false;
+                this.controller = null;
+                
+                // Enable input
+                if (this.currentInput) {
+                    this.currentInput.disabled = false;
+                }
+                
+                // Reset originalText
+                this.originalText = null;
+                
+                // Reset current message
+                this.currentMessage = null;
             }
         } catch (error) {
-            console.error("Error sending message:", error);
-            
-            // Display error to user
-            if (this.currentMessage) {
-                const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
-                if (contentDiv) {
-                    contentDiv.textContent = "Error: Failed to generate response. Please try again.";
-                }
-            }
-            
-            // Reset UI state
+            new Notice(`Error sending message: ${error.message || "Unknown error"}`);
             this.isGenerating = false;
-            this.controller = null;
-            this.currentMessage = null;
+            // Reset originalText
+            this.originalText = null;
         }
-    }
-
-    // Method to add apply button for diffs with improved active editor checking
-    private addApplyButton(originalText: string, responseText: string) {
-        // Store current editor reference at the time of function execution
-        const editorInfo = this.captureCurrentEditorState();
-        
-        const messages = this.messagesContainer.querySelectorAll('.message.assistant-message');
-        if (messages.length === 0) return;
-        
-        const lastMessage = messages[messages.length - 1] as HTMLElement;
-        if (!lastMessage) return;
-        
-        // Check if action container already exists
-        let actionContainer = lastMessage.querySelector('.message-actions');
-        if (!actionContainer) {
-            actionContainer = lastMessage.createDiv({ cls: 'message-actions hover-only' });
-        }
-        
-        // Add apply button
-        const applyButton = (actionContainer as HTMLElement).createEl('button', {
-            cls: 'message-action-button apply-button',
-            attr: { 'aria-label': 'Apply changes' }
-        });
-        setIcon(applyButton, 'check');
-        
-        // Add copy button
-        const copyButton = (actionContainer as HTMLElement).createEl('button', {
-            cls: 'message-action-button copy-button',
-            attr: { 'aria-label': 'Copy message' }
-        });
-        setIcon(copyButton, 'copy');
-        
-        copyButton.onclick = async () => {
-            try {
-                await navigator.clipboard.writeText(responseText);
-                new Notice('Copied to clipboard', 2000);
-            } catch (err) {
-                console.error("Failed to copy content:", err);
-                new Notice("Failed to copy content", 2000);
-            }
-        };
-        
-        // Add insert button
-        const insertButton = (actionContainer as HTMLElement).createEl('button', {
-            cls: 'message-action-button insert-button',
-            attr: { 'aria-label': 'Insert into editor' }
-        });
-        setIcon(insertButton, 'file-plus');
-        
-        insertButton.onclick = () => {
-            // Try to get editor from stored state first, then fall back to active editor
-            const editor = this.getEditorForAction(editorInfo);
-            if (!editor) {
-                new Notice("Please open a markdown file first", 3000);
-                return;
-            }
-            
-            // Insert at cursor position
-            editor.replaceSelection(responseText);
-            new Notice("Content inserted at cursor position", 2000);
-        };
-        
-        // Add click handler for showing diff and applying
-        applyButton.onclick = () => {
-            // Try to get editor from stored state first, then fall back to active editor
-            const editor = this.getEditorForAction(editorInfo);
-            if (!editor) {
-                new Notice("Please open a markdown file first", 3000);
-                return;
-            }
-            
-            // Show diff modal to apply changes
-            this.showDiffModal(editor, originalText, responseText);
-        };
-    }
-    
-    // Helper method to capture current editor state when function is executed
-    private captureCurrentEditorState() {
-        // First try to get current selection
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        
-        if (activeView && activeView.editor) {
-            return {
-                viewLeaf: this.app.workspace.activeLeaf,
-                viewType: 'markdown',
-                hasSelection: activeView.editor.somethingSelected(),
-                selectionText: activeView.editor.somethingSelected() ? activeView.editor.getSelection() : null
-            };
-        }
-        
-        // Try to find any markdown view with a selection
-        const markdownViews = this.app.workspace.getLeavesOfType('markdown')
-            .map(leaf => leaf.view as MarkdownView)
-            .filter(view => view instanceof MarkdownView);
-            
-        for (const view of markdownViews) {
-            if (view.editor && view.editor.somethingSelected()) {
-                const leaf = this.app.workspace.getLeavesOfType('markdown')
-                    .find(l => l.view === view);
-                    
-                if (leaf) {
-                    return {
-                        viewLeaf: leaf,
-                        viewType: 'markdown',
-                        hasSelection: true,
-                        selectionText: view.editor.getSelection()
-                    };
-                }
-            }
-        }
-        
-        // If no selection found, return the active leaf (if it's a markdown view)
-        if (this.app.workspace.activeLeaf && 
-            this.app.workspace.activeLeaf.view instanceof MarkdownView) {
-            return {
-                viewLeaf: this.app.workspace.activeLeaf,
-                viewType: 'markdown',
-                hasSelection: false,
-                selectionText: null
-            };
-        }
-        
-        return null;
-    }
-    
-    // Helper method to get editor from stored state or current state
-    private getEditorForAction(editorInfo: any) {
-        // If we have stored editor info, try to use that first
-        if (editorInfo && editorInfo.viewLeaf) {
-            const view = editorInfo.viewLeaf.view;
-            if (view instanceof MarkdownView && view.editor) {
-                return view.editor;
-            }
-        }
-        
-        // Fall back to current active editor
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (activeView && activeView.editor) {
-            return activeView.editor;
-        }
-        
-        // Try getting any markdown view as a last resort
-        const markdownViews = this.app.workspace.getLeavesOfType('markdown')
-            .map(leaf => leaf.view as MarkdownView)
-            .filter(view => view instanceof MarkdownView);
-            
-        if (markdownViews.length > 0 && markdownViews[0].editor) {
-            return markdownViews[0].editor;
-        }
-        
-        return null;
     }
 
     // Method to show diff modal
     private showDiffModal(editor: Editor, originalText: string, newText: string) {
-        // Create modal for showing diff
+        if (!this.plugin.diffMatchPatchLib) {
+            new Notice("Diff library not loaded. Cannot show diff view.", 3000);
+            return;
+        }
+        
+        // Create a new instance of diff_match_patch
+        const dmp = new this.plugin.diffMatchPatchLib();
+        
+        // Compute the diff
+        const diffs = dmp.diff_main(originalText, newText);
+        
+        // Clean up the diff for better human readability
+        dmp.diff_cleanupSemantic(diffs);
+        
+        // Visualize the diff
+        const diffHtml = this.visualizeDiff(diffs);
+        
+        // Show diff in modal
         const modal = new Modal(this.app);
         modal.titleEl.setText("Review Changes");
-        modal.contentEl.addClass("diff-modal");
+        modal.contentEl.addClass("diff-view-modal");
         
-        // Create diff container
-        const diffContainer = modal.contentEl.createDiv({ cls: "diff-container" });
+        // Create content container
+        const contentContainer = modal.contentEl.createDiv({ cls: "diff-container" });
         
-        // Add diff visualization
-        this.visualizeDiff(diffContainer, originalText, newText);
+        // Create diff content
+        const diffContent = contentContainer.createDiv({ cls: "diff-content" });
         
-        // Add action buttons
-        const buttonContainer = modal.contentEl.createDiv({ cls: "diff-actions" });
+        // Set content using proper DOM methods instead of innerHTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = diffHtml; // Safe because diffHtml is generated internally
         
-        // Apply button
+        // Move all child nodes to the real container
+        while (tempDiv.firstChild) {
+            diffContent.appendChild(tempDiv.firstChild);
+        }
+        
+        // Create button container
+        const buttonContainer = modal.contentEl.createDiv({ cls: "diff-buttons" });
+        
+        // Create apply button
         const applyButton = buttonContainer.createEl("button", {
             text: "Apply Changes",
             cls: "diff-apply-button"
         });
         
-        // Cancel button
+        // Create cancel button
         const cancelButton = buttonContainer.createEl("button", {
             text: "Cancel",
             cls: "diff-cancel-button"
         });
         
-        // Add event listeners
-        applyButton.onclick = () => {
-            // Check if it's a selection or entire document
-            if (editor.somethingSelected()) {
-                editor.replaceSelection(newText);
-            } else {
-                editor.setValue(newText);
-            }
+        // Add click handlers
+        applyButton.addEventListener("click", () => {
+            editor.replaceSelection(newText);
+            new Notice("Changes applied", 2000);
             modal.close();
-            new Notice("Changes applied successfully", 2000);
-        };
+        });
         
-        cancelButton.onclick = () => {
+        cancelButton.addEventListener("click", () => {
             modal.close();
-        };
+        });
         
         // Open the modal
         modal.open();
     }
 
-    // Method to visualize diff
-    private visualizeDiff(container: HTMLElement, originalText: string, newText: string) {
-        // Create formatted diff if we have the library
-        if (this.plugin.diffMatchPatchLib) {
-            try {
-                // Use the diffMatchPatchLib directly without creating a new instance
-                const diffs = this.plugin.diffMatchPatchLib.diff_main(originalText, newText);
-                this.plugin.diffMatchPatchLib.diff_cleanupSemantic(diffs);
+    // Add method to visualize diff
+    private visualizeDiff(diffs: Array<[number, string]>): string {
+        const DIFF_DELETE = -1;
+        const DIFF_INSERT = 1;
+        const DIFF_EQUAL = 0;
+        
+        let html = '';
+        for (let i = 0; i < diffs.length; i++) {
+            const [op, text] = diffs[i];
+            const safeText = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>');
                 
-                // Create diff view
-                const diffView = container.createDiv({ cls: "diff-view" });
-                
-                // Process each diff segment and create properly styled spans
-                for (const [op, text] of diffs) {
-                    if (!text) continue; // Skip empty segments
-                    
-                    // Create span with the appropriate class based on operation
-                    const span = document.createElement('span');
-                    
-                    // -1 = deletion, 1 = addition, 0 = unchanged
-                    if (op === -1) {
-                        span.className = 'diff-delete';
-                    } else if (op === 1) {
-                        span.className = 'diff-add';
-                    } else {
-                        span.className = 'diff-equal';
-                    }
-                    
-                    // Set text content and append to diff view
-                    span.textContent = text;
-                    diffView.appendChild(span);
-                }
-            } catch (error) {
-                console.error("Error creating diff:", error);
-                this.createSimpleDiffView(container, originalText, newText);
+            switch (op) {
+                case DIFF_INSERT:
+                    html += '<span class="diff-add">' + safeText + '</span>';
+                    break;
+                case DIFF_DELETE:
+                    html += '<span class="diff-delete">' + safeText + '</span>';
+                    break;
+                case DIFF_EQUAL:
+                    html += '<span class="diff-equal">' + safeText + '</span>';
+                    break;
             }
-        } else {
-            // Fallback to simple diff view
-            this.createSimpleDiffView(container, originalText, newText);
         }
-    }
-
-    // Create a simple side-by-side diff view
-    private createSimpleDiffView(container: HTMLElement, originalText: string, newText: string) {
-        const diffContainer = container.createDiv({ cls: "simple-diff-container" });
-        
-        // Create original text column
-        const originalCol = diffContainer.createDiv({ cls: "diff-column original-column" });
-        originalCol.createEl("h3", { text: "Original" });
-        const originalContent = originalCol.createDiv({ cls: "diff-content" });
-        originalContent.setText(originalText);
-        
-        // Create new text column
-        const newCol = diffContainer.createDiv({ cls: "diff-column new-column" });
-        newCol.createEl("h3", { text: "New Version" });
-        const newContent = newCol.createDiv({ cls: "diff-content" });
-        newContent.setText(newText);
+        return html;
     }
 
     // Add shouldSaveHistory method
@@ -1844,9 +1758,160 @@ export class ChatView extends ItemView implements Component {
             // Update last save time
             this.lastHistorySave = Date.now();
             
-            console.log(`Chat history saved to ${fileName}`);
+            // Chat history saved to fileName (removed console.log)
         } catch (error) {
             console.error("Failed to save chat history:", error);
         }
+    }
+
+    // Method to add apply button for diffs with improved active editor checking
+    private addApplyButton(originalText: string, responseText: string) {
+        // Store current editor reference at the time of function execution
+        const editorInfo = this.captureCurrentEditorState();
+        
+        const messages = this.messagesContainer.querySelectorAll('.message.assistant-message');
+        if (messages.length === 0) return;
+        
+        const lastMessage = messages[messages.length - 1] as HTMLElement;
+        if (!lastMessage) return;
+        
+        // Check if action container already exists
+        let actionContainer = lastMessage.querySelector('.message-actions');
+        if (!actionContainer) {
+            actionContainer = lastMessage.createDiv({ cls: 'message-actions hover-only' });
+        }
+        
+        // Add apply button
+        const applyButton = (actionContainer as HTMLElement).createEl('button', {
+            cls: 'message-action-button apply-button',
+            attr: { 'aria-label': 'Apply changes' }
+        });
+        setIcon(applyButton, 'check');
+        
+        // Add copy button
+        const copyButton = (actionContainer as HTMLElement).createEl('button', {
+            cls: 'message-action-button copy-button',
+            attr: { 'aria-label': 'Copy message' }
+        });
+        setIcon(copyButton, 'copy');
+        
+        copyButton.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(responseText);
+                new Notice('Copied to clipboard', 2000);
+            } catch (err) {
+                new Notice("Failed to copy content", 2000);
+            }
+        };
+        
+        // Add insert button
+        const insertButton = (actionContainer as HTMLElement).createEl('button', {
+            cls: 'message-action-button insert-button',
+            attr: { 'aria-label': 'Insert into editor' }
+        });
+        setIcon(insertButton, 'file-plus');
+        
+        insertButton.onclick = () => {
+            // Try to get editor from stored state first, then fall back to active editor
+            const editor = this.getEditorForAction(editorInfo);
+            if (!editor) {
+                new Notice("Please open a markdown file first", 3000);
+                return;
+            }
+            
+            // Insert at cursor position
+            editor.replaceSelection(responseText);
+            new Notice("Content inserted at cursor position", 2000);
+        };
+        
+        // Add click handler for showing diff and applying
+        applyButton.onclick = () => {
+            // Try to get editor from stored state first, then fall back to active editor
+            const editor = this.getEditorForAction(editorInfo);
+            if (!editor) {
+                new Notice("Please open a markdown file first", 3000);
+                return;
+            }
+            
+            // Show diff modal to apply changes
+            this.showDiffModal(editor, originalText, responseText);
+        };
+    }
+
+    // Helper method to capture current editor state when function is executed
+    private captureCurrentEditorState() {
+        // First try to get current selection
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        
+        if (activeView && activeView.editor) {
+            return {
+                viewLeaf: this.app.workspace.activeLeaf,
+                viewType: 'markdown',
+                hasSelection: activeView.editor.somethingSelected(),
+                selectionText: activeView.editor.somethingSelected() ? activeView.editor.getSelection() : null
+            };
+        }
+        
+        // Try to find any markdown view with a selection
+        const markdownViews = this.app.workspace.getLeavesOfType('markdown')
+            .map(leaf => leaf.view as MarkdownView)
+            .filter(view => view instanceof MarkdownView);
+            
+        for (const view of markdownViews) {
+            if (view.editor && view.editor.somethingSelected()) {
+                const leaf = this.app.workspace.getLeavesOfType('markdown')
+                    .find(l => l.view === view);
+                    
+                if (leaf) {
+                    return {
+                        viewLeaf: leaf,
+                        viewType: 'markdown',
+                        hasSelection: true,
+                        selectionText: view.editor.getSelection()
+                    };
+                }
+            }
+        }
+        
+        // If no selection found, return the active leaf (if it's a markdown view)
+        if (this.app.workspace.activeLeaf && 
+            this.app.workspace.activeLeaf.view instanceof MarkdownView) {
+            return {
+                viewLeaf: this.app.workspace.activeLeaf,
+                viewType: 'markdown',
+                hasSelection: false,
+                selectionText: null
+            };
+        }
+        
+        return null;
+    }
+
+    // Helper method to get editor from stored state or current state
+    private getEditorForAction(editorInfo: EditorInfo | null): Editor | null {
+        // If we have stored editor info, try to use that first
+        if (editorInfo && editorInfo.viewLeaf) {
+            const view = editorInfo.viewLeaf.view;
+            if (view instanceof MarkdownView && view.editor) {
+                return view.editor;
+            }
+        }
+        
+        // Fall back to current active editor
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView && activeView.editor) {
+            return activeView.editor;
+        }
+        
+        // Try getting any markdown view as a last resort
+        const markdownViews = this.app.workspace.getLeavesOfType('markdown')
+            .map(leaf => leaf.view as MarkdownView)
+            .filter(view => view instanceof MarkdownView);
+            
+        if (markdownViews.length > 0 && markdownViews[0].editor) {
+            return markdownViews[0].editor;
+        }
+        
+        return null;
     }
 } 

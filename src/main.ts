@@ -38,7 +38,8 @@ import {
     addIcon,
     ItemView,
     View,
-    Vault
+    Vault,
+    PluginManifest
 } from "obsidian";
 
 // CSS styles are loaded via manifest.json
@@ -293,16 +294,16 @@ function decryptString(encoded: string, salt: string): string {
 
 // Add getIcon helper function at the top of the file where other utility functions are defined
 // This extracts the SVG content from an icon
-function getIcon(iconName: string): string | null {
+function getIcon(iconName: string): SVGElement | null {
     try {
         const tempEl = document.createElement('div');
         
         // Use Obsidian's setIcon on the temp element
         setIcon(tempEl, iconName);
         
-        // Instead of returning innerHTML, create a properly cloned DOM element
-        const svgElement = tempEl.firstElementChild;
-        return svgElement ? svgElement.outerHTML : null;
+        // Instead of returning innerHTML or outerHTML, return the SVG element directly
+        const svgElement = tempEl.firstElementChild as SVGElement;
+        return svgElement ? svgElement.cloneNode(true) as SVGElement : null;
     } catch (e) {
         console.error(`Failed to get icon: ${iconName}`, e);
         return null;
@@ -324,16 +325,16 @@ export default class AIPilotPlugin extends Plugin {
     private readonly CACHE_DURATION = 1000 * 60 * 60; // 1 hour
     public currentInput: HTMLTextAreaElement | null = null;
     modelManager: ModelManager;
-    public diffMatchPatchLib: any = null;
+    public diffMatchPatchLib: DiffMatchPatch | null = null;
     ragService: RAGService;
 
-    constructor(app: App, manifest: any) {
+    constructor(app: App, manifest: PluginManifest) {
         super(app, manifest);
         this.app = app;
     }
 
     async onload() {
-        console.log('Loading AIPilot plugin');
+        // Loading AIPilot plugin (removed console.log)
         
         // Remove the manual styles loading as we're now properly importing CSS
         // and extracting it to a separate file
@@ -561,7 +562,7 @@ export default class AIPilotPlugin extends Plugin {
         if (this.settings.apiKey && this.settings.model && 
             (!this.settings.models || this.settings.models.length === 0)) {
             
-            console.log("Migrating legacy API key to models system");
+            // Migrating legacy API key to models system (removed console.log)
             this.settings.models.push({
                 name: "Default Model",
                 modelName: this.settings.model,
@@ -579,7 +580,7 @@ export default class AIPilotPlugin extends Plugin {
         if (this.settings.embeddingModels && 
             (!this.settings.embeddingModels || !this.settings.embeddingModels.length)) {
             
-            console.log("Migrating legacy embedding configuration");
+            // Migrating legacy embedding configuration (removed console.log)
             this.settings.embeddingModels = [
                 {
                     id: 'default-openai-embedding',
@@ -597,39 +598,37 @@ export default class AIPilotPlugin extends Plugin {
         try {
             // Check if we already have diff-match-patch in dependencies
             if (typeof window.diff_match_patch === 'function') {
-                // Create an instance of the diff_match_patch class
-                this.diffMatchPatchLib = new window.diff_match_patch();
-                console.log("Successfully loaded diff_match_patch from window");
+                this.diffMatchPatchLib = window.diff_match_patch;
+                // Successfully loaded diff_match_patch from window (removed console.log)
                 return;
             }
             
-            // Try to load from CDN if not already available
-            return new Promise((resolve) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js';
-                script.async = true;
-                
+            // If not available, dynamically load from CDN
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js';
+            script.async = true;
+            
+            // Create a promise to wait for the script to load
+            const loadPromise = new Promise<void>((resolve, reject) => {
                 script.onload = () => {
                     if (typeof window.diff_match_patch === 'function') {
-                        // Create an instance of the diff_match_patch class
-                        this.diffMatchPatchLib = new window.diff_match_patch();
-                        console.log("Successfully loaded diff_match_patch from CDN");
+                        this.diffMatchPatchLib = window.diff_match_patch;
+                        // Successfully loaded diff_match_patch from CDN (removed console.log)
                         resolve();
                     } else {
-                        console.error("diff_match_patch loaded but constructor not found");
-                        resolve();
+                        reject(new Error("Failed to load diff_match_patch library"));
                     }
                 };
-                
-                script.onerror = () => {
-                    console.error("Failed to load diff_match_patch from CDN");
-                    resolve();
-                };
-                
-                document.head.appendChild(script);
+                script.onerror = () => reject(new Error("Failed to load diff_match_patch library"));
             });
-        } catch (e) {
-            console.error("Error loading diff_match_patch library:", e);
+            
+            // Add script to document
+            document.head.appendChild(script);
+            
+            // Wait for script to load
+            await loadPromise;
+        } catch (error) {
+            console.error("Error loading diff_match_patch library:", error);
         }
     }
     
@@ -1860,13 +1859,8 @@ class CustomFunctionModal extends Modal {
             // Manually add the icon instead of using setIcon to ensure it's visible
             const svgIcon = getIcon(icon.name);
             if (svgIcon) {
-                // Replace innerHTML with proper DOM manipulation
-                const tempEl = document.createElement('div');
-                tempEl.innerHTML = svgIcon; // Using innerHTML temporarily just to parse the SVG
-                // Safely move the parsed SVG to the button
-                while (tempEl.firstChild) {
-                    iconBtn.appendChild(tempEl.firstChild);
-                }
+                // Directly append the SVG element since we're returning it from getIcon
+                iconBtn.appendChild(svgIcon);
             } else {
                 iconBtn.textContent = icon.name.charAt(0).toUpperCase();
             }
@@ -1975,13 +1969,8 @@ class CustomFunctionModal extends Modal {
         // Try to get the icon
         const svgIcon = getIcon(iconName);
         if (svgIcon) {
-            // Replace innerHTML with proper DOM manipulation
-            const tempEl = document.createElement('div');
-            tempEl.innerHTML = svgIcon; // Using innerHTML temporarily just to parse the SVG
-            // Safely move the parsed SVG to the preview element
-            while (tempEl.firstChild) {
-                this.iconPreviewEl.appendChild(tempEl.firstChild);
-            }
+            // Directly append the SVG element since we're returning it from getIcon
+            this.iconPreviewEl.appendChild(svgIcon);
         } else {
             this.iconPreviewEl.setText(`Icon not found: ${iconName}`);
         }
