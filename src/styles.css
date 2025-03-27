@@ -3164,3 +3164,133 @@
   justify-content: center;
   margin: 16px 0;
 }
+
+/* Diff View Styles for the diff modal */
+.diff-modal {
+  max-width: 80vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-description {
+  background-color: var(--background-secondary);
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  border-left: 4px solid var(--interactive-accent);
+}
+
+.diff-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  font-family: var(--font-text);
+  line-height: 1.5;
+  background-color: var(--background-primary);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  max-height: 60vh;
+}
+
+.diff-view {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Style for deleted text in diff view */
+.diff-delete {
+  text-decoration: line-through;
+  color: var(--text-error);
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+/* Style for added text in diff view */
+.diff-add {
+  background-color: rgba(128, 0, 128, 0.2);
+  color: var(--text-accent-hover);
+  font-weight: 500;
+}
+
+/* Equal/unchanged text */
+.diff-equal {
+  color: var(--text-normal);
+}
+
+/* Dark theme adjustments for diff view */
+.theme-dark .diff-delete {
+  color: rgb(255, 150, 150);
+  background-color: rgba(255, 0, 0, 0.15);
+}
+
+.theme-dark .diff-add {
+  background-color: rgba(180, 100, 200, 0.25);
+  color: rgb(220, 180, 250);
+}
+
+.diff-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.diff-apply-button,
+.diff-cancel-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.diff-apply-button {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+}
+
+.diff-apply-button:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+.diff-cancel-button {
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.diff-cancel-button:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Simple side-by-side diff styles */
+.simple-diff-container {
+  display: flex;
+  gap: 16px;
+}
+
+.diff-column {
+  flex: 1;
+  padding: 12px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.diff-column h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.diff-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-text);
+  line-height: 1.5;
+}

@@ -595,20 +595,39 @@ export default class AIPilotPlugin extends Plugin {
     
     async loadDiffMatchPatchLibrary(): Promise<void> {
         try {
-            if (!window.diff_match_patch) {
-                // Load the library
+            // Check if we already have diff-match-patch in dependencies
+            if (typeof window.diff_match_patch === 'function') {
+                // Create an instance of the diff_match_patch class
+                this.diffMatchPatchLib = new window.diff_match_patch();
+                console.log("Successfully loaded diff_match_patch from window");
+                return;
+            }
+            
+            // Try to load from CDN if not already available
+            return new Promise((resolve) => {
                 const script = document.createElement('script');
                 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js';
                 script.async = true;
+                
                 script.onload = () => {
-                    if (window.diff_match_patch) {
+                    if (typeof window.diff_match_patch === 'function') {
+                        // Create an instance of the diff_match_patch class
                         this.diffMatchPatchLib = new window.diff_match_patch();
+                        console.log("Successfully loaded diff_match_patch from CDN");
+                        resolve();
+                    } else {
+                        console.error("diff_match_patch loaded but constructor not found");
+                        resolve();
                     }
                 };
+                
+                script.onerror = () => {
+                    console.error("Failed to load diff_match_patch from CDN");
+                    resolve();
+                };
+                
                 document.head.appendChild(script);
-            } else {
-                this.diffMatchPatchLib = new window.diff_match_patch();
-            }
+            });
         } catch (e) {
             console.error("Error loading diff_match_patch library:", e);
         }

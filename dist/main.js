@@ -459,8 +459,14 @@ var ChatView = class extends import_obsidian2.ItemView {
     insertButton.onclick = () => {
       const contentDiv = messageEl.querySelector(".message-content");
       if (!contentDiv) return;
-      const activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
+      let activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
       if (!activeView) {
+        const activeLeaf = this.app.workspace.activeLeaf;
+        if (activeLeaf && activeLeaf.view instanceof import_obsidian2.MarkdownView) {
+          activeView = activeLeaf.view;
+        }
+      }
+      if (!activeView || !activeView.editor) {
         new import_obsidian2.Notice("Please open a markdown file first", 3e3);
         return;
       }
@@ -477,8 +483,14 @@ var ChatView = class extends import_obsidian2.ItemView {
     applyButton.onclick = () => {
       const contentDiv = messageEl.querySelector(".message-content");
       if (!contentDiv) return;
-      const activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
+      let activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
       if (!activeView) {
+        const activeLeaf = this.app.workspace.activeLeaf;
+        if (activeLeaf && activeLeaf.view instanceof import_obsidian2.MarkdownView) {
+          activeView = activeLeaf.view;
+        }
+      }
+      if (!activeView || !activeView.editor) {
         new import_obsidian2.Notice("Please open a markdown file first", 3e3);
         return;
       }
@@ -525,14 +537,23 @@ var ChatView = class extends import_obsidian2.ItemView {
     }
   }
   handleGenerate() {
-    var _a;
     if (!this.currentInput) return;
     const selectedText = this.getSelectedTextFromEditor();
+    console.log("Generate function called with selected text:", selectedText ? selectedText.substring(0, 50) + "..." : "none");
     if (selectedText) {
-      const prompt = `${((_a = this.plugin.settings.functions.find((f) => f.name === "Generate")) == null ? void 0 : _a.prompt) || ""} ${selectedText}`;
-      this.currentInput.value = prompt;
-      this.currentFunctionMode = "generate";
-      this.sendMessageWithDiff(selectedText);
+      try {
+        const generateFunc = this.plugin.settings.functions.find((f) => f.name === "Generate");
+        const prompt = generateFunc ? generateFunc.prompt : "Generate content based on the following prompt:";
+        const fullPrompt = `${prompt} ${selectedText}`;
+        console.log("Generate prompt prepared:", fullPrompt.substring(0, 50) + "...");
+        this.currentInput.value = fullPrompt;
+        this.currentFunctionMode = "generate";
+        console.log("Sending message with diff...");
+        this.sendMessageWithDiff(selectedText);
+      } catch (error) {
+        console.error("Error in handleGenerate:", error);
+        new import_obsidian2.Notice("Error processing generate request. Check console for details.", 3e3);
+      }
     } else {
       new import_obsidian2.Notice("No text available. Please open a markdown file or select text.", 3e3);
     }
@@ -593,15 +614,49 @@ var ChatView = class extends import_obsidian2.ItemView {
   // Add debugging and improved detection of active view
   getSelectedTextFromEditor() {
     console.log("Getting selected text from editor");
-    return MarkdownRenderer.getSelectedText(this.app);
+    let selectedText = "";
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
+    if (activeView && activeView.editor) {
+      const editor = activeView.editor;
+      if (editor.somethingSelected()) {
+        selectedText = editor.getSelection();
+        if (selectedText && selectedText.trim().length > 0) {
+          return selectedText;
+        }
+      }
+    }
+    if (!selectedText || selectedText.trim().length === 0) {
+      const markdownViews = this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view).filter((view) => view instanceof import_obsidian2.MarkdownView);
+      for (const view of markdownViews) {
+        if (view.editor && view.editor.somethingSelected()) {
+          selectedText = view.editor.getSelection();
+          if (selectedText && selectedText.trim().length > 0) {
+            return selectedText;
+          }
+        }
+      }
+    }
+    return selectedText;
   }
   // Add method for sending message with diff functionality
   sendMessageWithDiff(originalText) {
     return __async(this, null, function* () {
       var _a, _b;
-      if (!this.currentInput || this.isGenerating) return;
+      console.log("sendMessageWithDiff called with mode:", this.currentFunctionMode);
+      if (!this.currentInput) {
+        console.error("sendMessageWithDiff failed: currentInput is null");
+        return;
+      }
+      if (this.isGenerating) {
+        console.log("sendMessageWithDiff: already generating, ignoring request");
+        return;
+      }
       const userMessage = this.currentInput.value.trim();
-      if (!userMessage) return;
+      if (!userMessage) {
+        console.error("sendMessageWithDiff failed: userMessage is empty");
+        return;
+      }
+      console.log("sendMessageWithDiff proceeding with message:", userMessage.substring(0, 50) + "...");
       this.currentInput.value = "";
       this.currentInput.style.height = "auto";
       const userMessageEl = this.addMessage("user", userMessage);
@@ -675,6 +730,7 @@ var ChatView = class extends import_obsidian2.ItemView {
   }
   // Method to add apply button for diffs with improved active editor checking
   addApplyButton(originalText, responseText) {
+    const editorInfo = this.captureCurrentEditorState();
     const messages = this.messagesContainer.querySelectorAll(".message.assistant-message");
     if (messages.length === 0) return;
     const lastMessage = messages[messages.length - 1];
@@ -688,21 +744,95 @@ var ChatView = class extends import_obsidian2.ItemView {
       attr: { "aria-label": "Apply changes" }
     });
     (0, import_obsidian2.setIcon)(applyButton, "check");
-    applyButton.createSpan({ cls: "action-tooltip", text: "Apply changes" });
-    applyButton.onclick = () => {
-      let activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
-      if (!activeView) {
-        const activeLeaf = this.app.workspace.activeLeaf;
-        if (activeLeaf && activeLeaf.view instanceof import_obsidian2.MarkdownView) {
-          activeView = activeLeaf.view;
-        }
+    const copyButton = actionContainer.createEl("button", {
+      cls: "message-action-button copy-button",
+      attr: { "aria-label": "Copy message" }
+    });
+    (0, import_obsidian2.setIcon)(copyButton, "copy");
+    copyButton.onclick = () => __async(this, null, function* () {
+      try {
+        yield navigator.clipboard.writeText(responseText);
+        new import_obsidian2.Notice("Copied to clipboard", 2e3);
+      } catch (err) {
+        console.error("Failed to copy content:", err);
+        new import_obsidian2.Notice("Failed to copy content", 2e3);
       }
-      if (!activeView || !activeView.editor) {
+    });
+    const insertButton = actionContainer.createEl("button", {
+      cls: "message-action-button insert-button",
+      attr: { "aria-label": "Insert into editor" }
+    });
+    (0, import_obsidian2.setIcon)(insertButton, "file-plus");
+    insertButton.onclick = () => {
+      const editor = this.getEditorForAction(editorInfo);
+      if (!editor) {
         new import_obsidian2.Notice("Please open a markdown file first", 3e3);
         return;
       }
-      this.showDiffModal(activeView.editor, originalText, responseText);
+      editor.replaceSelection(responseText);
+      new import_obsidian2.Notice("Content inserted at cursor position", 2e3);
     };
+    applyButton.onclick = () => {
+      const editor = this.getEditorForAction(editorInfo);
+      if (!editor) {
+        new import_obsidian2.Notice("Please open a markdown file first", 3e3);
+        return;
+      }
+      this.showDiffModal(editor, originalText, responseText);
+    };
+  }
+  // Helper method to capture current editor state when function is executed
+  captureCurrentEditorState() {
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
+    if (activeView && activeView.editor) {
+      return {
+        viewLeaf: this.app.workspace.activeLeaf,
+        viewType: "markdown",
+        hasSelection: activeView.editor.somethingSelected(),
+        selectionText: activeView.editor.somethingSelected() ? activeView.editor.getSelection() : null
+      };
+    }
+    const markdownViews = this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view).filter((view) => view instanceof import_obsidian2.MarkdownView);
+    for (const view of markdownViews) {
+      if (view.editor && view.editor.somethingSelected()) {
+        const leaf = this.app.workspace.getLeavesOfType("markdown").find((l) => l.view === view);
+        if (leaf) {
+          return {
+            viewLeaf: leaf,
+            viewType: "markdown",
+            hasSelection: true,
+            selectionText: view.editor.getSelection()
+          };
+        }
+      }
+    }
+    if (this.app.workspace.activeLeaf && this.app.workspace.activeLeaf.view instanceof import_obsidian2.MarkdownView) {
+      return {
+        viewLeaf: this.app.workspace.activeLeaf,
+        viewType: "markdown",
+        hasSelection: false,
+        selectionText: null
+      };
+    }
+    return null;
+  }
+  // Helper method to get editor from stored state or current state
+  getEditorForAction(editorInfo) {
+    if (editorInfo && editorInfo.viewLeaf) {
+      const view = editorInfo.viewLeaf.view;
+      if (view instanceof import_obsidian2.MarkdownView && view.editor) {
+        return view.editor;
+      }
+    }
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
+    if (activeView && activeView.editor) {
+      return activeView.editor;
+    }
+    const markdownViews = this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view).filter((view) => view instanceof import_obsidian2.MarkdownView);
+    if (markdownViews.length > 0 && markdownViews[0].editor) {
+      return markdownViews[0].editor;
+    }
+    return null;
   }
   // Method to show diff modal
   showDiffModal(editor, originalText, newText) {
@@ -738,15 +868,21 @@ var ChatView = class extends import_obsidian2.ItemView {
   visualizeDiff(container, originalText, newText) {
     if (this.plugin.diffMatchPatchLib) {
       try {
-        const dmp = new this.plugin.diffMatchPatchLib();
-        const diffs = dmp.diff_main(originalText, newText);
-        dmp.diff_cleanupSemantic(diffs);
+        const diffs = this.plugin.diffMatchPatchLib.diff_main(originalText, newText);
+        this.plugin.diffMatchPatchLib.diff_cleanupSemantic(diffs);
         const diffView = container.createDiv({ cls: "diff-view" });
         for (const [op, text] of diffs) {
-          const span = diffView.createSpan({
-            cls: op === -1 ? "diff-delete" : op === 1 ? "diff-add" : "diff-equal",
-            text
-          });
+          if (!text) continue;
+          const span = document.createElement("span");
+          if (op === -1) {
+            span.className = "diff-delete";
+          } else if (op === 1) {
+            span.className = "diff-add";
+          } else {
+            span.className = "diff-equal";
+          }
+          span.textContent = text;
+          diffView.appendChild(span);
         }
       } catch (error) {
         console.error("Error creating diff:", error);
@@ -5141,19 +5277,31 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
   loadDiffMatchPatchLibrary() {
     return __async(this, null, function* () {
       try {
-        if (!window.diff_match_patch) {
+        if (typeof window.diff_match_patch === "function") {
+          this.diffMatchPatchLib = new window.diff_match_patch();
+          console.log("Successfully loaded diff_match_patch from window");
+          return;
+        }
+        return new Promise((resolve) => {
           const script = document.createElement("script");
           script.src = "https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js";
           script.async = true;
           script.onload = () => {
-            if (window.diff_match_patch) {
+            if (typeof window.diff_match_patch === "function") {
               this.diffMatchPatchLib = new window.diff_match_patch();
+              console.log("Successfully loaded diff_match_patch from CDN");
+              resolve();
+            } else {
+              console.error("diff_match_patch loaded but constructor not found");
+              resolve();
             }
           };
+          script.onerror = () => {
+            console.error("Failed to load diff_match_patch from CDN");
+            resolve();
+          };
           document.head.appendChild(script);
-        } else {
-          this.diffMatchPatchLib = new window.diff_match_patch();
-        }
+        });
       } catch (e) {
         console.error("Error loading diff_match_patch library:", e);
       }

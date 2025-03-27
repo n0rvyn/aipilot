@@ -1149,8 +1149,18 @@ export class ChatView extends ItemView implements Component {
             const contentDiv = messageEl.querySelector('.message-content') as HTMLElement;
             if (!contentDiv) return;
 
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            // Get active editor - try multiple methods
+            let activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            
+            // If not found through standard method, try from active leaf
             if (!activeView) {
+                const activeLeaf = this.app.workspace.activeLeaf;
+                if (activeLeaf && activeLeaf.view instanceof MarkdownView) {
+                    activeView = activeLeaf.view as MarkdownView;
+                }
+            }
+            
+            if (!activeView || !activeView.editor) {
                 new Notice("Please open a markdown file first", 3000);
                 return;
             }
@@ -1174,8 +1184,18 @@ export class ChatView extends ItemView implements Component {
             const contentDiv = messageEl.querySelector('.message-content') as HTMLElement;
             if (!contentDiv) return;
 
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            // Get active editor - try multiple methods
+            let activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            
+            // If not found through standard method, try from active leaf
             if (!activeView) {
+                const activeLeaf = this.app.workspace.activeLeaf;
+                if (activeLeaf && activeLeaf.view instanceof MarkdownView) {
+                    activeView = activeLeaf.view as MarkdownView;
+                }
+            }
+            
+            if (!activeView || !activeView.editor) {
                 new Notice("Please open a markdown file first", 3000);
                 return;
             }
@@ -1236,11 +1256,31 @@ export class ChatView extends ItemView implements Component {
         if (!this.currentInput) return;
         const selectedText = this.getSelectedTextFromEditor();
         
+        console.log("Generate function called with selected text:", selectedText ? selectedText.substring(0, 50) + "..." : "none");
+        
         if (selectedText) {
-            const prompt = `${this.plugin.settings.functions.find(f => f.name === "Generate")?.prompt || ''} ${selectedText}`;
-            this.currentInput.value = prompt;
-            this.currentFunctionMode = 'generate';
-            this.sendMessageWithDiff(selectedText);
+            try {
+                // Find the generate prompt
+                const generateFunc = this.plugin.settings.functions.find(f => f.name === "Generate");
+                const prompt = generateFunc ? generateFunc.prompt : "Generate content based on the following prompt:";
+                
+                // Create the full prompt with selected text
+                const fullPrompt = `${prompt} ${selectedText}`;
+                console.log("Generate prompt prepared:", fullPrompt.substring(0, 50) + "...");
+                
+                // Set input value
+                this.currentInput.value = fullPrompt;
+                
+                // Set function mode
+                this.currentFunctionMode = 'generate';
+                
+                // Directly call sendMessageWithDiff to auto-send
+                console.log("Sending message with diff...");
+                this.sendMessageWithDiff(selectedText);
+            } catch (error) {
+                console.error("Error in handleGenerate:", error);
+                new Notice("Error processing generate request. Check console for details.", 3000);
+            }
         } else {
             new Notice("No text available. Please open a markdown file or select text.", 3000);
         }
@@ -1307,15 +1347,63 @@ export class ChatView extends ItemView implements Component {
     // Add debugging and improved detection of active view
     private getSelectedTextFromEditor(): string {
         console.log("Getting selected text from editor");
-        return NewMarkdownRenderer.getSelectedText(this.app);
+        
+        // Try to get the active editor first
+        let selectedText = "";
+        
+        // Try the standard method first
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView && activeView.editor) {
+            const editor = activeView.editor;
+            if (editor.somethingSelected()) {
+                selectedText = editor.getSelection();
+                if (selectedText && selectedText.trim().length > 0) {
+                    return selectedText;
+                }
+            }
+        }
+        
+        // If no selection found, try additional methods
+        if (!selectedText || selectedText.trim().length === 0) {
+            // Look through all markdown leaves to find one with a selection
+            const markdownViews = this.app.workspace.getLeavesOfType('markdown')
+                .map(leaf => leaf.view as MarkdownView)
+                .filter(view => view instanceof MarkdownView);
+                
+            for (const view of markdownViews) {
+                if (view.editor && view.editor.somethingSelected()) {
+                    selectedText = view.editor.getSelection();
+                    if (selectedText && selectedText.trim().length > 0) {
+                        return selectedText;
+                    }
+                }
+            }
+        }
+        
+        return selectedText;
     }
 
     // Add method for sending message with diff functionality
     private async sendMessageWithDiff(originalText: string) {
-        if (!this.currentInput || this.isGenerating) return;
+        console.log("sendMessageWithDiff called with mode:", this.currentFunctionMode);
+        
+        if (!this.currentInput) {
+            console.error("sendMessageWithDiff failed: currentInput is null");
+            return;
+        }
+        
+        if (this.isGenerating) {
+            console.log("sendMessageWithDiff: already generating, ignoring request");
+            return;
+        }
 
         const userMessage = this.currentInput.value.trim();
-        if (!userMessage) return;
+        if (!userMessage) {
+            console.error("sendMessageWithDiff failed: userMessage is empty");
+            return;
+        }
+        
+        console.log("sendMessageWithDiff proceeding with message:", userMessage.substring(0, 50) + "...");
 
         // Clear input and reset height
         this.currentInput.value = '';
@@ -1429,6 +1517,9 @@ export class ChatView extends ItemView implements Component {
 
     // Method to add apply button for diffs with improved active editor checking
     private addApplyButton(originalText: string, responseText: string) {
+        // Store current editor reference at the time of function execution
+        const editorInfo = this.captureCurrentEditorState();
+        
         const messages = this.messagesContainer.querySelectorAll('.message.assistant-message');
         if (messages.length === 0) return;
         
@@ -1448,30 +1539,132 @@ export class ChatView extends ItemView implements Component {
         });
         setIcon(applyButton, 'check');
         
-        // Add tooltip
-        applyButton.createSpan({ cls: 'action-tooltip', text: 'Apply changes' });
+        // Add copy button
+        const copyButton = (actionContainer as HTMLElement).createEl('button', {
+            cls: 'message-action-button copy-button',
+            attr: { 'aria-label': 'Copy message' }
+        });
+        setIcon(copyButton, 'copy');
+        
+        copyButton.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(responseText);
+                new Notice('Copied to clipboard', 2000);
+            } catch (err) {
+                console.error("Failed to copy content:", err);
+                new Notice("Failed to copy content", 2000);
+            }
+        };
+        
+        // Add insert button
+        const insertButton = (actionContainer as HTMLElement).createEl('button', {
+            cls: 'message-action-button insert-button',
+            attr: { 'aria-label': 'Insert into editor' }
+        });
+        setIcon(insertButton, 'file-plus');
+        
+        insertButton.onclick = () => {
+            // Try to get editor from stored state first, then fall back to active editor
+            const editor = this.getEditorForAction(editorInfo);
+            if (!editor) {
+                new Notice("Please open a markdown file first", 3000);
+                return;
+            }
+            
+            // Insert at cursor position
+            editor.replaceSelection(responseText);
+            new Notice("Content inserted at cursor position", 2000);
+        };
         
         // Add click handler for showing diff and applying
         applyButton.onclick = () => {
-            // Get active editor - try multiple methods
-            let activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-            
-            // If not found through standard method, try from active leaf
-            if (!activeView) {
-                const activeLeaf = this.app.workspace.activeLeaf;
-                if (activeLeaf && activeLeaf.view instanceof MarkdownView) {
-                    activeView = activeLeaf.view as MarkdownView;
-                }
-            }
-            
-            if (!activeView || !activeView.editor) {
+            // Try to get editor from stored state first, then fall back to active editor
+            const editor = this.getEditorForAction(editorInfo);
+            if (!editor) {
                 new Notice("Please open a markdown file first", 3000);
                 return;
             }
             
             // Show diff modal to apply changes
-            this.showDiffModal(activeView.editor, originalText, responseText);
+            this.showDiffModal(editor, originalText, responseText);
         };
+    }
+    
+    // Helper method to capture current editor state when function is executed
+    private captureCurrentEditorState() {
+        // First try to get current selection
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        
+        if (activeView && activeView.editor) {
+            return {
+                viewLeaf: this.app.workspace.activeLeaf,
+                viewType: 'markdown',
+                hasSelection: activeView.editor.somethingSelected(),
+                selectionText: activeView.editor.somethingSelected() ? activeView.editor.getSelection() : null
+            };
+        }
+        
+        // Try to find any markdown view with a selection
+        const markdownViews = this.app.workspace.getLeavesOfType('markdown')
+            .map(leaf => leaf.view as MarkdownView)
+            .filter(view => view instanceof MarkdownView);
+            
+        for (const view of markdownViews) {
+            if (view.editor && view.editor.somethingSelected()) {
+                const leaf = this.app.workspace.getLeavesOfType('markdown')
+                    .find(l => l.view === view);
+                    
+                if (leaf) {
+                    return {
+                        viewLeaf: leaf,
+                        viewType: 'markdown',
+                        hasSelection: true,
+                        selectionText: view.editor.getSelection()
+                    };
+                }
+            }
+        }
+        
+        // If no selection found, return the active leaf (if it's a markdown view)
+        if (this.app.workspace.activeLeaf && 
+            this.app.workspace.activeLeaf.view instanceof MarkdownView) {
+            return {
+                viewLeaf: this.app.workspace.activeLeaf,
+                viewType: 'markdown',
+                hasSelection: false,
+                selectionText: null
+            };
+        }
+        
+        return null;
+    }
+    
+    // Helper method to get editor from stored state or current state
+    private getEditorForAction(editorInfo: any) {
+        // If we have stored editor info, try to use that first
+        if (editorInfo && editorInfo.viewLeaf) {
+            const view = editorInfo.viewLeaf.view;
+            if (view instanceof MarkdownView && view.editor) {
+                return view.editor;
+            }
+        }
+        
+        // Fall back to current active editor
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView && activeView.editor) {
+            return activeView.editor;
+        }
+        
+        // Try getting any markdown view as a last resort
+        const markdownViews = this.app.workspace.getLeavesOfType('markdown')
+            .map(leaf => leaf.view as MarkdownView)
+            .filter(view => view instanceof MarkdownView);
+            
+        if (markdownViews.length > 0 && markdownViews[0].editor) {
+            return markdownViews[0].editor;
+        }
+        
+        return null;
     }
 
     // Method to show diff modal
@@ -1527,24 +1720,38 @@ export class ChatView extends ItemView implements Component {
         // Create formatted diff if we have the library
         if (this.plugin.diffMatchPatchLib) {
             try {
-                const dmp = new this.plugin.diffMatchPatchLib();
-                const diffs = dmp.diff_main(originalText, newText);
-                dmp.diff_cleanupSemantic(diffs);
+                // Use the diffMatchPatchLib directly without creating a new instance
+                const diffs = this.plugin.diffMatchPatchLib.diff_main(originalText, newText);
+                this.plugin.diffMatchPatchLib.diff_cleanupSemantic(diffs);
                 
                 // Create diff view
                 const diffView = container.createDiv({ cls: "diff-view" });
                 
+                // Process each diff segment and create properly styled spans
                 for (const [op, text] of diffs) {
-                    const span = diffView.createSpan({
-                        cls: op === -1 ? "diff-delete" : op === 1 ? "diff-add" : "diff-equal",
-                        text
-                    });
+                    if (!text) continue; // Skip empty segments
+                    
+                    // Create span with the appropriate class based on operation
+                    const span = document.createElement('span');
+                    
+                    // -1 = deletion, 1 = addition, 0 = unchanged
+                    if (op === -1) {
+                        span.className = 'diff-delete';
+                    } else if (op === 1) {
+                        span.className = 'diff-add';
+                    } else {
+                        span.className = 'diff-equal';
+                    }
+                    
+                    // Set text content and append to diff view
+                    span.textContent = text;
+                    diffView.appendChild(span);
                 }
             } catch (error) {
                 console.error("Error creating diff:", error);
                 this.createSimpleDiffView(container, originalText, newText);
             }
-            } else {
+        } else {
             // Fallback to simple diff view
             this.createSimpleDiffView(container, originalText, newText);
         }
