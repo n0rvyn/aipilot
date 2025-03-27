@@ -295,14 +295,14 @@ function decryptString(encoded: string, salt: string): string {
 // This extracts the SVG content from an icon
 function getIcon(iconName: string): string | null {
     try {
-        // Create a temporary element
         const tempEl = document.createElement('div');
         
         // Use Obsidian's setIcon on the temp element
         setIcon(tempEl, iconName);
         
-        // Return the inner HTML which contains the SVG
-        return tempEl.innerHTML.trim() || null;
+        // Instead of returning innerHTML, create a properly cloned DOM element
+        const svgElement = tempEl.firstElementChild;
+        return svgElement ? svgElement.outerHTML : null;
     } catch (e) {
         console.error(`Failed to get icon: ${iconName}`, e);
         return null;
@@ -335,8 +335,9 @@ export default class AIPilotPlugin extends Plugin {
     async onload() {
         console.log('Loading AIPilot plugin');
         
-        // Manually load CSS
-        this.loadStyles();
+        // Remove the manual styles loading as we're now properly importing CSS
+        // and extracting it to a separate file
+        // this.loadStyles();
         
         await this.loadSettings();
         
@@ -403,7 +404,7 @@ export default class AIPilotPlugin extends Plugin {
         });
 
         // 3. Debate feature ribbon icon
-        this.addRibbonIcon("users", "AI Agent Debate", () => {
+        this.addRibbonIcon("brain-cog", "AI Agent Debate", () => {
             this.activateDebateView();
         });
         
@@ -954,383 +955,6 @@ export default class AIPilotPlugin extends Plugin {
     async handleCustomPrompt(editor: Editor): Promise<void> {
         // Implementation for handle custom prompt
         // This can be implemented later
-    }
-
-    // Add method to manually load styles
-    private loadStyles() {
-        // Add CSS to document
-        const cssElement = document.createElement('style');
-        cssElement.id = 'aipilot-styles';
-        
-        // Add critical inline styles
-        cssElement.textContent = `
-        /* Critical styles for AIPilot */
-        .chat-view-container, .kb-view-container, .debate-view-container {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            background-color: var(--background-secondary);
-            color: var(--text-normal);
-        }
-        
-        .chat-container, .kb-container, .debate-view-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .messages-container {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        
-        .input-container {
-            display: flex;
-            flex-direction: column;
-            padding: 8px 16px 16px;
-            border-top: 1px solid var(--background-modifier-border);
-            background-color: var(--background-primary);
-        }
-        
-        .input-wrapper {
-            display: flex;
-            position: relative;
-            width: 100%;
-            align-items: flex-end;
-            gap: 8px;
-        }
-        
-        .chat-input {
-            flex: 1;
-            resize: none;
-            padding: 12px;
-            border-radius: 6px;
-            min-height: 60px;
-            max-height: 200px;
-            background: var(--background-primary);
-            color: var(--text-normal);
-            border: 1px solid var(--background-modifier-border);
-            font-family: var(--font-text);
-            line-height: 1.5;
-        }
-        
-        .function-icons-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 8px;
-            position: relative;
-        }
-        
-        .function-icon-button {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 6px 10px;
-            border-radius: 4px;
-            background-color: var(--background-secondary);
-            color: var(--text-normal);
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-            border: 1px solid var(--background-modifier-border);
-        }
-        
-        .function-icon-button:hover {
-            background-color: var(--background-modifier-hover);
-        }
-        
-        /* Knowledge Base Search View Styles */
-        .kb-view-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background: var(--background-primary);
-            padding: 16px;
-        }
-
-        .kb-search-header {
-            text-align: center;
-            margin-bottom: 24px;
-        }
-
-        .kb-search-header h2 {
-            font-size: 24px;
-            margin-bottom: 8px;
-            color: var(--text-normal);
-        }
-
-        .kb-search-header p {
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        .kb-search-container {
-            background: var(--background-secondary);
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .kb-search-input-wrapper {
-            position: relative;
-            margin-bottom: 16px;
-        }
-
-        .kb-search-input {
-            width: 100%;
-            padding: 12px 16px;
-            font-size: 16px;
-            border: 2px solid var(--background-modifier-border);
-            border-radius: 8px;
-            background: var(--background-primary);
-            color: var(--text-normal);
-            transition: all 0.3s ease;
-        }
-
-        .kb-search-input:focus {
-            border-color: var(--interactive-accent);
-            box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.2);
-            outline: none;
-        }
-
-        .kb-search-buttons {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .kb-search-button {
-            flex: 1;
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .kb-search-button.primary {
-            background: var(--interactive-accent);
-            color: var(--text-on-accent);
-            border: none;
-        }
-
-        .kb-search-button.primary:hover {
-            background: var(--interactive-accent-hover);
-            transform: translateY(-1px);
-        }
-
-        .kb-search-button.secondary {
-            background: var(--background-modifier-form-field);
-            color: var(--text-normal);
-            border: 1px solid var(--background-modifier-border);
-        }
-
-        .kb-search-button.secondary:hover {
-            background: var(--background-modifier-form-field-highlighted);
-        }
-
-        .kb-results-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-            background: var(--background-primary);
-            border-radius: 8px;
-            border: 1px solid var(--background-modifier-border);
-        }
-
-        .kb-result-item {
-            padding: 16px;
-            margin-bottom: 16px;
-            background: var(--background-secondary);
-            border-radius: 8px;
-            border: 1px solid var(--background-modifier-border);
-            transition: all 0.2s ease;
-        }
-
-        .kb-result-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border-color: var(--interactive-accent);
-        }
-
-        .kb-result-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-normal);
-        }
-
-        .kb-result-excerpt {
-            font-size: 14px;
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-
-        .kb-result-meta {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--background-modifier-border);
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        .kb-loading-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 32px;
-            text-align: center;
-        }
-
-        .kb-loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--background-modifier-border);
-            border-top-color: var(--interactive-accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .kb-loading-text {
-            margin-top: 16px;
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        .kb-empty-state {
-            text-align: center;
-            padding: 48px 24px;
-            color: var(--text-muted);
-        }
-
-        .kb-empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .kb-empty-state-text {
-            font-size: 16px;
-            margin-bottom: 8px;
-        }
-
-        .kb-empty-state-subtext {
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        /* Loading indicator */
-        .loading-indicator {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 4px;
-            margin: 8px 0;
-            height: 20px;
-        }
-
-        .loading-indicator .dot {
-            width: 6px;
-            height: 6px;
-            background-color: var(--text-muted);
-            border-radius: 50%;
-            animation: pulse 1.4s infinite;
-            opacity: 0.6;
-        }
-
-        .loading-indicator .dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .loading-indicator .dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(0.8); opacity: 0.6; }
-            50% { transform: scale(1.2); opacity: 0.8; }
-            100% { transform: scale(0.8); opacity: 0.6; }
-        }
-
-        /* Message actions */
-        .message-action-button {
-            opacity: 0.8;
-            transition: all 0.2s ease;
-            position: relative;
-            border-radius: 4px;
-            padding: 4px;
-            margin: 0 2px;
-            background-color: rgba(var(--text-normal-rgb), 0.05);
-        }
-
-        .message-action-button:hover {
-            opacity: 1;
-            transform: scale(1.05);
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        .message-action-button:active {
-            transform: scale(0.95);
-        }
-
-        .message-action-button svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        /* Copy button */
-        .message-action-button.copy-button:hover {
-            background-color: rgba(var(--text-accent-rgb), 0.1);
-        }
-
-        .message-action-button.copy-button svg {
-            color: var(--text-accent);
-        }
-
-        /* Insert button */
-        .message-action-button.insert-button:hover {
-            background-color: rgba(var(--text-success-rgb), 0.1);
-        }
-
-        .message-action-button.insert-button svg {
-            color: var(--text-success);
-        }
-
-        /* Apply button */
-        .message-action-button.apply-button:hover {
-            background-color: rgba(var(--interactive-accent-rgb), 0.2);
-        }
-        `;
-        
-        // Add to document
-        document.head.appendChild(cssElement);
-        console.log('AIPilot styles loaded successfully');
     }
 
     /**
@@ -2217,7 +1841,13 @@ class CustomFunctionModal extends Modal {
             // Manually add the icon instead of using setIcon to ensure it's visible
             const svgIcon = getIcon(icon.name);
             if (svgIcon) {
-                iconBtn.innerHTML = svgIcon;
+                // Replace innerHTML with proper DOM manipulation
+                const tempEl = document.createElement('div');
+                tempEl.innerHTML = svgIcon; // Using innerHTML temporarily just to parse the SVG
+                // Safely move the parsed SVG to the button
+                while (tempEl.firstChild) {
+                    iconBtn.appendChild(tempEl.firstChild);
+                }
             } else {
                 iconBtn.textContent = icon.name.charAt(0).toUpperCase();
             }
@@ -2326,7 +1956,13 @@ class CustomFunctionModal extends Modal {
         // Try to get the icon
         const svgIcon = getIcon(iconName);
         if (svgIcon) {
-            this.iconPreviewEl.innerHTML = svgIcon;
+            // Replace innerHTML with proper DOM manipulation
+            const tempEl = document.createElement('div');
+            tempEl.innerHTML = svgIcon; // Using innerHTML temporarily just to parse the SVG
+            // Safely move the parsed SVG to the preview element
+            while (tempEl.firstChild) {
+                this.iconPreviewEl.appendChild(tempEl.firstChild);
+            }
         } else {
             this.iconPreviewEl.setText(`Icon not found: ${iconName}`);
         }

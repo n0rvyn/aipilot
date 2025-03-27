@@ -20,6 +20,9 @@ export class DebatePanel extends ItemView {
   private exportButtonEl: HTMLButtonElement;
   private statusEl: HTMLElement;
   private languageSelectEl: HTMLSelectElement;
+  private configPanelEl: HTMLElement;
+  private isConfigPanelCollapsed: boolean = false;
+  private configToggleButton: HTMLElement;
   
   constructor(leaf: WorkspaceLeaf, modelManager: ModelManager) {
     super(leaf);
@@ -62,13 +65,28 @@ export class DebatePanel extends ItemView {
   }
   
   private createConfigPanel(): void {
-    const configPanelEl = this.containerEl.createDiv({ cls: 'debate-config-panel' });
+    this.configPanelEl = this.containerEl.createDiv({ cls: 'debate-config-panel' });
+    
+    // Add config header with toggle button
+    const configHeaderEl = this.configPanelEl.createDiv({ cls: 'debate-config-header' });
     
     // Header
-    const headerEl = configPanelEl.createEl('h2', { text: 'AI Agent Debate' });
+    const headerEl = configHeaderEl.createEl('h2', { text: 'AI Agent Debate' });
+    
+    // Add toggle button
+    this.configToggleButton = configHeaderEl.createDiv({ 
+      cls: 'debate-config-toggle',
+      attr: { title: 'Toggle configuration panel' }
+    });
+    this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    
+    this.configToggleButton.addEventListener('click', () => this.toggleConfigPanel());
+    
+    // Config content div that can be collapsed
+    const configContentEl = this.configPanelEl.createDiv({ cls: 'debate-config-content' });
     
     // Topic input
-    const topicWrapperEl = configPanelEl.createDiv({ cls: 'config-input-wrapper' });
+    const topicWrapperEl = configContentEl.createDiv({ cls: 'config-input-wrapper' });
     topicWrapperEl.createEl('label', { text: 'Topic', attr: { for: 'debate-topic' } });
     
     this.topicInputEl = topicWrapperEl.createEl('input', {
@@ -81,7 +99,7 @@ export class DebatePanel extends ItemView {
     });
     
     // Language selection
-    const languageWrapperEl = configPanelEl.createDiv({ cls: 'config-input-wrapper' });
+    const languageWrapperEl = configContentEl.createDiv({ cls: 'config-input-wrapper' });
     languageWrapperEl.createEl('label', { text: 'Language', attr: { for: 'debate-language' } });
     
     this.languageSelectEl = languageWrapperEl.createEl('select', {
@@ -105,7 +123,7 @@ export class DebatePanel extends ItemView {
     });
     
     // Mode selection
-    const modeContainerEl = configPanelEl.createDiv({ cls: 'config-item config-row' });
+    const modeContainerEl = configContentEl.createDiv({ cls: 'config-item config-row' });
     
     const modeWrapperEl = modeContainerEl.createDiv({ cls: 'config-input-wrapper' });
     modeWrapperEl.createEl('label', { text: 'Debate Mode', attr: { for: 'debate-mode' } });
@@ -165,7 +183,7 @@ export class DebatePanel extends ItemView {
     });
     
     // Control buttons
-    this.controlsEl = configPanelEl.createDiv({ cls: 'debate-controls' });
+    this.controlsEl = configContentEl.createDiv({ cls: 'debate-controls' });
     
     this.startButtonEl = this.controlsEl.createEl('button', {
       cls: 'debate-start-button',
@@ -239,6 +257,24 @@ export class DebatePanel extends ItemView {
     // You could update UI here to show the different agents for the selected mode
   }
   
+  private toggleConfigPanel(): void {
+    this.isConfigPanelCollapsed = !this.isConfigPanelCollapsed;
+    
+    if (this.isConfigPanelCollapsed) {
+      this.configPanelEl.addClass('collapsed');
+      this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    } else {
+      this.configPanelEl.removeClass('collapsed');
+      this.configToggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    }
+    
+    // Force a re-layout
+    this.containerEl.style.display = 'none';
+    setTimeout(() => {
+      this.containerEl.style.display = '';
+    }, 10);
+  }
+  
   private async startDebate(): Promise<void> {
     const topic = this.topicInputEl.value.trim();
     if (!topic) {
@@ -249,6 +285,11 @@ export class DebatePanel extends ItemView {
     if (!this.debateConfig) {
       new Notice('Debate configuration not initialized');
       return;
+    }
+    
+    // Auto-collapse the config panel when debate starts
+    if (!this.isConfigPanelCollapsed) {
+      this.toggleConfigPanel();
     }
     
     // Update rounds

@@ -53,14 +53,14 @@ export class ModelConfigModal extends Modal {
       .setDesc('Select the provider for this model')
       .addDropdown(dropdown => dropdown
         .addOption('openai', 'OpenAI')
-        .addOption('ollama', 'Ollama')
-        .addOption('claude', 'Anthropic Claude')
-        .addOption('zhipuai', 'Zhipu AI')
+        .addOption('zhipuai', 'ZhipuAI')
         .addOption('baidu', 'Baidu')
+        .addOption('claude', 'Claude/Anthropic')
+        .addOption('ollama', 'Ollama (local)')
         .addOption('custom', 'Custom API')
         .setValue(this.model.type)
         .onChange(value => {
-          this.model.type = value as any;
+          this.model.type = value as 'openai' | 'zhipuai' | 'baidu' | 'claude' | 'ollama' | 'custom';
           // Clear model-specific fields when changing provider
           this.model.baseUrl = '';
           this.model.modelName = '';

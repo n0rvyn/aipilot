@@ -43,38 +43,41 @@ const extractCssPlugin = {
     },
 };
 
-try {
-    await esbuild.build({
-        banner: {
-            js: banner,
-        },
-        entryPoints: ['src/main.ts'],
-        bundle: true,
-        external: [
-            'obsidian',
-            'electron',
-            '@codemirror/autocomplete',
-            '@codemirror/collab',
-            '@codemirror/state',
-            '@codemirror/view',
-            ...builtins
-        ],
-        format: 'cjs',
-        target: 'es2016',
-        logLevel: "info",
-        sourcemap: prod ? false : 'inline',
-        treeShaking: true,
-        outfile: 'dist/main.js',
-        plugins: [extractCssPlugin],
-        loader: {
-            '.css': 'text'
-        }
-    });
+// Use async IIFE instead of top-level await
+(async function() {
+    try {
+        await esbuild.build({
+            banner: {
+                js: banner,
+            },
+            entryPoints: ['src/main.ts'],
+            bundle: true,
+            external: [
+                'obsidian',
+                'electron',
+                '@codemirror/autocomplete',
+                '@codemirror/collab',
+                '@codemirror/state',
+                '@codemirror/view',
+                ...builtins
+            ],
+            format: 'cjs',
+            target: 'es2016',
+            logLevel: "info",
+            sourcemap: prod ? false : 'inline',
+            treeShaking: true,
+            outfile: 'dist/main.js',
+            plugins: [extractCssPlugin],
+            loader: {
+                '.css': 'text'
+            }
+        });
 
-    if (!prod) {
-        console.log('Build complete, watching for changes...');
+        if (!prod) {
+            console.log('Build complete, watching for changes...');
+        }
+    } catch (error) {
+        console.error('Build failed:', error);
+        process.exit(1);
     }
-} catch (error) {
-    console.error('Build failed:', error);
-    process.exit(1);
-} 
+})(); 

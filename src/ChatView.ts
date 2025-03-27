@@ -968,6 +968,31 @@ export class ChatView extends ItemView implements Component {
         const userMessage = this.currentInput.value.trim();
         if (!userMessage) return;
 
+        // Clear input and reset height
+        this.currentInput.value = '';
+        this.currentInput.style.height = 'auto';
+
+        // Create and add user message to UI
+        const userMessageEl = this.addMessage("user", userMessage);
+
+        // Disable input during generation
+        this.isGenerating = true;
+        if (this.currentInput) {
+            this.currentInput.disabled = true;
+        }
+
+        // Add loading indicator
+        const loadingEl = this.messagesContainer.createDiv({ cls: 'ai-message' });
+        loadingEl.addClass('loading');
+        const loadingIndicator = loadingEl.createDiv({ cls: 'loading-indicator' });
+        
+        // Create loading dots safely using createSpan instead of innerHTML
+        const dot1 = loadingIndicator.createSpan({ cls: 'dot' });
+        const dot2 = loadingIndicator.createSpan({ cls: 'dot' });
+        const dot3 = loadingIndicator.createSpan({ cls: 'dot' });
+
+        this.scrollToBottom();
+
         try {
             // Get the default model
             const defaultModel = this.modelManager.getDefaultModel();
@@ -978,20 +1003,9 @@ export class ChatView extends ItemView implements Component {
             // Add user message to chat
             this.addMessage("user", userMessage);
             
-            // Clear input field and reset height
-            this.currentInput.value = "";
-            this.currentInput.style.height = 'auto';
-            
-            // Set generating flag
-            this.isGenerating = true;
-            
             // Create placeholder for assistant message
             const assistantMessageId = `msg-${Date.now()}`;
             this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
-            
-            // Add loading indicator
-            const loadingIndicator = this.currentMessage.createDiv({ cls: 'loading-indicator' });
-            loadingIndicator.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
             
             // Initialize controller for potential cancellation
             this.controller = new AbortController();
@@ -1028,9 +1042,6 @@ export class ChatView extends ItemView implements Component {
                     signal: this.controller.signal
                 }
             );
-            
-            // Remove loading indicator
-            loadingIndicator?.remove();
             
             // Reset UI state
             this.isGenerating = false;
@@ -1306,6 +1317,31 @@ export class ChatView extends ItemView implements Component {
         const userMessage = this.currentInput.value.trim();
         if (!userMessage) return;
 
+        // Clear input and reset height
+        this.currentInput.value = '';
+        this.currentInput.style.height = 'auto';
+
+        // Create and add user message to UI
+        const userMessageEl = this.addMessage("user", userMessage);
+
+        // Disable input during generation
+        this.isGenerating = true;
+        if (this.currentInput) {
+            this.currentInput.disabled = true;
+        }
+
+        // Add loading indicator
+        const loadingEl = this.messagesContainer.createDiv({ cls: 'ai-message' });
+        loadingEl.addClass('loading');
+        const loadingIndicator = loadingEl.createDiv({ cls: 'loading-indicator' });
+        
+        // Create loading dots safely using createSpan instead of innerHTML
+        const dot1 = loadingIndicator.createSpan({ cls: 'dot' });
+        const dot2 = loadingIndicator.createSpan({ cls: 'dot' });
+        const dot3 = loadingIndicator.createSpan({ cls: 'dot' });
+        
+        this.scrollToBottom();
+
         try {
             // Get the default model
             const defaultModel = this.modelManager.getDefaultModel();
@@ -1316,20 +1352,9 @@ export class ChatView extends ItemView implements Component {
             // Add user message to chat
             this.addMessage("user", userMessage);
             
-            // Clear input field and reset height
-        this.currentInput.value = "";
-            this.currentInput.style.height = 'auto';
-            
-            // Set generating flag
-            this.isGenerating = true;
-            
             // Create placeholder for assistant message
             const assistantMessageId = `msg-${Date.now()}`;
             this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
-            
-            // Add loading indicator
-            const loadingIndicator = this.currentMessage.createDiv({ cls: 'loading-indicator' });
-            loadingIndicator.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
             
             // Initialize controller for potential cancellation
             this.controller = new AbortController();
@@ -1341,7 +1366,7 @@ export class ChatView extends ItemView implements Component {
                 defaultModel.id,
                 userMessage,
                 {
-                            streaming: true,
+                    streaming: true,
                     onChunk: (chunk) => {
                         try {
                             // Update UI with streaming chunks
@@ -1357,18 +1382,15 @@ export class ChatView extends ItemView implements Component {
                                     
                                     // Keep scroll at bottom
                                     this.scrollToBottom();
-                }
-            }
-        } catch (error) {
+                                }
+                            }
+                        } catch (error) {
                             console.error('Error handling stream chunk:', error);
                         }
                     },
                     signal: this.controller.signal
                 }
             );
-            
-            // Remove loading indicator
-            loadingIndicator?.remove();
             
             // Reset UI state
             this.isGenerating = false;
@@ -1387,7 +1409,7 @@ export class ChatView extends ItemView implements Component {
             if (this.shouldSaveHistory()) {
                 await this.saveChatHistory();
             }
-            } catch (error) {
+        } catch (error) {
             console.error("Error sending message:", error);
             
             // Display error to user

@@ -1,5 +1,4 @@
-import { marked } from 'marked';
-import { Component, MarkdownView, Notice, App, Plugin, TFile, Editor } from 'obsidian';
+import { Component, MarkdownView, App, Plugin, TFile, Editor, MarkdownRenderer as ObsidianMarkdownRenderer } from 'obsidian';
 
 export class MarkdownRenderer extends Component {
     private container: HTMLElement;
@@ -14,8 +13,7 @@ export class MarkdownRenderer extends Component {
     }
 
     static async renderMarkdown(content: string, container: HTMLElement, sourcePath: string, component: Plugin) {
-        const renderer = new MarkdownRenderer(container, content, component.app);
-        await renderer.render();
+        await ObsidianMarkdownRenderer.renderMarkdown(content, container, sourcePath, component);
     }
 
     async render(): Promise<void> {
@@ -26,24 +24,19 @@ export class MarkdownRenderer extends Component {
             // Add markdown-rendered class for styling
             this.container.addClass('markdown-rendered');
             
-            // Parse markdown using marked.js
-            const rendered = await marked.parse(this.content, { async: true });
-            
-            // Create a temporary div to parse the HTML content
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = rendered;
-            
-            // Safely append content using Obsidian's DOM API
-            const fragment = document.createDocumentFragment();
-            while (tempDiv.firstChild) {
-                fragment.appendChild(tempDiv.firstChild);
-            }
-            this.container.appendChild(fragment);
+            // Use Obsidian's native MarkdownRenderer to safely render content
+            // This avoids security risks from using innerHTML
+            await ObsidianMarkdownRenderer.renderMarkdown(
+                this.content,
+                this.container,
+                '',  // sourcePath (empty since this is dynamic content)
+                this  // component
+            );
             
             // No action buttons will be added here - they'll be handled by ChatView
         } catch (error) {
             console.error("Error rendering markdown:", error);
-            this.container.setText("Error rendering content: " + error.message);
+            this.container.setText("Error rendering content: " + (error as Error).message);
         }
     }
 
