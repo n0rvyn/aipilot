@@ -1,13 +1,20 @@
 import { App } from 'obsidian';
 import { RAGService, RAGOptions, RAGResult, Source } from './RAGService';
 import { AIService } from './AIService';
-import { VectorRetriever } from './retrieval/VectorRetriever';
+import { VectorRetriever, RetrieverSettings } from './retrieval/VectorRetriever';
 import { QueryRewriter } from './enhancement/QueryRewriter';
-import { HyDE } from './enhancement/HyDE';
+import { HyDE, HyDESettings } from './enhancement/HyDE';
 import { MMRReranker } from './ranking/MMR';
 import { SemanticChunker } from './ranking/SemanticChunker';
-import { Reflector } from './reflection/Reflector';
+import { Reflector, ReflectorSettings } from './reflection/Reflector';
 import AIPilotPlugin from '../main';
+
+/**
+ * Combined settings for all RAG components
+ */
+export interface RAGSettings extends RetrieverSettings, HyDESettings, ReflectorSettings {
+  // Any additional settings specific to the RAG service
+}
 
 /**
  * Create complete RAG service
@@ -16,7 +23,7 @@ import AIPilotPlugin from '../main';
  * @param settings Settings object
  * @returns Configured RAG service
  */
-export function createRAGService(app: App, plugin: AIPilotPlugin, settings: any): RAGService {
+export function createRAGService(app: App, plugin: AIPilotPlugin, settings: RAGSettings): RAGService {
   // Create AI service with model manager
   const aiService = new AIService(plugin, plugin.modelManager);
   
@@ -80,9 +87,6 @@ function initializeRAGService(
 // Export all RAG-related types and services
 export { 
   RAGService, 
-  RAGOptions, 
-  RAGResult, 
-  Source,
   AIService,
   VectorRetriever,
   QueryRewriter,
@@ -90,4 +94,11 @@ export {
   MMRReranker,
   SemanticChunker,
   Reflector
+};
+
+// Export types
+export type {
+  RAGOptions, 
+  RAGResult, 
+  Source
 }; 

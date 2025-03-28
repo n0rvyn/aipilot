@@ -1,6 +1,18 @@
 import { Source } from '../RAGService';
 
 /**
+ * Document with similarity score interface
+ */
+export interface RankableDocument {
+  score?: number;
+  content?: string;
+  embedding?: number[];
+  file?: any;
+  similarity?: number;
+  [key: string]: any; // Allow additional properties
+}
+
+/**
  * Maximum Marginal Relevance Reranker
  * 
  * Uses MMR algorithm to rerank retrieval results, balancing relevance and diversity
@@ -14,7 +26,7 @@ export class MMRReranker {
    * @param k Number of results to return
    * @returns Reranked document list
    */
-  async rerank(docs: any[], query: string, lambda = 0.7, k = 5): Promise<any[]> {
+  async rerank(docs: RankableDocument[], query: string, lambda = 0.7, k = 5): Promise<RankableDocument[]> {
     if (!docs || docs.length === 0) {
       return [];
     }
@@ -73,7 +85,7 @@ export class MMRReranker {
    * Calculate similarity between two documents
    * Using existing score by default, can be extended for more complex similarity
    */
-  private calculateSimilarity(docA: any, docB: any): number {
+  private calculateSimilarity(docA: RankableDocument, docB: RankableDocument): number {
     // Basic implementation - can be enhanced for more sophisticated similarity measures
     if (docA.embedding && docB.embedding) {
       return this.cosineSimilarity(docA.embedding, docB.embedding);

@@ -41,25 +41,69 @@ export interface ProxyConfig {
   password?: string;
 }
 
-// Add a type definition for API options
-interface OpenAIOptions {
-  modelName?: string;
+/**
+ * Base options for model calls
+ */
+export interface BaseModelOptions {
   temperature?: number;
   maxTokens?: number;
-}
-
-interface OllamaOptions {
+  streaming?: boolean;
+  onChunk?: (chunk: string) => void;
+  isChat?: boolean;
+  messages?: Array<{ role: string, content: string }>;
   modelName?: string;
-  temperature?: number;
-  maxTokens?: number;
+  [key: string]: any; // Allow for extension
 }
 
-interface ClaudeOptions {
-  modelName?: string;
-  maxTokens?: number;
+/**
+ * OpenAI-specific options
+ */
+export interface OpenAIOptions extends BaseModelOptions {
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  top_p?: number;
 }
 
-type ModelOptions = OpenAIOptions | OllamaOptions | ClaudeOptions;
+/**
+ * Ollama-specific options
+ */
+export interface OllamaOptions extends BaseModelOptions {
+  top_k?: number;
+  top_p?: number;
+  repeat_penalty?: number;
+}
+
+/**
+ * Claude-specific options
+ */
+export interface ClaudeOptions extends BaseModelOptions {
+  top_p?: number;
+  top_k?: number;
+}
+
+/**
+ * ZhipuAI-specific options
+ */
+export interface ZhipuOptions extends BaseModelOptions {
+  conversation?: Array<{ role: string, content: string }>;
+}
+
+/**
+ * Baidu-specific options
+ */
+export interface BaiduOptions extends BaseModelOptions {
+  top_p?: number;
+  penalty_score?: number;
+}
+
+/**
+ * CustomAPI-specific options
+ */
+export interface CustomAPIOptions extends BaseModelOptions {
+  customHeaders?: Record<string, string>;
+  requestFormat?: string;
+  responseField?: string;
+}
 
 export class ModelManager {
   private models: ModelConfig[] = [];
@@ -208,7 +252,7 @@ export class ModelManager {
     this.saveSettingsCallback();
   }
 
-  async callModel(modelId: string, prompt: string, options: any = {}): Promise<string> {
+  async callModel(modelId: string, prompt: string, options: BaseModelOptions = {}): Promise<string> {
     const model = this.getModelById(modelId);
     if (!model) throw new Error(`Model ${modelId} not found`);
 
@@ -232,13 +276,13 @@ export class ModelManager {
           break;
         case 'zhipu':
         case 'zhipuai':  // Add zhipuai as an alias for zhipu
-          result = await this.callZhipu(model, prompt, useProxy, options);
+          result = await this.callZhipu(model, prompt, useProxy, options as ZhipuOptions);
           break;
         case 'baidu':
-          result = await this.callBaidu(model, prompt, useProxy, options);
+          result = await this.callBaidu(model, prompt, useProxy, options as BaiduOptions);
           break;
         case 'custom':
-          result = await this.callCustomAPI(model, prompt, useProxy, options);
+          result = await this.callCustomAPI(model, prompt, useProxy, options as CustomAPIOptions);
           break;
         default:
           throw new Error(`Model type ${model.type} not supported`);
@@ -334,7 +378,7 @@ export class ModelManager {
     return data.content[0].text;
   }
   
-  private async callZhipu(model: ModelConfig, prompt: string, useProxy: boolean, options: any): Promise<string> {
+  private async callZhipu(model: ModelConfig, prompt: string, useProxy: boolean, options: ZhipuOptions): Promise<string> {
     // Implementation for ZhipuAI API
     const isZhipuAI = model.type === 'zhipuai'; 
     
@@ -493,7 +537,7 @@ export class ModelManager {
     }
   }
   
-  private async callBaidu(model: ModelConfig, prompt: string, useProxy: boolean, options: any): Promise<string> {
+  private async callBaidu(model: ModelConfig, prompt: string, useProxy: boolean, options: BaiduOptions): Promise<string> {
     // Implementation for Baidu Wenxin API
     // This is a placeholder implementation - would need to be updated with actual API details
     const url = model.baseUrl || "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/";
@@ -521,7 +565,7 @@ export class ModelManager {
     return data.result;
   }
   
-  private async callCustomAPI(model: ModelConfig, prompt: string, useProxy: boolean, options: any): Promise<string> {
+  private async callCustomAPI(model: ModelConfig, prompt: string, useProxy: boolean, options: CustomAPIOptions): Promise<string> {
     // Implementation for custom LLM API
     if (!model.baseUrl) throw new Error("Base URL is required for custom API model");
     
@@ -575,20 +619,26 @@ export class ModelManager {
     }
   }
   
-  async callMultipleModels(modelIds: string[], prompt: string, options: any = {}): Promise<Record<string, string>> {
+  /**
+   * Call multiple models with the same prompt in parallel
+   * @param modelIds Array of model IDs to call
+   * @param prompt Prompt to send to all models
+   * @param options Options for the API calls
+   * @returns Object mapping model IDs to their responses
+   */
+  async callMultipleModels(modelIds: string[], prompt: string, options: BaseModelOptions = {}): Promise<Record<string, string>> {
     const results: Record<string, string> = {};
     
-    // Use Promise.all to call all models in parallel
-    await Promise.all(modelIds.map(async (modelId) => {
+    const promises = modelIds.map(async (modelId) => {
       try {
-        const result = await this.callModel(modelId, prompt, options);
-        results[modelId] = result;
+        const response = await this.callModel(modelId, prompt, options);
+        results[modelId] = response;
       } catch (error) {
-        console.error(`Error calling model ${modelId}:`, error);
         results[modelId] = `Error: ${error.message}`;
       }
-    }));
+    });
     
+    await Promise.all(promises);
     return results;
   }
 

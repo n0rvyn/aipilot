@@ -1,6 +1,20 @@
 import { TFile } from 'obsidian';
 import { Source } from '../RAGService';
-import { VectorRetriever } from '../retrieval/VectorRetriever';
+import { VectorRetriever, RetrieverSettings } from '../retrieval/VectorRetriever';
+
+/**
+ * Interface for AI Service
+ */
+export interface AIService {
+  callAIChat(messages: Array<{ role: string, content: string }>): Promise<string>;
+}
+
+/**
+ * Interface for HyDE Settings
+ */
+export interface HyDESettings extends RetrieverSettings {
+  minHypotheticalDocLength?: number;
+}
 
 /**
  * Hypothetical Document Embedding (HyDE) Enhancer
@@ -8,8 +22,8 @@ import { VectorRetriever } from '../retrieval/VectorRetriever';
  */
 export class HyDE {
   constructor(
-    private settings: any,
-    private aiService?: any,
+    private settings: HyDESettings,
+    private aiService?: AIService,
     private vectorRetriever?: VectorRetriever
   ) {}
   
@@ -22,7 +36,6 @@ export class HyDE {
     const empty = { hypotheticalDoc: '', hydeResults: [] };
     
     if (!this.aiService || !this.vectorRetriever) {
-      console.log("HyDE requires AI service and vector retriever, skipping");
       return empty;
     }
     
@@ -30,13 +43,11 @@ export class HyDE {
       // Generate hypothetical answer
       const hypotheticalDoc = await this.generateHypotheticalDoc(query);
       
-      if (!hypotheticalDoc || hypotheticalDoc.length < 50) return empty;
+      const minLength = this.settings.minHypotheticalDocLength || 50;
+      if (!hypotheticalDoc || hypotheticalDoc.length < minLength) return empty;
       
-      // Use hypothetical document as query for retrieval
-      // Assumes vectorRetriever implements retrieve method
       const hydeResults = await this.vectorRetriever.retrieve(hypotheticalDoc);
       
-      console.log(`HyDE retrieval returned ${hydeResults.length} results`);
       return { hypotheticalDoc, hydeResults };
     } catch (error) {
       console.error("Error in HyDE retrieval:", error);
@@ -63,7 +74,7 @@ export class HyDE {
         }
       ];
       
-      return await this.aiService.callAIChat(messages);
+      return await this.aiService!.callAIChat(messages);
     } catch (error) {
       console.error("Error generating hypothetical document:", error);
       return "";
@@ -71,11 +82,11 @@ export class HyDE {
   }
   
   /**
-   * 创建源对象
-   * @param file 文件
-   * @param similarity 相似度分数
-   * @param content 内容片段
-   * @returns 源对象
+   * Create source object
+   * @param file File
+   * @param similarity Similarity score
+   * @param content Content snippet
+   * @returns Source object
    */
   private createSource(file: TFile, similarity: number, content: string): Source {
     return { file, similarity, content };

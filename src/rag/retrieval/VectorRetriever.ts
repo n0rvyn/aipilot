@@ -4,15 +4,24 @@ import { BaseRetriever, RetrieverPriority } from './Retriever';
 import { ModelManager } from '../../models/ModelManager';
 
 /**
+ * Interface for Retriever Settings
+ */
+export interface RetrieverSettings {
+  knowledgeBasePath?: string;
+  similarityThreshold?: number;
+  maxResults?: number;
+}
+
+/**
  * Vector Retriever
  * Uses embedding vectors to implement semantic document retrieval
  */
 export class VectorRetriever extends BaseRetriever {
   private app: App;
   private modelManager: ModelManager;
-  private settings: any;
+  private settings: RetrieverSettings;
   
-  constructor(app: App, modelManager: ModelManager, settings: any) {
+  constructor(app: App, modelManager: ModelManager, settings: RetrieverSettings) {
     super(RetrieverPriority.Vector);
     this.app = app;
     this.modelManager = modelManager;
@@ -31,12 +40,14 @@ export class VectorRetriever extends BaseRetriever {
    */
   async retrieve(query: string, limit: number = 5): Promise<Source[]> {
     try {
-      console.log(`Vector retrieval: Finding relevant notes for "${query}"`);
       const files = await this.getKnowledgeBaseNotes();
       const results: Source[] = [];
       
       // Get query embedding using model manager
       const queryEmbedding = await this.modelManager.getEmbedding(query);
+      
+      // Set similarity threshold from settings or default to 0.5
+      const similarityThreshold = this.settings.similarityThreshold || 0.5;
       
       for (const file of files) {
         try {
@@ -48,8 +59,7 @@ export class VectorRetriever extends BaseRetriever {
           // Calculate cosine similarity
           const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
           
-          if (similarity > 0.5) { // Set a reasonable threshold
-            console.log(`High vector similarity (${similarity.toFixed(2)}) for file: ${file.path}`);
+          if (similarity > similarityThreshold) {
             const snippet = this.getRelevantSnippet(content, query, 1000);
             results.push({ file, similarity, content: snippet });
           }
@@ -59,9 +69,10 @@ export class VectorRetriever extends BaseRetriever {
       }
       
       // Sort by similarity and limit results
+      const maxResults = limit || this.settings.maxResults || 5;
       return results
         .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, limit);
+        .slice(0, maxResults);
     } catch (error) {
       console.error("Vector retrieval failed:", error);
       return []; // Return empty array on failure

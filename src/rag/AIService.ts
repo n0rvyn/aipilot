@@ -1,10 +1,13 @@
+import AIPilotPlugin from '../main';
+import { ModelManager } from '../models/ModelManager';
+
 /**
  * AI服务
  * 
  * 与LLM交互的统一接口，委托调用到插件的AI功能
  */
 export class AIService {
-  constructor(private plugin: any, private modelManager: any) {}
+  constructor(private plugin: AIPilotPlugin, private modelManager: ModelManager) {}
   
   /**
    * 获取AI回复
@@ -30,10 +33,10 @@ export class AIService {
   }
   
   /**
-   * 调用AI聊天接口
-   * @param messages 消息数组
-   * @param onChunk 流式回调
-   * @returns AI生成的响应
+   * Call AI chat interface
+   * @param messages Message array
+   * @param onChunk Streaming callback
+   * @returns AI-generated response
    */
   async callAIChat(
     messages: Array<{role: string, content: string}>, 
@@ -47,10 +50,11 @@ export class AIService {
       }
 
       // Call model with chat format
-      return await this.modelManager.callModel(defaultModel.id, messages, {
+      return await this.modelManager.callModel(defaultModel.id, '', {
         streaming: !!onChunk,
         onChunk: onChunk,
-        isChat: true
+        isChat: true,
+        messages: messages
       });
     } catch (error) {
       console.error('Error in AI chat:', error);

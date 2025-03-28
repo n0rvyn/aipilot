@@ -1,4 +1,21 @@
 import { Source } from '../RAGService';
+import { VectorRetriever, RetrieverSettings } from '../retrieval/VectorRetriever';
+
+/**
+ * Interface for AI Service with custom parameters
+ */
+export interface ReflectorAIService {
+  callAIChat(messages: Array<{ role: string, content: string }>, onChunk?: (chunk: string) => void): Promise<string>;
+  getAIResponse?(prompt: string): Promise<string>;
+}
+
+/**
+ * Interface for Reflector Settings
+ */
+export interface ReflectorSettings extends RetrieverSettings {
+  maxReflections?: number;
+  minReflectionLength?: number;
+}
 
 /**
  * Reflector
@@ -9,9 +26,9 @@ export class Reflector {
   private reflectionCount: number = 0;
   
   constructor(
-    private settings: any,
-    private aiService?: any,
-    private retriever?: any
+    private settings: ReflectorSettings,
+    private aiService?: ReflectorAIService,
+    private retriever?: VectorRetriever
   ) {}
   
   /**
@@ -31,28 +48,25 @@ export class Reflector {
     this.reflectionCount = 0;
     
     if (!this.aiService || !this.retriever) {
-      console.log("Reflector needs AI service and retriever, skipping reflection");
       return initialAnswer;
     }
     
     try {
       let currentAnswer = initialAnswer;
       let context = this.formatContext(initialContext);
-      const MAX_REFLECTIONS = 2;
-      const minReflectionLength = 50;
+      const MAX_REFLECTIONS = this.settings.maxReflections || 2;
+      const minReflectionLength = this.settings.minReflectionLength || 50;
       
       // Tell the user we're starting the reflection process
       onChunk("\n\n_Enhancing with knowledge base..._");
       
       for (let i = 0; i < MAX_REFLECTIONS; i++) {
-        console.log(`Executing reflection round ${i+1}/${MAX_REFLECTIONS}`);
         
         // Generate reflection, identifying missing information in the answer
         const reflection = await this.generateReflection(query, currentAnswer, context);
         
         // If reflection is too short or meaningless, end the loop
         if (!reflection || reflection.length < minReflectionLength) {
-          console.log("Reflection result too short or meaningless, ending reflection loop");
           break;
         }
         
@@ -61,7 +75,6 @@ export class Reflector {
         // Extract search queries from reflection
         const searchQueries = await this.extractSearchQueries(reflection);
         if (!searchQueries || searchQueries.length === 0) {
-          console.log("Unable to extract search queries from reflection, ending reflection loop");
           break;
         }
         
@@ -124,11 +137,9 @@ Please generate an improved, more comprehensive answer while maintaining the str
           if (improvedAnswer && improvedAnswer.length > currentAnswer.length / 2) {
             currentAnswer = improvedAnswer;
           } else {
-            console.log("Quality of improved answer insufficient, keeping current answer");
             break;
           }
         } else {
-          console.log("No additional information found, ending reflection loop");
           break;
         }
       }
@@ -156,25 +167,22 @@ Please generate an improved, more comprehensive answer while maintaining the str
     this.reflectionCount = 0;
     
     if (!this.aiService || !this.retriever) {
-      console.log("Reflector needs AI service and retriever, skipping reflection");
       return initialAnswer;
     }
     
     try {
       let currentAnswer = initialAnswer;
       let context = this.formatContext(initialContext);
-      const MAX_REFLECTIONS = 2;
-      const minReflectionLength = 50;
+      const MAX_REFLECTIONS = this.settings.maxReflections || 2;
+      const minReflectionLength = this.settings.minReflectionLength || 50;
       
       for (let i = 0; i < MAX_REFLECTIONS; i++) {
-        console.log(`Executing reflection round ${i+1}/${MAX_REFLECTIONS}`);
         
         // Generate reflection, identifying missing information in the answer
         const reflection = await this.generateReflection(query, currentAnswer, context);
         
         // If reflection is too short or meaningless, end the loop
         if (!reflection || reflection.length < minReflectionLength) {
-          console.log("Reflection result too short or meaningless, ending reflection loop");
           break;
         }
         
@@ -183,7 +191,6 @@ Please generate an improved, more comprehensive answer while maintaining the str
         // Extract search queries from reflection
         const searchQueries = await this.extractSearchQueries(reflection);
         if (!searchQueries || searchQueries.length === 0) {
-          console.log("Unable to extract search queries from reflection, ending reflection loop");
           break;
         }
         
@@ -219,11 +226,9 @@ Please generate an improved, more comprehensive answer while maintaining the str
           if (improvedAnswer && improvedAnswer.length > currentAnswer.length / 2) {
             currentAnswer = improvedAnswer;
           } else {
-            console.log("Quality of improved answer insufficient, keeping current answer");
             break;
           }
         } else {
-          console.log("No additional information found, ending reflection loop");
           break;
         }
       }
@@ -265,7 +270,7 @@ Please generate an improved, more comprehensive answer while maintaining the str
     answer: string, 
     context: string
   ): Promise<string> {
-    if (!this.aiService) return "";
+    if (!this.aiService || !this.aiService.getAIResponse) return "";
     
     const prompt = `Your task is to evaluate the quality of the following answer and identify any missing information or gaps in the answer.
     
@@ -292,7 +297,7 @@ Identify 3-5 specific points in the answer that need more information and list s
    * @returns Array of search queries
    */
   private async extractSearchQueries(reflection: string): Promise<string[]> {
-    if (!this.aiService) return [];
+    if (!this.aiService || !this.aiService.getAIResponse) return [];
     
     // Try using regular expression directly to extract queries
     const queryMatches = reflection.match(/\d+\.\s*(.*?)(?=\d+\.|$)/g) || [];
@@ -332,7 +337,7 @@ Queries:`;
     reflection: string,
     additionalContext: string
   ): Promise<string> {
-    if (!this.aiService) return currentAnswer;
+    if (!this.aiService || !this.aiService.getAIResponse) return currentAnswer;
     
     const prompt = `Please improve the answer below, addressing issues identified in the reflection and utilizing newly provided information.
 

@@ -13,14 +13,33 @@ interface Message {
     content: string;
 }
 
+// Define a proper settings interface
+interface AIPilotSettings {
+    apiKey?: string;
+    endpoint?: string;
+    modelName?: string;
+    modelProvider?: string;
+    embeddingModel?: string;
+    customModels?: any[];
+    chatHistoryPath?: string;
+    functions?: CustomFunction[];
+    [key: string]: any; // Allow other settings properties
+}
+
 // Add the diff match patch library type to the AIPilot interface
 declare module "./main" {
     interface AIPilot extends Plugin {
-        settings: any;
+        settings: AIPilotSettings;
         requestId: string | null;
         saveSettings(): Promise<void>;
-        diffMatchPatchLib?: any; // Add this line for the diff library
+        diffMatchPatchLib?: DiffMatchPatch; // Use typed interface
     }
+}
+
+// Add interface for the diff library
+interface DiffMatchPatch {
+    diff_main(text1: string, text2: string): Array<[number, string]>;
+    diff_cleanupSemantic(diffs: Array<[number, string]>): void;
 }
 
 type FunctionMode = 'none' | 'organize' | 'grammar' | 'generate' | 'dialogue' | 'summary' | 'polish' | 'custom';
@@ -705,11 +724,6 @@ class ChatHistoryModal extends Modal {
 }
 
 type ViewMode = 'chat' | 'search';
-
-interface DiffMatchPatch {
-    diff_main(text1: string, text2: string): Array<[number, string]>;
-    diff_cleanupSemantic(diffs: Array<[number, string]>): void;
-}
 
 interface TextDiff {
     operation: -1 | 0 | 1;  // -1: deletion, 0: unchanged, 1: addition

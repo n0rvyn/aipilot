@@ -1389,18 +1389,25 @@ var ModelManager = class {
       }
     });
   }
+  /**
+   * Call multiple models with the same prompt in parallel
+   * @param modelIds Array of model IDs to call
+   * @param prompt Prompt to send to all models
+   * @param options Options for the API calls
+   * @returns Object mapping model IDs to their responses
+   */
   callMultipleModels(_0, _1) {
     return __async(this, arguments, function* (modelIds, prompt, options = {}) {
       const results = {};
-      yield Promise.all(modelIds.map((modelId) => __async(this, null, function* () {
+      const promises = modelIds.map((modelId) => __async(this, null, function* () {
         try {
-          const result = yield this.callModel(modelId, prompt, options);
-          results[modelId] = result;
+          const response = yield this.callModel(modelId, prompt, options);
+          results[modelId] = response;
         } catch (error) {
-          console.error(`Error calling model ${modelId}:`, error);
           results[modelId] = `Error: ${error.message}`;
         }
-      })));
+      }));
+      yield Promise.all(promises);
       return results;
     });
   }
@@ -3687,10 +3694,10 @@ var AIService = class {
     });
   }
   /**
-   * 调用AI聊天接口
-   * @param messages 消息数组
-   * @param onChunk 流式回调
-   * @returns AI生成的响应
+   * Call AI chat interface
+   * @param messages Message array
+   * @param onChunk Streaming callback
+   * @returns AI-generated response
    */
   callAIChat(messages, onChunk) {
     return __async(this, null, function* () {
@@ -3699,10 +3706,11 @@ var AIService = class {
         if (!defaultModel) {
           throw new Error("No default model configured. Please configure a model in settings.");
         }
-        return yield this.modelManager.callModel(defaultModel.id, messages, {
+        return yield this.modelManager.callModel(defaultModel.id, "", {
           streaming: !!onChunk,
           onChunk,
-          isChat: true
+          isChat: true,
+          messages
         });
       } catch (error) {
         console.error("Error in AI chat:", error);
@@ -3784,17 +3792,16 @@ var VectorRetriever = class extends BaseRetriever {
   retrieve(query, limit = 5) {
     return __async(this, null, function* () {
       try {
-        console.log(`Vector retrieval: Finding relevant notes for "${query}"`);
         const files = yield this.getKnowledgeBaseNotes();
         const results = [];
         const queryEmbedding = yield this.modelManager.getEmbedding(query);
+        const similarityThreshold = this.settings.similarityThreshold || 0.5;
         for (const file of files) {
           try {
             const content = yield this.app.vault.read(file);
             const contentEmbedding = yield this.modelManager.getEmbedding(content);
             const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
-            if (similarity > 0.5) {
-              console.log(`High vector similarity (${similarity.toFixed(2)}) for file: ${file.path}`);
+            if (similarity > similarityThreshold) {
               const snippet = this.getRelevantSnippet(content, query, 1e3);
               results.push({ file, similarity, content: snippet });
             }
@@ -3802,7 +3809,8 @@ var VectorRetriever = class extends BaseRetriever {
             console.error(`Error processing file ${file.path} for vector search:`, error);
           }
         }
-        return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
+        const maxResults = limit || this.settings.maxResults || 5;
+        return results.sort((a, b) => b.similarity - a.similarity).slice(0, maxResults);
       } catch (error) {
         console.error("Vector retrieval failed:", error);
         return [];
@@ -3899,7 +3907,6 @@ var QueryRewriter = class {
         return originalQuery;
       }
       if (!this.aiService) {
-        console.log("AI service not configured, using original query");
         return originalQuery;
       }
       try {
@@ -3914,7 +3921,6 @@ Rewrite this query to be more effective for semantic search in a personal knowle
         if (!cleanedQuery || cleanedQuery.length < 3 || cleanedQuery.length > 200) {
           return originalQuery;
         }
-        console.log(`Rewritten query: "${cleanedQuery}" (from: "${originalQuery}")`);
         return cleanedQuery;
       } catch (error) {
         console.error("Error rewriting query:", error);
@@ -3940,14 +3946,13 @@ var HyDE = class {
     return __async(this, null, function* () {
       const empty = { hypotheticalDoc: "", hydeResults: [] };
       if (!this.aiService || !this.vectorRetriever) {
-        console.log("HyDE requires AI service and vector retriever, skipping");
         return empty;
       }
       try {
         const hypotheticalDoc = yield this.generateHypotheticalDoc(query);
-        if (!hypotheticalDoc || hypotheticalDoc.length < 50) return empty;
+        const minLength = this.settings.minHypotheticalDocLength || 50;
+        if (!hypotheticalDoc || hypotheticalDoc.length < minLength) return empty;
         const hydeResults = yield this.vectorRetriever.retrieve(hypotheticalDoc);
-        console.log(`HyDE retrieval returned ${hydeResults.length} results`);
         return { hypotheticalDoc, hydeResults };
       } catch (error) {
         console.error("Error in HyDE retrieval:", error);
@@ -3981,11 +3986,11 @@ var HyDE = class {
     });
   }
   /**
-   * 创建源对象
-   * @param file 文件
-   * @param similarity 相似度分数
-   * @param content 内容片段
-   * @returns 源对象
+   * Create source object
+   * @param file File
+   * @param similarity Similarity score
+   * @param content Content snippet
+   * @returns Source object
    */
   createSource(file, similarity, content) {
     return { file, similarity, content };
@@ -4219,26 +4224,22 @@ var Reflector = class {
     return __async(this, null, function* () {
       this.reflectionCount = 0;
       if (!this.aiService || !this.retriever) {
-        console.log("Reflector needs AI service and retriever, skipping reflection");
         return initialAnswer;
       }
       try {
         let currentAnswer = initialAnswer;
         let context = this.formatContext(initialContext);
-        const MAX_REFLECTIONS = 2;
-        const minReflectionLength = 50;
+        const MAX_REFLECTIONS = this.settings.maxReflections || 2;
+        const minReflectionLength = this.settings.minReflectionLength || 50;
         onChunk("\n\n_Enhancing with knowledge base..._");
         for (let i = 0; i < MAX_REFLECTIONS; i++) {
-          console.log(`Executing reflection round ${i + 1}/${MAX_REFLECTIONS}`);
           const reflection = yield this.generateReflection(query, currentAnswer, context);
           if (!reflection || reflection.length < minReflectionLength) {
-            console.log("Reflection result too short or meaningless, ending reflection loop");
             break;
           }
           this.reflectionCount++;
           const searchQueries = yield this.extractSearchQueries(reflection);
           if (!searchQueries || searchQueries.length === 0) {
-            console.log("Unable to extract search queries from reflection, ending reflection loop");
             break;
           }
           let additionalContext = "";
@@ -4294,11 +4295,9 @@ Please generate an improved, more comprehensive answer while maintaining the str
             if (improvedAnswer && improvedAnswer.length > currentAnswer.length / 2) {
               currentAnswer = improvedAnswer;
             } else {
-              console.log("Quality of improved answer insufficient, keeping current answer");
               break;
             }
           } else {
-            console.log("No additional information found, ending reflection loop");
             break;
           }
         }
@@ -4321,25 +4320,21 @@ Please generate an improved, more comprehensive answer while maintaining the str
     return __async(this, null, function* () {
       this.reflectionCount = 0;
       if (!this.aiService || !this.retriever) {
-        console.log("Reflector needs AI service and retriever, skipping reflection");
         return initialAnswer;
       }
       try {
         let currentAnswer = initialAnswer;
         let context = this.formatContext(initialContext);
-        const MAX_REFLECTIONS = 2;
-        const minReflectionLength = 50;
+        const MAX_REFLECTIONS = this.settings.maxReflections || 2;
+        const minReflectionLength = this.settings.minReflectionLength || 50;
         for (let i = 0; i < MAX_REFLECTIONS; i++) {
-          console.log(`Executing reflection round ${i + 1}/${MAX_REFLECTIONS}`);
           const reflection = yield this.generateReflection(query, currentAnswer, context);
           if (!reflection || reflection.length < minReflectionLength) {
-            console.log("Reflection result too short or meaningless, ending reflection loop");
             break;
           }
           this.reflectionCount++;
           const searchQueries = yield this.extractSearchQueries(reflection);
           if (!searchQueries || searchQueries.length === 0) {
-            console.log("Unable to extract search queries from reflection, ending reflection loop");
             break;
           }
           let additionalContext = "";
@@ -4372,11 +4367,9 @@ Regarding: "${searchQuery}"
             if (improvedAnswer && improvedAnswer.length > currentAnswer.length / 2) {
               currentAnswer = improvedAnswer;
             } else {
-              console.log("Quality of improved answer insufficient, keeping current answer");
               break;
             }
           } else {
-            console.log("No additional information found, ending reflection loop");
             break;
           }
         }
@@ -4413,7 +4406,7 @@ ${source.content}`;
    */
   generateReflection(query, answer, context) {
     return __async(this, null, function* () {
-      if (!this.aiService) return "";
+      if (!this.aiService || !this.aiService.getAIResponse) return "";
       const prompt = `Your task is to evaluate the quality of the following answer and identify any missing information or gaps in the answer.
     
 Original question:
@@ -4439,7 +4432,7 @@ Identify 3-5 specific points in the answer that need more information and list s
    */
   extractSearchQueries(reflection) {
     return __async(this, null, function* () {
-      if (!this.aiService) return [];
+      if (!this.aiService || !this.aiService.getAIResponse) return [];
       const queryMatches = reflection.match(/\d+\.\s*(.*?)(?=\d+\.|$)/g) || [];
       if (queryMatches.length > 0) {
         return queryMatches.map((m) => m.replace(/^\d+\.\s*/, "").trim()).filter((q) => q.length > 5);
@@ -4463,7 +4456,7 @@ Queries:`;
    */
   generateImprovedAnswer(query, currentAnswer, reflection, additionalContext) {
     return __async(this, null, function* () {
-      if (!this.aiService) return currentAnswer;
+      if (!this.aiService || !this.aiService.getAIResponse) return currentAnswer;
       const prompt = `Please improve the answer below, addressing issues identified in the reflection and utilizing newly provided information.
 
 Original question:

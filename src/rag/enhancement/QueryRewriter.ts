@@ -1,9 +1,11 @@
+import { AIService } from './HyDE';
+
 /**
  * Query Rewriter
  * Used to optimize original queries to make them more suitable for semantic search
  */
 export class QueryRewriter {
-  constructor(private aiService?: any) {}
+  constructor(private aiService?: AIService) {}
   
   /**
    * Rewrite query to make it more suitable for retrieval
@@ -17,7 +19,6 @@ export class QueryRewriter {
     }
     
     if (!this.aiService) {
-      console.log("AI service not configured, using original query");
       return originalQuery;
     }
     
@@ -40,7 +41,6 @@ export class QueryRewriter {
         return originalQuery;
       }
       
-      console.log(`Rewritten query: "${cleanedQuery}" (from: "${originalQuery}")`);
       return cleanedQuery;
     } catch (error) {
       console.error("Error rewriting query:", error);
