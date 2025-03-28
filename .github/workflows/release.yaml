@@ -64,6 +64,66 @@ jobs:
     - name: Build the project
       run: npm run build
 
+    # Validate Obsidian plugin requirements before release
+    - name: Validate Plugin
+      id: validate_plugin
+      run: |
+        echo "Validating Obsidian plugin structure and requirements..."
+        
+        # Check manifest.json exists in dist
+        if [ ! -f ./dist/manifest.json ]; then
+          echo "::error::Missing manifest.json file in dist directory"
+          exit 1
+        fi
+        
+        # Check required fields in manifest.json
+        echo "Checking manifest.json fields..."
+        MISSING_FIELDS=$(node -e "
+          const manifest = require('./dist/manifest.json');
+          const requiredFields = ['id', 'name', 'version', 'minAppVersion', 'description', 'author'];
+          const missingFields = requiredFields.filter(field => !manifest[field]);
+          console.log(missingFields.join(', '));
+          process.exit(missingFields.length > 0 ? 1 : 0);
+        ")
+        
+        if [ $? -ne 0 ]; then
+          echo "::error::Missing required fields in manifest.json: $MISSING_FIELDS"
+          exit 1
+        fi
+        
+        # Validate version format
+        VALID_VERSION=$(node -e "
+          const manifest = require('./dist/manifest.json');
+          const isValid = /^[0-9.]+$/.test(manifest.version);
+          console.log(isValid ? 'true' : 'false');
+          process.exit(isValid ? 0 : 1);
+        ")
+        
+        if [ $? -ne 0 ]; then
+          echo "::error::Invalid version format in manifest.json. Only numbers and dots allowed."
+          exit 1
+        fi
+        
+        # Check main.js exists in dist
+        if [ ! -f ./dist/main.js ]; then
+          echo "::error::Missing main.js file in dist directory"
+          exit 1
+        fi
+        
+        # Check LICENSE exists
+        if [ ! -f LICENSE ]; then
+          echo "::warning::Missing LICENSE file. It is recommended to include a license for open-source projects."
+        fi
+        
+        # Ensure manifest version matches the incremented version
+        MANIFEST_VERSION=$(node -e "console.log(require('./dist/manifest.json').version)")
+        if [ "$MANIFEST_VERSION" != "${{ steps.increment_version.outputs.VERSION }}" ]; then
+          echo "::error::Version mismatch: manifest.json ($MANIFEST_VERSION) doesn't match incremented version (${{ steps.increment_version.outputs.VERSION }})"
+          exit 1
+        fi
+        
+        echo "Plugin validation successful!"
+
     - name: Create GitHub Release
       id: create_release
       uses: actions/create-release@v1
