@@ -3355,27 +3355,39 @@ var EmbeddingModelConfigModal = class extends import_obsidian5.Modal {
     contentEl.createEl("h2", { text: this.model.id ? "Edit Embedding Model" : "Add Embedding Model" });
     contentEl.createEl("h3", { text: "Basic Information" });
     new import_obsidian5.Setting(contentEl).setName("Model Name").setDesc("Display name for this embedding model").addText((text) => text.setPlaceholder("e.g., OpenAI Ada 2").setValue(this.model.name).onChange((value) => this.model.name = value));
-    new import_obsidian5.Setting(contentEl).setName("Provider").setDesc("Select the embedding model provider").addDropdown((dropdown) => dropdown.addOption("openai", "OpenAI").addOption("zhipuai", "ZhipuAI").addOption("custom", "Custom API").setValue(this.model.type).onChange((value) => {
+    new import_obsidian5.Setting(contentEl).setName("Provider").setDesc("Select the embedding model provider").addDropdown((dropdown2) => dropdown2.addOption("openai", "OpenAI").addOption("zhipuai", "ZhipuAI").addOption("custom", "Custom API").setValue(this.model.type).onChange((value) => {
       this.model.type = value;
       this.model.modelName = "";
       this.onOpen();
     }));
-    new import_obsidian5.Setting(contentEl).setName("Model Name/Identifier").setDesc("Select the specific embedding model for this provider").addDropdown((dropdown) => {
+    const modelNameSetting = new import_obsidian5.Setting(contentEl).setName("Model Name/ID").setDesc("Select from known models or enter a custom identifier").addDropdown((dropdown2) => {
       if (this.model.type === "openai") {
-        dropdown.addOption("text-embedding-3-small", "Embedding 3 Small").addOption("text-embedding-3-large", "Embedding 3 Large").addOption("text-embedding-ada-002", "Ada 2 (Legacy)");
+        dropdown2.addOption("text-embedding-3-small", "text-embedding-3-small").addOption("text-embedding-3-large", "text-embedding-3-large").addOption("text-embedding-ada-002", "text-embedding-ada-002").addOption("custom", "-- Custom Model --");
       } else if (this.model.type === "zhipuai") {
-        dropdown.addOption("embedding-2", "Embedding 2").addOption("embedding-3", "Embedding 3");
+        dropdown2.addOption("embedding-2", "embedding-2").addOption("embedding-3", "embedding-3").addOption("custom", "-- Custom Model --");
       } else {
-        return dropdown.addOption("custom", "Custom Model Name");
+        dropdown2.addOption("custom", "-- Custom Model --");
       }
-      return dropdown;
-    }).addText((text) => {
-      if (this.model.type === "custom") {
-        text.setPlaceholder("Enter model name/identifier").setValue(this.model.modelName).onChange((value) => this.model.modelName = value);
-      } else {
-        text.setValue(this.model.modelName).setDisabled(true);
-      }
+      const isCustomValue = this.model.type === "openai" && !["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"].includes(this.model.modelName) || this.model.type === "zhipuai" && !["embedding-2", "embedding-3"].includes(this.model.modelName) || this.model.type === "custom";
+      dropdown2.setValue(isCustomValue ? "custom" : this.model.modelName);
+      dropdown2.onChange((value) => {
+        if (value === "custom") {
+          customModelInput.settingEl.style.display = "flex";
+        } else {
+          customModelInput.settingEl.style.display = "none";
+          this.model.modelName = value;
+        }
+      });
+      return dropdown2;
     });
+    const customModelInput = new import_obsidian5.Setting(contentEl).setName("Custom Model ID").setDesc("Enter the custom model identifier").addText((text) => text.setPlaceholder("e.g., your-custom-model-name").setValue(this.model.modelName !== "custom" ? this.model.modelName : "").onChange((value) => {
+      if (modelNameSetting.components[0].getValue() === "custom") {
+        this.model.modelName = value;
+      }
+    }));
+    const dropdown = modelNameSetting.components[0];
+    const isCustomSelected = dropdown.getValue() === "custom";
+    customModelInput.settingEl.style.display = isCustomSelected ? "flex" : "none";
     new import_obsidian5.Setting(contentEl).setName("Description").setDesc("Optional description for this model").addText((text) => text.setPlaceholder("e.g., Fast and efficient for most tasks").setValue(this.model.description || "").onChange((value) => this.model.description = value));
     contentEl.createEl("h3", { text: "API Configuration" });
     new import_obsidian5.Setting(contentEl).setName("API Key").setDesc("API key for this model (leave empty to use global key)").addText((text) => text.setPlaceholder("Enter API key").setValue(this.model.apiKey || "").onChange((value) => this.model.apiKey = value));

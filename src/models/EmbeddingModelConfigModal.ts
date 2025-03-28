@@ -63,36 +63,66 @@ export class EmbeddingModelConfigModal extends Modal {
                 }));
 
         // Model name (specific to provider)
-        new Setting(contentEl)
-            .setName('Model Name/Identifier')
-            .setDesc('Select the specific embedding model for this provider')
+        const modelNameSetting = new Setting(contentEl)
+            .setName('Model Name/ID')
+            .setDesc('Select from known models or enter a custom identifier')
             .addDropdown(dropdown => {
+                // Add provider-specific models
                 if (this.model.type === 'openai') {
                     dropdown
-                        .addOption('text-embedding-3-small', 'Embedding 3 Small')
-                        .addOption('text-embedding-3-large', 'Embedding 3 Large')
-                        .addOption('text-embedding-ada-002', 'Ada 2 (Legacy)');
+                        .addOption('text-embedding-3-small', 'text-embedding-3-small')
+                        .addOption('text-embedding-3-large', 'text-embedding-3-large')
+                        .addOption('text-embedding-ada-002', 'text-embedding-ada-002')
+                        .addOption('custom', '-- Custom Model --');
                 } else if (this.model.type === 'zhipuai') {
                     dropdown
-                        .addOption('embedding-2', 'Embedding 2')
-                        .addOption('embedding-3', 'Embedding 3');
+                        .addOption('embedding-2', 'embedding-2')
+                        .addOption('embedding-3', 'embedding-3')
+                        .addOption('custom', '-- Custom Model --');
                 } else {
-                    // For custom API, use text input instead
-                    return dropdown.addOption('custom', 'Custom Model Name');
+                    // For custom API providers
+                    dropdown.addOption('custom', '-- Custom Model --');
                 }
+                
+                // Set initial value
+                const isCustomValue = 
+                    (this.model.type === 'openai' && !['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'].includes(this.model.modelName)) ||
+                    (this.model.type === 'zhipuai' && !['embedding-2', 'embedding-3'].includes(this.model.modelName)) ||
+                    (this.model.type === 'custom');
+                
+                dropdown.setValue(isCustomValue ? 'custom' : this.model.modelName);
+                
+                dropdown.onChange(value => {
+                    if (value === 'custom') {
+                        // Show the custom model input when custom is selected
+                        customModelInput.settingEl.style.display = 'flex';
+                    } else {
+                        // Hide the custom model input and set the model name directly
+                        customModelInput.settingEl.style.display = 'none';
+                        this.model.modelName = value;
+                    }
+                });
+                
                 return dropdown;
-            })
-            .addText(text => {
-                // Only show text input for custom API
-                if (this.model.type === 'custom') {
-                    text
-                        .setPlaceholder('Enter model name/identifier')
-                        .setValue(this.model.modelName)
-                        .onChange(value => this.model.modelName = value);
-                } else {
-                    text.setValue(this.model.modelName).setDisabled(true);
-                }
             });
+        
+        // Custom model input (initially hidden if a standard model is selected)
+        const customModelInput = new Setting(contentEl)
+            .setName('Custom Model ID')
+            .setDesc('Enter the custom model identifier')
+            .addText(text => text
+                .setPlaceholder('e.g., your-custom-model-name')
+                .setValue(this.model.modelName !== 'custom' ? this.model.modelName : '')
+                .onChange(value => {
+                    if (modelNameSetting.components[0].getValue() === 'custom') {
+                        this.model.modelName = value;
+                    }
+                }));
+        
+        // Initially hide/show based on whether custom is selected
+        const dropdown = modelNameSetting.components[0] as any;
+        const isCustomSelected = dropdown.getValue() === 'custom';
+        customModelInput.settingEl.style.display = isCustomSelected ? 'flex' : 'none';
 
         // Description
         new Setting(contentEl)
