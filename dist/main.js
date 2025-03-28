@@ -334,7 +334,6 @@ var ChatView = class extends import_obsidian2.ItemView {
   }
   sendMessage() {
     return __async(this, null, function* () {
-      var _a, _b;
       if (!this.currentInput || this.isGenerating) return;
       const userMessage = this.currentInput.value.trim();
       if (!userMessage) return;
@@ -357,7 +356,6 @@ var ChatView = class extends import_obsidian2.ItemView {
         if (!defaultModel) {
           throw new Error("No default model configured. Please set a default model in settings.");
         }
-        this.addMessage("user", userMessage);
         const assistantMessageId = `msg-${Date.now()}`;
         this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
         this.controller = new AbortController();
@@ -387,26 +385,33 @@ var ChatView = class extends import_obsidian2.ItemView {
         );
         this.isGenerating = false;
         this.controller = null;
-        this.currentMessage = null;
+        if (this.currentInput) {
+          this.currentInput.disabled = false;
+        }
+        loadingEl.remove();
+        const responseText = accumulatedResponse;
+        if (this.currentFunctionMode !== "none" && this.originalText) {
+          this.addApplyButton(this.originalText, responseText);
+          this.originalText = null;
+        }
         if (this.shouldSaveHistory()) {
           yield this.saveChatHistory();
         }
+        this.currentMessage = null;
       } catch (error) {
-        console.error("Error sending message:", error);
-        (_b = (_a = this.currentMessage) == null ? void 0 : _a.querySelector(".loading-indicator")) == null ? void 0 : _b.remove();
         if (this.currentMessage) {
           const contentDiv = this.currentMessage.querySelector(".message-content");
           if (contentDiv) {
-            contentDiv.empty();
-            const errorMessage = error instanceof Error ? error.message : "Failed to generate response";
-            contentDiv.createEl("div", {
-              cls: "error-message",
-              text: `Error: ${errorMessage}. Please try again.`
-            });
+            contentDiv.textContent = `Error: ${error.message || "Failed to generate response"}. Please try again.`;
           }
         }
+        loadingEl.remove();
         this.isGenerating = false;
         this.controller = null;
+        if (this.currentInput) {
+          this.currentInput.disabled = false;
+        }
+        this.originalText = null;
         this.currentMessage = null;
       }
     });

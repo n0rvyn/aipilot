@@ -1023,10 +1023,7 @@ export class ChatView extends ItemView implements Component {
                 throw new Error("No default model configured. Please set a default model in settings.");
             }
 
-            // Add user message to chat
-            this.addMessage("user", userMessage);
-            
-            // Create placeholder for assistant message
+            // Create placeholder for assistant message (removed duplicate user message)
             const assistantMessageId = `msg-${Date.now()}`;
             this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
             
@@ -1069,34 +1066,58 @@ export class ChatView extends ItemView implements Component {
             // Reset UI state
             this.isGenerating = false;
             this.controller = null;
-            this.currentMessage = null;
+            
+            // Enable input
+            if (this.currentInput) {
+                this.currentInput.disabled = false;
+            }
+            
+            // Remove loading element
+            loadingEl.remove();
+            
+            // Save for diff view later
+            const responseText = accumulatedResponse;
+            
+            // Add apply button for diffs if we're in a function mode and have original text
+            if (this.currentFunctionMode !== 'none' && this.originalText) {
+                this.addApplyButton(this.originalText, responseText);
+                // Clear originalText after use
+                this.originalText = null;
+            }
             
             // Check if we should save chat history
             if (this.shouldSaveHistory()) {
                 await this.saveChatHistory();
             }
+            
+            // Reset current message
+            this.currentMessage = null;
+            
         } catch (error) {
-            console.error("Error sending message:", error);
-            
-            // Remove loading indicator if it exists
-            this.currentMessage?.querySelector('.loading-indicator')?.remove();
-            
-            // Display error to user
+            // Handle error and display to user
             if (this.currentMessage) {
                 const contentDiv = this.currentMessage.querySelector('.message-content') as HTMLElement;
                 if (contentDiv) {
-                    contentDiv.empty();
-                    const errorMessage = error instanceof Error ? error.message : "Failed to generate response";
-                    contentDiv.createEl('div', { 
-                        cls: 'error-message',
-                        text: `Error: ${errorMessage}. Please try again.`
-                    });
+                    contentDiv.textContent = `Error: ${error.message || "Failed to generate response"}. Please try again.`;
                 }
             }
-
+            
+            // Remove loading element
+            loadingEl.remove();
+            
             // Reset UI state
             this.isGenerating = false;
             this.controller = null;
+            
+            // Enable input
+            if (this.currentInput) {
+                this.currentInput.disabled = false;
+            }
+            
+            // Reset originalText
+            this.originalText = null;
+            
+            // Reset current message
             this.currentMessage = null;
         }
     }
@@ -1498,7 +1519,7 @@ export class ChatView extends ItemView implements Component {
                     throw new Error("No default model configured. Please set a default model in settings.");
                 }
 
-                // Create placeholder for assistant message
+                // Create placeholder for assistant message (removed duplicate user message)
                 const assistantMessageId = `msg-${Date.now()}`;
                 this.currentMessage = this.addMessage("assistant", "", assistantMessageId);
                 
