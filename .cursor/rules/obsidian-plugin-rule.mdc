@@ -1,15 +1,37 @@
 ---
-description: 
+description: Obsidian Plugin Developping Rules
 globs: 
 alwaysApply: false
 ---
+# Cursor Rules for Obsidian Plugin Development
 
-# Your rule content
+## Security Rules
+1. Never use `innerHTML` or `outerHTML` for DOM manipulation - use Obsidian's helper functions instead (`createEl`, `createDiv`, `appendText`, etc.)
+2. When working with user-generated content, always sanitize inputs before rendering
+3. Use proper DOM APIs for element creation and manipulation instead of direct HTML string insertion
 
-- You can @ files here
-- You can use markdown but dont have to
+## Default Settings Rules
+1. Never provide default hotkeys in plugins to avoid conflicts with existing user configurations
+2. Allow users to set their own keyboard shortcuts through Obsidian's settings
+3. Document recommended hotkeys in README but don't set them programmatically
 
-When generating code for this Obsidian plugin, ensure to:
-- Use TypeScript and follow the sample plugin structure.
-- Implement `onload` and `onunload` methods.
-- Adhere to guidelines from https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin
+## Performance Rules
+1. Minimize console logging in production code - remove debugging logs
+2. Use structured error handling with specific error messages
+3. Add logging in development mode only using conditional flags
+
+## TypeScript Best Practices
+1. Avoid using `as any` type casting - use proper specific types
+2. Define interfaces for all data structures
+3. Use nullish coalescing (`??`) and optional chaining (`?.`) for safer code
+
+## Error Handling
+1. Add proper try/catch blocks for operations that might fail
+2. Handle specific error cases (e.g., "folder already exists") with appropriate recovery
+3. Provide meaningful error messages to users
+
+## General Maintenance
+1. Follow Obsidian's API patterns and conventions
+2. Document public methods and complex logic
+3. Break down complex functions into smaller, reusable components
+4. Use consistent naming conventions throughout the codebase

@@ -256,13 +256,18 @@ export class ModelManager {
     const model = this.getModelById(modelId);
     if (!model) throw new Error(`Model ${modelId} not found`);
 
-    // Determine if we should use proxy based on global and model-specific settings
+    // If the model is not active, throw an error
+    if (!model.active) {
+      throw new Error(`Model ${model.name} is not active`);
+    }
+    
+    // Check if we should use proxy
     const useProxy = model.useProxy !== undefined ? model.useProxy : this.proxyConfig.enabled;
     
     let result = "";
     
     try {
-      console.log(`Calling model: ${model.name} (${model.type}) with prompt: ${prompt.substring(0, 50)}...`);
+      // Calling model with prompt
       
       switch(model.type) {
         case 'openai':
@@ -396,7 +401,7 @@ export class ModelManager {
         : "https://open.bigmodel.cn/api/paas/v3/chat/completions";
     }
     
-    console.log(`ZhipuAI: Using endpoint ${baseUrl} for model type ${model.type}`);
+    // Using ZhipuAI endpoint for model type
     
     // For ZhipuAI, we need to generate the proper authentication header
     let headers: Record<string, string> = {
@@ -436,7 +441,7 @@ export class ModelManager {
     };
     
     try {
-      console.log(`ZhipuAI: Using model ${modelIdentifier} (mapped from ${model.modelName}), streaming: ${streaming}`);
+      // Using ZhipuAI model with streaming setting
       
       // Handle streaming
       if (streaming && typeof onChunk === 'function') {
@@ -459,7 +464,7 @@ export class ModelManager {
           throw new Error('Failed to get response reader for streaming');
         }
         
-        const decoder = new TextDecoder();
+        let decoder = new TextDecoder();
         let buffer = '';
         
         while (true) {
@@ -468,71 +473,79 @@ export class ModelManager {
           
           buffer += decoder.decode(value, { stream: true });
           
-          // Process any complete lines in the buffer
-          let newlineIndex;
-          while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, newlineIndex).trim();
-            buffer = buffer.slice(newlineIndex + 1);
+          let lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim() === '') continue;
             
-            if (line.startsWith('data:')) {
-              const jsonData = line.slice(5).trim();
+            // Remove the "data: " prefix if present
+            const dataLine = line.startsWith('data: ') ? line.slice(6) : line;
+            
+            if (dataLine === '[DONE]') continue;
+            
+            try {
+              const data = JSON.parse(dataLine);
               
-              // Skip empty lines and [DONE] marker
-              if (jsonData === '' || jsonData === '[DONE]') continue;
+              // Handle different response formats
+              let chunkText = '';
               
-              try {
-                const parsedData = JSON.parse(jsonData);
-                if (parsedData.choices?.[0]?.delta?.content) {
-                  const content = parsedData.choices[0].delta.content;
-                  fullResponse += content;
-                  onChunk(content);
-                }
-              } catch (e) {
-                console.error('Error parsing streaming data:', e, jsonData);
+              // Format for zhipuai GLM-4
+              if (data.choices && data.choices[0] && data.choices[0].delta) {
+                chunkText = data.choices[0].delta.content || '';
+              } 
+              // Format for v3 API
+              else if (data.data && data.data.choices && data.data.choices[0]) {
+                chunkText = data.data.choices[0].content || '';
               }
+              
+              if (chunkText) {
+                fullResponse += chunkText;
+                onChunk(chunkText);
+              }
+            } catch (e) {
+              // Skip this line if it's not valid JSON
+              continue;
             }
           }
         }
         
+        // Return the full response that was accumulated
         return fullResponse;
-      } 
-      
-      // Handle non-streaming
-      const response = await this.fetchWithProxy(baseUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload)
-      }, useProxy);
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
+      } else {
+        // Non-streaming request
+        payload.stream = false;
         
-        if (response.status === 404) {
-          // If we get a 404, it might be due to an incorrect endpoint
-          console.error("ZhipuAI API endpoint not found. Please verify the correct endpoint URL.");
-          throw new Error(`ZhipuAI API endpoint not found. Please check your model configuration and API documentation for the correct URL. Status: ${response.status}`);
+        const response = await this.fetchWithProxy(baseUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        }, useProxy);
+        
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
+          throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
         }
         
-        throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      console.log("ZhipuAI response:", JSON.stringify(data).substring(0, 200) + "...");
-      
-      // Handle different response formats
-      if (data.choices && data.choices[0]?.message?.content) {
-        return data.choices[0].message.content;
-      } else if (data.data && data.data.choices && data.data.choices[0]?.content) {
-        return data.data.choices[0].content;
-      } else if (data.response) {
-        return data.response;
-      } else {
-        console.warn("Unexpected ZhipuAI response format:", data);
-        return JSON.stringify(data);
+        const data = await response.json();
+        
+        // ZhipuAI response processing
+        
+        // Handle different response formats
+        // For v4 API
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          return data.choices[0].message.content;
+        }
+        // For v3 API
+        else if (data.data && data.data.choices && data.data.choices[0]) {
+          return data.data.choices[0].content;
+        } else {
+          throw new Error('Unexpected response format from ZhipuAI API');
+        }
       }
     } catch (error) {
-      console.error("Error calling ZhipuAI:", error);
+      console.error('Error calling ZhipuAI:', error);
       throw error;
     }
   }
@@ -597,7 +610,7 @@ export class ModelManager {
   
   private async fetchWithProxy(url: string, options: RequestInit, useProxy: boolean): Promise<Response> {
     try {
-      console.log(`Making request to: ${url}`);
+      // Making request to URL
       
       if (!useProxy || !this.proxyConfig.enabled) {
         return fetch(url, options);
@@ -608,10 +621,10 @@ export class ModelManager {
       // For Obsidian, you might need to implement a custom solution or use a plugin API
       
       // This is a placeholder for proxy implementation
-      console.log(`Using proxy: ${this.proxyConfig.type}://${this.proxyConfig.address}:${this.proxyConfig.port}`);
+      // Using proxy configuration
       
       // In an actual implementation, you'd modify the fetch options to use the proxy
-      // For now, we'll just do a regular fetch with a console log
+      // For now, just do a regular fetch
       return fetch(url, options);
     } catch (error) {
       console.error(`Fetch error for ${url}:`, error);
@@ -695,7 +708,7 @@ export class ModelManager {
     if (!activeModel) {
       throw new Error('No active embedding model configured');
     }
-
+    
     try {
       // Check cache first
       const cached = await this.getCachedEmbedding(text, activeModel.id);
@@ -703,7 +716,7 @@ export class ModelManager {
         return cached;
       }
 
-      console.log(`Getting embedding using provider: ${activeModel.type}, model: ${activeModel.modelName}`);
+      // Getting embedding using provider and model
       
       let vector: number[];
       switch(activeModel.type) {
@@ -720,7 +733,7 @@ export class ModelManager {
         default:
           throw new Error(`Embedding not supported for provider: ${activeModel.type}`);
       }
-
+      
       // Cache the result
       this.setCachedEmbedding(text, activeModel.id, vector);
       return vector;
@@ -782,7 +795,6 @@ export class ModelManager {
     };
 
     try {
-      console.log(`Making request to: ${baseUrl}`);
       const response = await this.fetchWithProxy(baseUrl, {
         method: "POST",
         headers,

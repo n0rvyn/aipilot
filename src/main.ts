@@ -501,7 +501,7 @@ export default class AIPilotPlugin extends Plugin {
                 this.settings.apiKey = isValidFormat ? decrypted : '';
                 
                 if (!isValidFormat) {
-                    console.log("Invalid API key format detected, resetting key");
+                    // Invalid API key format detected, resetting key
                 }
             } catch (e) {
                 console.error("Error decrypting API key, resetting it", e);
@@ -521,7 +521,7 @@ export default class AIPilotPlugin extends Plugin {
                             modelCopy.apiKey = decrypted;
                         } else {
                             modelCopy.apiKey = ''; // Reset invalid key
-                            console.log(`Invalid API key format detected for model ${model.name}, resetting key`);
+                            // Invalid API key format detected for model, resetting key
                         }
                     } catch (e) {
                         console.error(`Error decrypting API key for model ${model.name}, resetting it`, e);
@@ -757,49 +757,49 @@ export default class AIPilotPlugin extends Plugin {
         this.addCommand({
             id: "organize-text",
             name: "Organize text",
-            editorCallback: (editor: Editor) => this.organizeText(editor),
+            editorCallback: (editor: Editor) => this.organizeText(editor)
         });
 
         this.addCommand({
             id: "check-grammar",
             name: "Check grammar",
-            editorCallback: (editor: Editor) => this.checkGrammar(editor),
+            editorCallback: (editor: Editor) => this.checkGrammar(editor)
         });
 
         this.addCommand({
             id: "generate-content",
             name: "Generate content",
-            editorCallback: (editor: Editor) => this.generateAIContent(editor),
+            editorCallback: (editor: Editor) => this.generateAIContent(editor)
         });
 
         this.addCommand({
             id: "engage-in-dialogue",
             name: "Engage in Dialogue",
-            editorCallback: (editor: Editor) => this.engageInDialogue(editor),
+            editorCallback: (editor: Editor) => this.engageInDialogue(editor)
         });
 
         this.addCommand({
             id: "summarize-content",
             name: "Summarize Content",
-            editorCallback: (editor: Editor) => this.summarizeContent(editor),
+            editorCallback: (editor: Editor) => this.summarizeContent(editor)
         });
 
         this.addCommand({
             id: "polish-text",
             name: "Polish Text",
-            editorCallback: (editor: Editor) => this.polishText(editor),
+            editorCallback: (editor: Editor) => this.polishText(editor)
         });
 
         this.addCommand({
             id: "clean-polish-markup",
             name: "Clean Polish Markup",
-            editorCallback: (editor: Editor) => this.cleanPolishMarkup(editor),
+            editorCallback: (editor: Editor) => this.cleanPolishMarkup(editor)
         });
 
         this.addCommand({
             id: "custom-prompt",
             name: "Custom Prompt",
-            editorCallback: (editor: Editor) => this.handleCustomPrompt(editor),
+            editorCallback: (editor: Editor) => this.handleCustomPrompt(editor)
         });
     }
 
@@ -1776,53 +1776,58 @@ class CustomFunctionModal extends Modal {
     onOpen() {
         const {contentEl} = this;
         contentEl.empty();
+        
+        // Add the custom function modal class
         contentEl.addClass('custom-function-modal');
         
-        contentEl.createEl('h2', {text: this.function ? 'Edit Custom Function' : 'Create Custom Function'});
+        // Modal title
+        contentEl.createEl('h2', {
+            text: this.function ? 'Edit Custom Function' : 'Create Custom Function'
+        });
         
+        // Form container
         const formContainer = contentEl.createDiv({cls: 'custom-function-form'});
         
         // Function name
-        const nameContainer = formContainer.createDiv({cls: 'form-group'});
-        nameContainer.createEl('label', {text: 'Function Name'});
+        const nameContainer = formContainer.createDiv({cls: 'setting-item'});
+        nameContainer.createEl('label', {
+            text: 'Function Name', 
+            cls: 'setting-item-name'
+        });
         const nameInput = nameContainer.createEl('input', {
             type: 'text',
-            cls: 'function-name-input',
+            cls: 'setting-item-input',
             attr: {
                 placeholder: 'Enter function name'
             }
         });
         nameInput.value = this.function?.name || '';
         
-        // Function icon with help link and live preview
-        const iconContainer = formContainer.createDiv({cls: 'form-group'});
-        const iconHeader = iconContainer.createDiv({cls: 'icon-header'});
-        
-        // Icon name label
-        const iconLabelContainer = iconHeader.createDiv({cls: 'label-with-help'});
-        iconLabelContainer.createEl('label', {text: 'Icon Name'});
-        
-        // Add help link for icons
-        const iconHelpLink = iconLabelContainer.createEl('a', {
-            cls: 'icon-help-link',
-            href: 'https://lucide.dev/icons/',
-            text: 'View available icons'
+        // Icon name with preview
+        const iconContainer = formContainer.createDiv({cls: 'setting-item'});
+        const iconLabel = iconContainer.createEl('label', {
+            text: 'Icon Name',
+            cls: 'setting-item-name'
         });
-        iconHelpLink.setAttribute('target', '_blank');
-        iconHelpLink.setAttribute('rel', 'noopener noreferrer');
         
-        // Icon preview element
-        const iconPreviewContainer = iconHeader.createDiv({cls: 'icon-preview-container'});
-        const iconPreviewLabel = iconPreviewContainer.createSpan({cls: 'icon-preview-label', text: 'Preview: '});
-        this.iconPreviewEl = iconPreviewContainer.createDiv({cls: 'icon-preview'});
+        // Add the "View available icons" link
+        const iconLink = iconLabel.createEl('a', {
+            text: 'View available icons',
+            href: 'https://lucide.dev/icons/',
+            cls: 'icon-link'
+        });
+        iconLink.setAttr('target', '_blank');
         
-        // Icon input
-        const iconInputContainer = iconContainer.createDiv({cls: 'icon-input-container'});
-        const iconInput = iconInputContainer.createEl('input', {
+        const iconRow = iconContainer.createDiv({cls: 'icon-row'});
+        
+        // Create icon preview
+        this.iconPreviewEl = iconRow.createDiv({cls: 'icon-preview'});
+        
+        const iconInput = iconRow.createEl('input', {
             type: 'text',
-            cls: 'function-icon-input',
+            cls: 'setting-item-input',
             attr: {
-                placeholder: 'e.g., sparkles, check, star, file-text'
+                placeholder: 'Enter icon name (e.g., "message-square")'
             }
         });
         iconInput.value = this.function?.icon || '';
@@ -1836,8 +1841,13 @@ class CustomFunctionModal extends Modal {
         });
         
         // Add some example icons for quick selection
-        const iconExamples = iconContainer.createDiv({cls: 'icon-examples'});
-        iconExamples.createSpan({text: 'Examples: '});
+        const iconExamplesSection = iconContainer.createDiv({cls: 'icon-preview-section'});
+        iconExamplesSection.createEl('label', {
+            text: 'Examples:',
+            cls: 'setting-item-name'
+        });
+        
+        const examplesGrid = iconExamplesSection.createDiv({cls: 'examples-grid'});
         
         const commonIcons = [
             {name: 'file-text', display: 'Text'},
@@ -1851,10 +1861,15 @@ class CustomFunctionModal extends Modal {
         ];
         
         for (const icon of commonIcons) {
-            const iconBtn = iconExamples.createEl('button', {
-                cls: 'icon-example-button',
+            const iconBtn = examplesGrid.createEl('button', {
+                cls: 'icon-option',
                 attr: {'data-icon': icon.name, 'title': icon.name}
             });
+            
+            // Add selected class if this is the current icon
+            if (icon.name === iconInput.value) {
+                iconBtn.addClass('selected');
+            }
             
             // Manually add the icon instead of using setIcon to ensure it's visible
             const svgIcon = getIcon(icon.name);
@@ -1867,17 +1882,25 @@ class CustomFunctionModal extends Modal {
             
             // Add click handler to set the icon
             iconBtn.addEventListener('click', () => {
+                // Remove selected class from all buttons
+                examplesGrid.findAll('.icon-option').forEach(el => el.removeClass('selected'));
+                // Add selected class to this button
+                iconBtn.addClass('selected');
+                
                 iconInput.value = icon.name;
                 this.updateIconPreview(icon.name);
             });
         }
         
         // Function tooltip
-        const tooltipContainer = formContainer.createDiv({cls: 'form-group'});
-        tooltipContainer.createEl('label', {text: 'Tooltip'});
+        const tooltipContainer = formContainer.createDiv({cls: 'setting-item'});
+        tooltipContainer.createEl('label', {
+            text: 'Tooltip',
+            cls: 'setting-item-name'
+        });
         const tooltipInput = tooltipContainer.createEl('input', {
             type: 'text',
-            cls: 'function-tooltip-input',
+            cls: 'setting-item-input',
             attr: {
                 placeholder: 'Brief description shown on hover'
             }
@@ -1885,10 +1908,13 @@ class CustomFunctionModal extends Modal {
         tooltipInput.value = this.function?.tooltip || '';
         
         // Function prompt
-        const promptContainer = formContainer.createDiv({cls: 'form-group'});
-        promptContainer.createEl('label', {text: 'Prompt Template'});
+        const promptContainer = formContainer.createDiv({cls: 'setting-item'});
+        promptContainer.createEl('label', {
+            text: 'Prompt Template',
+            cls: 'setting-item-name'
+        });
         const promptArea = promptContainer.createEl('textarea', {
-            cls: 'function-prompt-textarea',
+            cls: 'setting-item-input prompt-input',
             attr: {
                 rows: '8',
                 placeholder: 'Enter the prompt template for this function'
@@ -1897,18 +1923,18 @@ class CustomFunctionModal extends Modal {
         promptArea.value = this.function?.prompt || '';
         
         // Buttons
-        const buttonContainer = contentEl.createDiv({cls: 'custom-function-buttons'});
+        const buttonContainer = contentEl.createDiv({cls: 'custom-function-button-container'});
         
         // Save button
         const saveButton = buttonContainer.createEl('button', {
             text: this.function ? 'Save Changes' : 'Create Function',
-            cls: 'custom-function-save'
+            cls: 'custom-function-button save-button'
         });
         
         // Cancel button
         const cancelButton = buttonContainer.createEl('button', {
             text: 'Cancel',
-            cls: 'custom-function-cancel'
+            cls: 'custom-function-button cancel-button'
         });
         
         // Add event listeners

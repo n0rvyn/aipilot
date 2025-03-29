@@ -1626,27 +1626,9 @@ export class ChatView extends ItemView implements Component {
 
     // Method to show diff modal
     private showDiffModal(editor: Editor, originalText: string, newText: string) {
-        if (!this.plugin.diffMatchPatchLib) {
-            new Notice("Diff library not loaded. Cannot show diff view.", 3000);
-            return;
-        }
-        
-        // Create a new instance of diff_match_patch
-        const dmp = new this.plugin.diffMatchPatchLib();
-        
-        // Compute the diff
-        const diffs = dmp.diff_main(originalText, newText);
-        
-        // Clean up the diff for better human readability
-        dmp.diff_cleanupSemantic(diffs);
-        
-        // Visualize the diff
-        const diffHtml = this.visualizeDiff(diffs);
-        
-        // Show diff in modal
+        // Create modal
         const modal = new Modal(this.app);
-        modal.titleEl.setText("Review Changes");
-        modal.contentEl.addClass("diff-view-modal");
+        modal.containerEl.addClass("diff-modal");
         
         // Create content container
         const contentContainer = modal.contentEl.createDiv({ cls: "diff-container" });
@@ -1654,13 +1636,66 @@ export class ChatView extends ItemView implements Component {
         // Create diff content
         const diffContent = contentContainer.createDiv({ cls: "diff-content" });
         
-        // Set content using proper DOM methods instead of innerHTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = diffHtml; // Safe because diffHtml is generated internally
-        
-        // Move all child nodes to the real container
-        while (tempDiv.firstChild) {
-            diffContent.appendChild(tempDiv.firstChild);
+        // Calculate and visualize diffs
+        // First check if the plugin has the library loaded
+        if (!this.plugin.diffMatchPatchLib) {
+            // Fallback to window object if available
+            if (window.diff_match_patch) {
+                try {
+                    const diffLib = new window.diff_match_patch();
+                    const diffs = diffLib.diff_main(originalText, newText);
+                    diffLib.diff_cleanupSemantic(diffs);
+                    
+                    // Create diff elements using our safe method
+                    this.createDiffElements(diffContent, diffs);
+                } catch (error) {
+                    console.error("Error using diff library:", error);
+                    diffContent.setText("Error: Could not generate diff view");
+                    
+                    // Show simple before/after instead
+                    const beforeDiv = diffContent.createDiv({ cls: "diff-before" });
+                    beforeDiv.createEl("h4", { text: "Original:" });
+                    beforeDiv.createDiv({ text: originalText });
+                    
+                    const afterDiv = diffContent.createDiv({ cls: "diff-after" });
+                    afterDiv.createEl("h4", { text: "Modified:" });
+                    afterDiv.createDiv({ text: newText });
+                }
+            } else {
+                // No diff library available
+                diffContent.setText("Diff library not available. Please check console for errors.");
+                
+                // Show simple before/after instead
+                const beforeDiv = diffContent.createDiv({ cls: "diff-before" });
+                beforeDiv.createEl("h4", { text: "Original:" });
+                beforeDiv.createDiv({ text: originalText });
+                
+                const afterDiv = diffContent.createDiv({ cls: "diff-after" });
+                afterDiv.createEl("h4", { text: "Modified:" });
+                afterDiv.createDiv({ text: newText });
+            }
+        } else {
+            // Use the plugin's diff library
+            try {
+                const dmp = new this.plugin.diffMatchPatchLib();
+                const diffs = dmp.diff_main(originalText, newText);
+                dmp.diff_cleanupSemantic(diffs);
+                
+                // Create diff elements using our safe method
+                this.createDiffElements(diffContent, diffs);
+            } catch (error) {
+                console.error("Error using plugin's diff library:", error);
+                diffContent.setText("Error: Could not generate diff view");
+                
+                // Show simple before/after instead
+                const beforeDiv = diffContent.createDiv({ cls: "diff-before" });
+                beforeDiv.createEl("h4", { text: "Original:" });
+                beforeDiv.createDiv({ text: originalText });
+                
+                const afterDiv = diffContent.createDiv({ cls: "diff-after" });
+                afterDiv.createEl("h4", { text: "Modified:" });
+                afterDiv.createDiv({ text: newText });
+            }
         }
         
         // Create button container
@@ -1692,8 +1727,41 @@ export class ChatView extends ItemView implements Component {
         // Open the modal
         modal.open();
     }
+    
+    // New helper method to create diff elements without using innerHTML
+    private createDiffElements(container: HTMLElement, diffs: Array<[number, string]>) {
+        const DIFF_DELETE = -1;
+        const DIFF_INSERT = 1;
+        const DIFF_EQUAL = 0;
+        
+        diffs.forEach(([op, text]) => {
+            // Create a span for this diff segment
+            const span = container.createSpan();
+            
+            // Set the appropriate class based on operation
+            if (op === DIFF_INSERT) {
+                span.addClass("diff-add");
+            } else if (op === DIFF_DELETE) {
+                span.addClass("diff-delete");
+            } else {
+                span.addClass("diff-equal");
+            }
+            
+            // Handle line breaks in the text
+            const lines = text.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                // Add the text content
+                span.appendText(lines[i]);
+                
+                // Add line breaks between lines, but not after the last line
+                if (i < lines.length - 1) {
+                    span.appendChild(document.createElement('br'));
+                }
+            }
+        });
+    }
 
-    // Add method to visualize diff
+    // Modified visualizeDiff to return the formatted HTML for export/copy purpose only
     private visualizeDiff(diffs: Array<[number, string]>): string {
         const DIFF_DELETE = -1;
         const DIFF_INSERT = 1;
@@ -1775,7 +1843,16 @@ export class ChatView extends ItemView implements Component {
             const folder = this.app.vault.getAbstractFileByPath(folderPath);
             
             if (!folder) {
-                await this.app.vault.createFolder(folderPath);
+                try {
+                    await this.app.vault.createFolder(folderPath);
+                } catch (err) {
+                    // Folder might already exist or there might be a file with the same name
+                    // If the error is not because the folder already exists, rethrow
+                    if (!(err.message && err.message.includes("already exists"))) {
+                        throw err;
+                    }
+                    // Otherwise, the folder exists, so we can continue
+                }
             }
             
             // Write history to file

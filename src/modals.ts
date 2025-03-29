@@ -163,7 +163,7 @@ export class SearchResultsModal extends Modal {
                 this.answer,
                 answerContent,
                 '',
-                null as any
+                null
             );
             
             // Add sources header

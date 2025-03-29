@@ -764,23 +764,52 @@ var ChatView = class extends import_obsidian2.ItemView {
   }
   // Method to show diff modal
   showDiffModal(editor, originalText, newText) {
-    if (!this.plugin.diffMatchPatchLib) {
-      new import_obsidian2.Notice("Diff library not loaded. Cannot show diff view.", 3e3);
-      return;
-    }
-    const dmp = new this.plugin.diffMatchPatchLib();
-    const diffs = dmp.diff_main(originalText, newText);
-    dmp.diff_cleanupSemantic(diffs);
-    const diffHtml = this.visualizeDiff(diffs);
     const modal = new import_obsidian2.Modal(this.app);
-    modal.titleEl.setText("Review Changes");
-    modal.contentEl.addClass("diff-view-modal");
+    modal.containerEl.addClass("diff-modal");
     const contentContainer = modal.contentEl.createDiv({ cls: "diff-container" });
     const diffContent = contentContainer.createDiv({ cls: "diff-content" });
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = diffHtml;
-    while (tempDiv.firstChild) {
-      diffContent.appendChild(tempDiv.firstChild);
+    if (!this.plugin.diffMatchPatchLib) {
+      if (window.diff_match_patch) {
+        try {
+          const diffLib = new window.diff_match_patch();
+          const diffs = diffLib.diff_main(originalText, newText);
+          diffLib.diff_cleanupSemantic(diffs);
+          this.createDiffElements(diffContent, diffs);
+        } catch (error) {
+          console.error("Error using diff library:", error);
+          diffContent.setText("Error: Could not generate diff view");
+          const beforeDiv = diffContent.createDiv({ cls: "diff-before" });
+          beforeDiv.createEl("h4", { text: "Original:" });
+          beforeDiv.createDiv({ text: originalText });
+          const afterDiv = diffContent.createDiv({ cls: "diff-after" });
+          afterDiv.createEl("h4", { text: "Modified:" });
+          afterDiv.createDiv({ text: newText });
+        }
+      } else {
+        diffContent.setText("Diff library not available. Please check console for errors.");
+        const beforeDiv = diffContent.createDiv({ cls: "diff-before" });
+        beforeDiv.createEl("h4", { text: "Original:" });
+        beforeDiv.createDiv({ text: originalText });
+        const afterDiv = diffContent.createDiv({ cls: "diff-after" });
+        afterDiv.createEl("h4", { text: "Modified:" });
+        afterDiv.createDiv({ text: newText });
+      }
+    } else {
+      try {
+        const dmp = new this.plugin.diffMatchPatchLib();
+        const diffs = dmp.diff_main(originalText, newText);
+        dmp.diff_cleanupSemantic(diffs);
+        this.createDiffElements(diffContent, diffs);
+      } catch (error) {
+        console.error("Error using plugin's diff library:", error);
+        diffContent.setText("Error: Could not generate diff view");
+        const beforeDiv = diffContent.createDiv({ cls: "diff-before" });
+        beforeDiv.createEl("h4", { text: "Original:" });
+        beforeDiv.createDiv({ text: originalText });
+        const afterDiv = diffContent.createDiv({ cls: "diff-after" });
+        afterDiv.createEl("h4", { text: "Modified:" });
+        afterDiv.createDiv({ text: newText });
+      }
     }
     const buttonContainer = modal.contentEl.createDiv({ cls: "diff-buttons" });
     const applyButton = buttonContainer.createEl("button", {
@@ -801,7 +830,30 @@ var ChatView = class extends import_obsidian2.ItemView {
     });
     modal.open();
   }
-  // Add method to visualize diff
+  // New helper method to create diff elements without using innerHTML
+  createDiffElements(container, diffs) {
+    const DIFF_DELETE = -1;
+    const DIFF_INSERT = 1;
+    const DIFF_EQUAL = 0;
+    diffs.forEach(([op, text]) => {
+      const span = container.createSpan();
+      if (op === DIFF_INSERT) {
+        span.addClass("diff-add");
+      } else if (op === DIFF_DELETE) {
+        span.addClass("diff-delete");
+      } else {
+        span.addClass("diff-equal");
+      }
+      const lines = text.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        span.appendText(lines[i]);
+        if (i < lines.length - 1) {
+          span.appendChild(document.createElement("br"));
+        }
+      }
+    });
+  }
+  // Modified visualizeDiff to return the formatted HTML for export/copy purpose only
   visualizeDiff(diffs) {
     const DIFF_DELETE = -1;
     const DIFF_INSERT = 1;
@@ -862,7 +914,13 @@ var ChatView = class extends import_obsidian2.ItemView {
         const folderPath = this.plugin.settings.chatHistoryPath;
         const folder = this.app.vault.getAbstractFileByPath(folderPath);
         if (!folder) {
-          yield this.app.vault.createFolder(folderPath);
+          try {
+            yield this.app.vault.createFolder(folderPath);
+          } catch (err) {
+            if (!(err.message && err.message.includes("already exists"))) {
+              throw err;
+            }
+          }
         }
         const fileName = `${folderPath}/${history.id}.json`;
         yield this.app.vault.adapter.write(
@@ -1103,10 +1161,12 @@ var ModelManager = class {
     return __async(this, arguments, function* (modelId, prompt, options = {}) {
       const model = this.getModelById(modelId);
       if (!model) throw new Error(`Model ${modelId} not found`);
+      if (!model.active) {
+        throw new Error(`Model ${model.name} is not active`);
+      }
       const useProxy = model.useProxy !== void 0 ? model.useProxy : this.proxyConfig.enabled;
       let result = "";
       try {
-        console.log(`Calling model: ${model.name} (${model.type}) with prompt: ${prompt.substring(0, 50)}...`);
         switch (model.type) {
           case "openai":
             result = yield this.callOpenAI(model, prompt, useProxy, options);
@@ -1215,7 +1275,7 @@ var ModelManager = class {
   }
   callZhipu(model, prompt, useProxy, options) {
     return __async(this, null, function* () {
-      var _a, _b, _c, _d, _e, _f, _g;
+      var _a;
       const isZhipuAI = model.type === "zhipuai";
       let baseUrl = "";
       if (model.baseUrl) {
@@ -1226,7 +1286,6 @@ var ModelManager = class {
       } else {
         baseUrl = isZhipuAI ? "https://open.bigmodel.cn/api/paas/v4/chat/completions" : "https://open.bigmodel.cn/api/paas/v3/chat/completions";
       }
-      console.log(`ZhipuAI: Using endpoint ${baseUrl} for model type ${model.type}`);
       let headers = {
         "Content-Type": "application/json"
       };
@@ -1254,76 +1313,72 @@ var ModelManager = class {
         stream: streaming
       };
       try {
-        console.log(`ZhipuAI: Using model ${modelIdentifier} (mapped from ${model.modelName}), streaming: ${streaming}`);
         if (streaming && typeof onChunk === "function") {
           let fullResponse = "";
-          const response2 = yield this.fetchWithProxy(baseUrl, {
+          const response = yield this.fetchWithProxy(baseUrl, {
             method: "POST",
             headers,
             body: JSON.stringify(payload)
           }, useProxy);
-          if (!response2.ok) {
-            const errorData = yield response2.text();
-            console.error(`ZhipuAI API error (${response2.status}): ${errorData}`);
-            throw new Error(`ZhipuAI API error: ${response2.status} ${response2.statusText}`);
+          if (!response.ok) {
+            const errorData = yield response.text();
+            console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
+            throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
           }
-          const reader = (_a = response2.body) == null ? void 0 : _a.getReader();
+          const reader = (_a = response.body) == null ? void 0 : _a.getReader();
           if (!reader) {
             throw new Error("Failed to get response reader for streaming");
           }
-          const decoder = new TextDecoder();
+          let decoder = new TextDecoder();
           let buffer = "";
           while (true) {
             const { done, value } = yield reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            let newlineIndex;
-            while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-              const line = buffer.slice(0, newlineIndex).trim();
-              buffer = buffer.slice(newlineIndex + 1);
-              if (line.startsWith("data:")) {
-                const jsonData = line.slice(5).trim();
-                if (jsonData === "" || jsonData === "[DONE]") continue;
-                try {
-                  const parsedData = JSON.parse(jsonData);
-                  if ((_d = (_c = (_b = parsedData.choices) == null ? void 0 : _b[0]) == null ? void 0 : _c.delta) == null ? void 0 : _d.content) {
-                    const content = parsedData.choices[0].delta.content;
-                    fullResponse += content;
-                    onChunk(content);
-                  }
-                } catch (e) {
-                  console.error("Error parsing streaming data:", e, jsonData);
+            let lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (line.trim() === "") continue;
+              const dataLine = line.startsWith("data: ") ? line.slice(6) : line;
+              if (dataLine === "[DONE]") continue;
+              try {
+                const data = JSON.parse(dataLine);
+                let chunkText = "";
+                if (data.choices && data.choices[0] && data.choices[0].delta) {
+                  chunkText = data.choices[0].delta.content || "";
+                } else if (data.data && data.data.choices && data.data.choices[0]) {
+                  chunkText = data.data.choices[0].content || "";
                 }
+                if (chunkText) {
+                  fullResponse += chunkText;
+                  onChunk(chunkText);
+                }
+              } catch (e) {
+                continue;
               }
             }
           }
           return fullResponse;
-        }
-        const response = yield this.fetchWithProxy(baseUrl, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload)
-        }, useProxy);
-        if (!response.ok) {
-          const errorData = yield response.text();
-          console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
-          if (response.status === 404) {
-            console.error("ZhipuAI API endpoint not found. Please verify the correct endpoint URL.");
-            throw new Error(`ZhipuAI API endpoint not found. Please check your model configuration and API documentation for the correct URL. Status: ${response.status}`);
-          }
-          throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
-        }
-        const data = yield response.json();
-        console.log("ZhipuAI response:", JSON.stringify(data).substring(0, 200) + "...");
-        if (data.choices && ((_f = (_e = data.choices[0]) == null ? void 0 : _e.message) == null ? void 0 : _f.content)) {
-          return data.choices[0].message.content;
-        } else if (data.data && data.data.choices && ((_g = data.data.choices[0]) == null ? void 0 : _g.content)) {
-          return data.data.choices[0].content;
-        } else if (data.response) {
-          return data.response;
         } else {
-          console.warn("Unexpected ZhipuAI response format:", data);
-          return JSON.stringify(data);
+          payload.stream = false;
+          const response = yield this.fetchWithProxy(baseUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload)
+          }, useProxy);
+          if (!response.ok) {
+            const errorData = yield response.text();
+            console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
+            throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
+          }
+          const data = yield response.json();
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content;
+          } else if (data.data && data.data.choices && data.data.choices[0]) {
+            return data.data.choices[0].content;
+          } else {
+            throw new Error("Unexpected response format from ZhipuAI API");
+          }
         }
       } catch (error) {
         console.error("Error calling ZhipuAI:", error);
@@ -1382,11 +1437,9 @@ var ModelManager = class {
   fetchWithProxy(url, options, useProxy) {
     return __async(this, null, function* () {
       try {
-        console.log(`Making request to: ${url}`);
         if (!useProxy || !this.proxyConfig.enabled) {
           return fetch(url, options);
         }
-        console.log(`Using proxy: ${this.proxyConfig.type}://${this.proxyConfig.address}:${this.proxyConfig.port}`);
         return fetch(url, options);
       } catch (error) {
         console.error(`Fetch error for ${url}:`, error);
@@ -1467,7 +1520,6 @@ var ModelManager = class {
         if (cached) {
           return cached;
         }
-        console.log(`Getting embedding using provider: ${activeModel.type}, model: ${activeModel.modelName}`);
         let vector;
         switch (activeModel.type) {
           case "openai":
@@ -1533,7 +1585,6 @@ var ModelManager = class {
         input: text
       };
       try {
-        console.log(`Making request to: ${baseUrl}`);
         const response = yield this.fetchWithProxy(baseUrl, {
           method: "POST",
           headers,
@@ -5386,7 +5437,6 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
           /^[a-zA-Z0-9_-]+$/.test(decrypted);
           this.settings.apiKey = isValidFormat ? decrypted : "";
           if (!isValidFormat) {
-            console.log("Invalid API key format detected, resetting key");
           }
         } catch (e) {
           console.error("Error decrypting API key, resetting it", e);
@@ -5403,7 +5453,6 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
                 modelCopy.apiKey = decrypted;
               } else {
                 modelCopy.apiKey = "";
-                console.log(`Invalid API key format detected for model ${model.name}, resetting key`);
               }
             } catch (e) {
               console.error(`Error decrypting API key for model ${model.name}, resetting it`, e);
@@ -6294,38 +6343,41 @@ var CustomFunctionModal = class extends import_obsidian9.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("custom-function-modal");
-    contentEl.createEl("h2", { text: this.function ? "Edit Custom Function" : "Create Custom Function" });
+    contentEl.createEl("h2", {
+      text: this.function ? "Edit Custom Function" : "Create Custom Function"
+    });
     const formContainer = contentEl.createDiv({ cls: "custom-function-form" });
-    const nameContainer = formContainer.createDiv({ cls: "form-group" });
-    nameContainer.createEl("label", { text: "Function Name" });
+    const nameContainer = formContainer.createDiv({ cls: "setting-item" });
+    nameContainer.createEl("label", {
+      text: "Function Name",
+      cls: "setting-item-name"
+    });
     const nameInput = nameContainer.createEl("input", {
       type: "text",
-      cls: "function-name-input",
+      cls: "setting-item-input",
       attr: {
         placeholder: "Enter function name"
       }
     });
     nameInput.value = ((_a = this.function) == null ? void 0 : _a.name) || "";
-    const iconContainer = formContainer.createDiv({ cls: "form-group" });
-    const iconHeader = iconContainer.createDiv({ cls: "icon-header" });
-    const iconLabelContainer = iconHeader.createDiv({ cls: "label-with-help" });
-    iconLabelContainer.createEl("label", { text: "Icon Name" });
-    const iconHelpLink = iconLabelContainer.createEl("a", {
-      cls: "icon-help-link",
-      href: "https://lucide.dev/icons/",
-      text: "View available icons"
+    const iconContainer = formContainer.createDiv({ cls: "setting-item" });
+    const iconLabel = iconContainer.createEl("label", {
+      text: "Icon Name",
+      cls: "setting-item-name"
     });
-    iconHelpLink.setAttribute("target", "_blank");
-    iconHelpLink.setAttribute("rel", "noopener noreferrer");
-    const iconPreviewContainer = iconHeader.createDiv({ cls: "icon-preview-container" });
-    const iconPreviewLabel = iconPreviewContainer.createSpan({ cls: "icon-preview-label", text: "Preview: " });
-    this.iconPreviewEl = iconPreviewContainer.createDiv({ cls: "icon-preview" });
-    const iconInputContainer = iconContainer.createDiv({ cls: "icon-input-container" });
-    const iconInput = iconInputContainer.createEl("input", {
+    const iconLink = iconLabel.createEl("a", {
+      text: "View available icons",
+      href: "https://lucide.dev/icons/",
+      cls: "icon-link"
+    });
+    iconLink.setAttr("target", "_blank");
+    const iconRow = iconContainer.createDiv({ cls: "icon-row" });
+    this.iconPreviewEl = iconRow.createDiv({ cls: "icon-preview" });
+    const iconInput = iconRow.createEl("input", {
       type: "text",
-      cls: "function-icon-input",
+      cls: "setting-item-input",
       attr: {
-        placeholder: "e.g., sparkles, check, star, file-text"
+        placeholder: 'Enter icon name (e.g., "message-square")'
       }
     });
     iconInput.value = ((_b = this.function) == null ? void 0 : _b.icon) || "";
@@ -6333,8 +6385,12 @@ var CustomFunctionModal = class extends import_obsidian9.Modal {
     iconInput.addEventListener("input", () => {
       this.updateIconPreview(iconInput.value);
     });
-    const iconExamples = iconContainer.createDiv({ cls: "icon-examples" });
-    iconExamples.createSpan({ text: "Examples: " });
+    const iconExamplesSection = iconContainer.createDiv({ cls: "icon-preview-section" });
+    iconExamplesSection.createEl("label", {
+      text: "Examples:",
+      cls: "setting-item-name"
+    });
+    const examplesGrid = iconExamplesSection.createDiv({ cls: "examples-grid" });
     const commonIcons = [
       { name: "file-text", display: "Text" },
       { name: "check-square", display: "Check" },
@@ -6346,10 +6402,13 @@ var CustomFunctionModal = class extends import_obsidian9.Modal {
       { name: "zap", display: "Zap" }
     ];
     for (const icon of commonIcons) {
-      const iconBtn = iconExamples.createEl("button", {
-        cls: "icon-example-button",
+      const iconBtn = examplesGrid.createEl("button", {
+        cls: "icon-option",
         attr: { "data-icon": icon.name, "title": icon.name }
       });
+      if (icon.name === iconInput.value) {
+        iconBtn.addClass("selected");
+      }
       const svgIcon = getIcon(icon.name);
       if (svgIcon) {
         iconBtn.appendChild(svgIcon);
@@ -6357,38 +6416,46 @@ var CustomFunctionModal = class extends import_obsidian9.Modal {
         iconBtn.textContent = icon.name.charAt(0).toUpperCase();
       }
       iconBtn.addEventListener("click", () => {
+        examplesGrid.findAll(".icon-option").forEach((el) => el.removeClass("selected"));
+        iconBtn.addClass("selected");
         iconInput.value = icon.name;
         this.updateIconPreview(icon.name);
       });
     }
-    const tooltipContainer = formContainer.createDiv({ cls: "form-group" });
-    tooltipContainer.createEl("label", { text: "Tooltip" });
+    const tooltipContainer = formContainer.createDiv({ cls: "setting-item" });
+    tooltipContainer.createEl("label", {
+      text: "Tooltip",
+      cls: "setting-item-name"
+    });
     const tooltipInput = tooltipContainer.createEl("input", {
       type: "text",
-      cls: "function-tooltip-input",
+      cls: "setting-item-input",
       attr: {
         placeholder: "Brief description shown on hover"
       }
     });
     tooltipInput.value = ((_c = this.function) == null ? void 0 : _c.tooltip) || "";
-    const promptContainer = formContainer.createDiv({ cls: "form-group" });
-    promptContainer.createEl("label", { text: "Prompt Template" });
+    const promptContainer = formContainer.createDiv({ cls: "setting-item" });
+    promptContainer.createEl("label", {
+      text: "Prompt Template",
+      cls: "setting-item-name"
+    });
     const promptArea = promptContainer.createEl("textarea", {
-      cls: "function-prompt-textarea",
+      cls: "setting-item-input prompt-input",
       attr: {
         rows: "8",
         placeholder: "Enter the prompt template for this function"
       }
     });
     promptArea.value = ((_d = this.function) == null ? void 0 : _d.prompt) || "";
-    const buttonContainer = contentEl.createDiv({ cls: "custom-function-buttons" });
+    const buttonContainer = contentEl.createDiv({ cls: "custom-function-button-container" });
     const saveButton = buttonContainer.createEl("button", {
       text: this.function ? "Save Changes" : "Create Function",
-      cls: "custom-function-save"
+      cls: "custom-function-button save-button"
     });
     const cancelButton = buttonContainer.createEl("button", {
       text: "Cancel",
-      cls: "custom-function-cancel"
+      cls: "custom-function-button cancel-button"
     });
     saveButton.addEventListener("click", () => __async(this, null, function* () {
       if (!nameInput.value.trim()) {

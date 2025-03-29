@@ -1,6 +1,15 @@
 /* styles.css */
 /* AI Pilot Plugin Styles - Scoped to prevent conflicts with Obsidian global styles */
 
+/* IMPORTANT: All selectors should be scoped with one of these parent selectors to avoid conflicts:
+   - .aipilot-modal
+   - .chat-view-container
+   - .kb-view-container
+   - .debate-view-container
+   
+   This prevents style leakage and conflicts with Obsidian's global styles.
+*/
+
 /* Custom Prompt Input (Modal specific styles) */
 .aipilot-modal .custom-prompt-input {
     width: 100%;
@@ -1087,7 +1096,8 @@
 }
 
 /* Keyboard shortcuts hint */
-.keyboard-shortcuts {
+.aipilot-modal .keyboard-shortcuts,
+.chat-view-container .keyboard-shortcuts {
     position: fixed;
     bottom: 16px;
     right: 16px;
@@ -1106,13 +1116,15 @@
     opacity: 1;
 }
 
-.keyboard-shortcut {
+.aipilot-modal .keyboard-shortcut,
+.chat-view-container .keyboard-shortcut {
     display: inline-flex;
     align-items: center;
     margin: 0 4px;
 }
 
-.keyboard-shortcut kbd {
+.aipilot-modal .keyboard-shortcut kbd,
+.chat-view-container .keyboard-shortcut kbd {
     background: var(--background-primary);
     border: 1px solid var(--background-modifier-border);
     border-radius: 3px;
@@ -1137,7 +1149,8 @@
 }
 
 /* Skip navigation for keyboard users */
-.skip-nav {
+.chat-view-container .skip-nav,
+.aipilot-modal .skip-nav {
     position: absolute;
     top: -40px;
     left: 50%;
@@ -1151,27 +1164,32 @@
     transition: top 0.2s ease;
 }
 
-.skip-nav:focus {
+.chat-view-container .skip-nav:focus,
+.aipilot-modal .skip-nav:focus {
     top: 8px;
     outline: none;
 }
 
 /* Improved focus management for search */
-.history-search-container:focus-within {
+.chat-view-container .history-search-container:focus-within,
+.aipilot-modal .history-search-container:focus-within {
     background-color: var(--background-primary);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.history-search-input:focus {
+.chat-view-container .history-search-input:focus,
+.aipilot-modal .history-search-input:focus {
     background-color: var(--background-primary);
 }
 
 /* Ensure proper focus order */
-.history-search-clear {
+.chat-view-container .history-search-clear,
+.aipilot-modal .history-search-clear {
     tab-index: 0;
 }
 
-.export-button {
+.chat-view-container .export-button,
+.aipilot-modal .export-button {
     tab-index: 0;
 }
 
@@ -2124,7 +2142,8 @@
 }
 
 /* Search Prompt Modal Styles */
-.search-prompt-modal {
+.aipilot-modal .search-prompt-modal,
+.chat-view-container .search-prompt-modal {
     padding: 20px;
     width: 520px;
     max-width: 90vw;
@@ -2133,25 +2152,29 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.search-modal-header {
+.aipilot-modal .search-modal-header,
+.chat-view-container .search-modal-header {
     margin-bottom: 16px;
     text-align: center;
 }
 
-.search-modal-header h2 {
+.aipilot-modal .search-modal-header h2,
+.chat-view-container .search-modal-header h2 {
     margin: 0 0 8px;
     font-size: 24px;
     font-weight: 600;
     color: var(--text-normal);
 }
 
-.search-modal-description {
+.aipilot-modal .search-modal-description,
+.chat-view-container .search-modal-description {
     font-size: 14px;
     color: var(--text-muted);
     margin: 0 0 16px;
 }
 
-.search-input-container {
+.aipilot-modal .search-input-container,
+.chat-view-container .search-input-container {
     position: relative;
     margin-bottom: 20px;
     display: flex;
@@ -2162,25 +2185,29 @@
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.search-input-container:focus-within {
+.aipilot-modal .search-input-container:focus-within,
+.chat-view-container .search-input-container:focus-within {
     border-color: var(--interactive-accent);
     box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
 }
 
-.search-icon-container {
+.aipilot-modal .search-icon-container,
+.chat-view-container .search-icon-container {
     display: flex;
     align-items: center;
     padding: 0 4px 0 6px;
 }
 
-.search-icon {
+.aipilot-modal .search-icon,
+.chat-view-container .search-icon {
     color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.search-prompt-input {
+.aipilot-modal .search-prompt-input,
+.chat-view-container .search-prompt-input {
     flex: 1;
     padding: 12px 8px;
     font-size: 16px;
@@ -2190,18 +2217,21 @@
     width: 100%;
 }
 
-.search-prompt-input:focus {
+.aipilot-modal .search-prompt-input:focus,
+.chat-view-container .search-prompt-input:focus {
     outline: none;
 }
 
-.search-prompt-buttons {
+.aipilot-modal .search-prompt-buttons,
+.chat-view-container .search-prompt-buttons {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
     margin-top: 20px;
 }
 
-.search-button {
+.aipilot-modal .search-button,
+.chat-view-container .search-button {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2217,11 +2247,13 @@
     transition: background-color 0.2s ease;
 }
 
-.search-button:hover {
+.aipilot-modal .search-button:hover,
+.chat-view-container .search-button:hover {
     background: var(--interactive-accent-hover);
 }
 
-.cancel-button {
+.aipilot-modal .cancel-button,
+.chat-view-container .cancel-button {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2237,18 +2269,21 @@
     transition: background-color 0.2s ease;
 }
 
-.cancel-button:hover {
+.aipilot-modal .cancel-button:hover,
+.chat-view-container .cancel-button:hover {
     background: var(--background-modifier-hover);
 }
 
-.search-shortcut-hint {
+.aipilot-modal .search-shortcut-hint,
+.chat-view-container .search-shortcut-hint {
     text-align: center;
     margin-top: 16px;
     font-size: 13px;
     color: var(--text-muted);
 }
 
-.search-shortcut-hint kbd {
+.aipilot-modal .search-shortcut-hint kbd,
+.chat-view-container .search-shortcut-hint kbd {
     display: inline-block;
     padding: 2px 6px;
     font-family: inherit;
@@ -2261,11 +2296,13 @@
 }
 
 /* Dark theme specific adjustments */
-.theme-dark .search-input-container {
+.theme-dark .aipilot-modal .search-input-container,
+.theme-dark .chat-view-container .search-input-container {
     background: var(--background-primary-alt);
 }
 
-.theme-dark .search-prompt-modal {
+.theme-dark .aipilot-modal .search-prompt-modal,
+.theme-dark .chat-view-container .search-prompt-modal {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
@@ -2282,12 +2319,14 @@
     }
 }
 
-.search-input-container:focus-within {
+.aipilot-modal .search-input-container:focus-within,
+.chat-view-container .search-input-container:focus-within {
     animation: chat-view-input-pulse 1s ease-out;
 }
 
 /* Search Reference Item */
-.search-reference-item {
+.aipilot-modal .search-reference-item,
+.chat-view-container .search-reference-item {
     padding: 8px 12px;
     border-radius: 6px;
     background-color: var(--background-primary);
@@ -2295,7 +2334,8 @@
     margin-bottom: 8px;
 }
 
-.reflection-badge {
+.aipilot-modal .reflection-badge,
+.chat-view-container .reflection-badge {
     display: inline-block;
     background-color: var(--interactive-accent);
     color: var(--text-on-accent);
@@ -2306,12 +2346,15 @@
     font-weight: 600;
 }
 
-.search-reference-item:hover {
+.aipilot-modal .search-reference-item:hover,
+.chat-view-container .search-reference-item:hover {
     background-color: var(--background-modifier-hover);
 }
 
 /* RAG Results Styling */
-.rag-results-container {
+.chat-view-container .rag-results-container,
+.aipilot-modal .rag-results-container,
+.kb-view-container .rag-results-container {
   margin-top: 20px;
   border-radius: 8px;
   background-color: var(--background-secondary);
@@ -2319,40 +2362,52 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.rag-question {
+.chat-view-container .rag-question,
+.aipilot-modal .rag-question,
+.kb-view-container .rag-question {
   font-weight: bold;
   margin-bottom: 12px;
   color: var(--text-normal);
   font-size: 1.1em;
 }
 
-.rag-answer {
+.chat-view-container .rag-answer,
+.aipilot-modal .rag-answer,
+.kb-view-container .rag-answer {
   margin-bottom: 16px;
   line-height: 1.6;
   color: var(--text-normal);
   position: relative;
 }
 
-.rag-references {
+.chat-view-container .rag-references,
+.aipilot-modal .rag-references,
+.kb-view-container .rag-references {
   margin-top: 16px;
   border-top: 1px solid var(--background-modifier-border);
   padding-top: 12px;
 }
 
-.references-title {
+.chat-view-container .references-title,
+.aipilot-modal .references-title,
+.kb-view-container .references-title {
   font-weight: bold;
   margin-bottom: 8px;
   font-size: 0.95em;
   color: var(--text-muted);
 }
 
-.references-list {
+.chat-view-container .references-list,
+.aipilot-modal .references-list,
+.kb-view-container .references-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.reference-link {
+.chat-view-container .reference-link,
+.aipilot-modal .reference-link,
+.kb-view-container .reference-link {
   font-weight: 600;
   color: var(--interactive-accent);
   text-decoration: none;
@@ -2360,7 +2415,9 @@
   margin-bottom: 4px;
 }
 
-.reference-excerpt {
+.chat-view-container .reference-excerpt,
+.aipilot-modal .reference-excerpt,
+.kb-view-container .reference-excerpt {
   font-size: 0.85em;
   color: var(--text-muted);
   white-space: normal;
@@ -2370,7 +2427,9 @@
 }
 
 /* Enhanced LoadingModal */
-.loading-modal-container {
+.chat-view-container .loading-modal-container,
+.aipilot-modal .loading-modal-container,
+.kb-view-container .loading-modal-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2378,11 +2437,15 @@
   gap: 16px;
 }
 
-.loading-spinner-container {
+.chat-view-container .loading-spinner-container,
+.aipilot-modal .loading-spinner-container,
+.kb-view-container .loading-spinner-container {
   margin-bottom: 10px;
 }
 
-.loading-spinner {
+.chat-view-container .loading-spinner,
+.aipilot-modal .loading-spinner,
+.kb-view-container .loading-spinner {
   width: 40px;
   height: 40px;
   border: 4px solid var(--background-modifier-border);
@@ -2396,7 +2459,9 @@
   100% { transform: rotate(360deg); }
 }
 
-.loading-message {
+.chat-view-container .loading-message,
+.aipilot-modal .loading-message,
+.kb-view-container .loading-message {
   text-align: center;
   max-width: 400px;
   overflow-wrap: break-word;
@@ -2409,12 +2474,16 @@
   background-color: var(--background-primary);
 }
 
-.loading-progress-container {
+.chat-view-container .loading-progress-container,
+.aipilot-modal .loading-progress-container,
+.kb-view-container .loading-progress-container {
   width: 100%;
   margin: 10px 0;
 }
 
-.loading-progress {
+.chat-view-container .loading-progress,
+.aipilot-modal .loading-progress,
+.kb-view-container .loading-progress {
   width: 100%;
   height: 10px;
   background-color: var(--background-modifier-border);
@@ -2422,30 +2491,38 @@
   overflow: hidden;
 }
 
-.loading-progress-bar {
+.chat-view-container .loading-progress-bar,
+.aipilot-modal .loading-progress-bar,
+.kb-view-container .loading-progress-bar {
   height: 100%;
   background-color: var(--interactive-accent);
   border-radius: 5px;
   transition: width 0.3s ease;
 }
 
-.loading-percentage {
+.chat-view-container .loading-percentage,
+.aipilot-modal .loading-percentage,
+.kb-view-container .loading-percentage {
   text-align: center;
   font-size: 0.8em;
   margin-top: 5px;
 }
 
-.loading-button-container {
+.chat-view-container .loading-button-container,
+.aipilot-modal .loading-button-container,
+.kb-view-container .loading-button-container {
   margin-top: 10px;
 }
 
 /* InputModal styling */
-.search-prompt-container {
+.aipilot-modal .search-prompt-container,
+.chat-view-container .search-prompt-container {
   margin-bottom: 20px;
   width: 100%;
 }
 
-.search-prompt-input {
+.aipilot-modal .search-prompt-input,
+.chat-view-container .search-prompt-input {
   width: 100%;
   padding: 10px;
   border-radius: 4px;
@@ -2454,12 +2531,14 @@
   font-size: 1em;
 }
 
-.search-prompt-input:focus {
+.aipilot-modal .search-prompt-input:focus,
+.chat-view-container .search-prompt-input:focus {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
 }
 
-.search-prompt-buttons {
+.aipilot-modal .search-prompt-buttons,
+.chat-view-container .search-prompt-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -2595,7 +2674,10 @@
 }
 
 /* Welcome message styles for all views */
-.welcome-message {
+.chat-view-container .welcome-message,
+.kb-view-container .welcome-message,
+.debate-view-container .welcome-message,
+.aipilot-modal .welcome-message {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2608,7 +2690,9 @@
     max-width: 90%;
 }
 
-.model-card {
+.chat-view-container .model-card,
+.aipilot-modal .model-card,
+.kb-view-container .model-card {
   background-color: var(--background-secondary);
   border-radius: 8px;
   padding: 12px 16px;
@@ -3294,4 +3378,203 @@
   word-break: break-word;
   font-family: var(--font-text);
   line-height: 1.5;
+}
+
+.chat-view-container .keyboard-help-text,
+.aipilot-modal .keyboard-help-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-style: italic;
+}
+
+/* 
+* REMAINING SELECTORS NEEDING PROPER SCOPING:
+* 
+* 1. .history-date-group
+* 2. .history-item-actions and children
+* 3. .model-card duplicate definition at line ~2859
+* 4. .loading-indicator and children
+* 5. .error-message
+* 6. .message-content and children
+* 7. All model-related selectors
+* 8. All polish-related selectors
+* 
+* To fix these conflicts, each selector should be properly scoped with a parent container:
+* - .aipilot-modal
+* - .chat-view-container
+* - .kb-view-container
+* - .debate-view-container
+*/
+
+/* Custom Function Editor Improvements */
+.aipilot-modal .custom-function-modal {
+    padding: 20px;
+    max-width: 90%;
+}
+
+.aipilot-modal .custom-function-modal .setting-item {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.aipilot-modal .custom-function-modal .setting-item:last-child {
+    border-bottom: none;
+}
+
+.aipilot-modal .custom-function-modal .setting-item-name {
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: block;
+    font-size: 16px;
+    color: var(--text-normal);
+}
+
+.aipilot-modal .custom-function-modal .setting-item-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 2px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    font-size: 15px;
+    transition: border-color 0.2s ease;
+}
+
+.aipilot-modal .custom-function-modal .setting-item-input:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+/* Improved icon preview */
+.aipilot-modal .custom-function-modal .icon-preview-section {
+    margin: 20px 0;
+}
+
+.aipilot-modal .custom-function-modal .icon-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    background-color: var(--background-secondary);
+    border-radius: 8px;
+    border: 2px solid var(--background-modifier-border);
+    color: var(--interactive-accent);
+    font-size: 24px;
+    margin-right: 16px;
+    margin-bottom: 16px;
+}
+
+/* Icon grid */
+.aipilot-modal .custom-function-modal .examples-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.aipilot-modal .custom-function-modal .icon-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.aipilot-modal .custom-function-modal .icon-option:hover {
+    background-color: var(--background-modifier-hover);
+    transform: translateY(-2px);
+}
+
+.aipilot-modal .custom-function-modal .icon-option.selected {
+    border-color: var(--interactive-accent);
+    background-color: rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+.aipilot-modal .custom-function-modal .icon-option svg {
+    width: 24px;
+    height: 24px;
+    color: var(--text-normal);
+}
+
+/* Prompt template */
+.aipilot-modal .custom-function-modal .prompt-input {
+    min-height: 150px;
+    font-family: var(--font-monospace);
+    line-height: 1.5;
+    resize: vertical;
+    padding: 12px;
+}
+
+/* Buttons */
+.aipilot-modal .custom-function-modal .custom-function-button-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.aipilot-modal .custom-function-modal .custom-function-button {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.aipilot-modal .custom-function-modal .save-button {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+}
+
+.aipilot-modal .custom-function-modal .save-button:hover {
+    background-color: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+}
+
+.aipilot-modal .custom-function-modal .cancel-button {
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.aipilot-modal .custom-function-modal .cancel-button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+/* Tooltip field */
+.aipilot-modal .custom-function-modal .tooltip-field {
+    margin-bottom: 20px;
+}
+
+.aipilot-modal .custom-function-modal .tooltip-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.aipilot-modal .custom-function-modal .tooltip-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 2px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+}
+
+/* Language consistency */
+.aipilot-modal .custom-function-modal ::placeholder {
+    color: var(--text-faint);
+    opacity: 0.7;
 }

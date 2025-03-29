@@ -120,7 +120,7 @@ export class EmbeddingModelConfigModal extends Modal {
                 }));
         
         // Initially hide/show based on whether custom is selected
-        const dropdown = modelNameSetting.components[0] as any;
+        const dropdown = modelNameSetting.components[0] as DropdownComponent;
         const isCustomSelected = dropdown.getValue() === 'custom';
         customModelInput.settingEl.style.display = isCustomSelected ? 'flex' : 'none';
 

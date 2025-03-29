@@ -9,6 +9,6 @@ import { App, Plugin } from "obsidian";
 // The correct approach is to let esbuild handle CSS through the plugin in esbuild.config.mjs
 export default class TestPlugin extends Plugin {
     async onload() {
-        console.log("Test plugin loaded correctly without CSS import");
+        // Plugin loaded without console logging
     }
 } 

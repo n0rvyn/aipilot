@@ -11,7 +11,7 @@ export class RAGService {
 
   async findRelevantNotes(query: string): Promise<RelevantNote[]> {
     try {
-      console.log('Vector retrieval: Finding relevant notes for', query);
+      // Finding relevant notes for query
 
       // Get embedding for query
       const embedding = await this.modelManager.getQueryEmbedding(query);
