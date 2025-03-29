@@ -2683,11 +2683,10 @@ var DebatePanel = class extends import_obsidian3.ItemView {
     const configContentEl = this.configPanelEl.createDiv({ cls: "debate-config-content" });
     const topicWrapperEl = configContentEl.createDiv({ cls: "config-input-wrapper" });
     topicWrapperEl.createEl("label", { text: "Topic", attr: { for: "debate-topic" } });
-    this.topicInputEl = topicWrapperEl.createEl("input", {
+    this.topicInputEl = topicWrapperEl.createEl("textarea", {
       cls: "debate-topic-input",
       attr: {
         id: "debate-topic",
-        type: "text",
         placeholder: "Enter debate topic"
       }
     });

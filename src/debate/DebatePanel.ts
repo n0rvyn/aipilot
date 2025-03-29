@@ -11,7 +11,7 @@ export class DebatePanel extends ItemView {
   
   // UI elements
   public containerEl: HTMLElement;
-  private topicInputEl: HTMLInputElement;
+  private topicInputEl: HTMLTextAreaElement;
   private messagesContainerEl: HTMLElement;
   private controlsEl: HTMLElement;
   private modeSelectEl: HTMLSelectElement;
@@ -106,11 +106,10 @@ export class DebatePanel extends ItemView {
     const topicWrapperEl = configContentEl.createDiv({ cls: 'config-input-wrapper' });
     topicWrapperEl.createEl('label', { text: 'Topic', attr: { for: 'debate-topic' } });
     
-    this.topicInputEl = topicWrapperEl.createEl('input', {
+    this.topicInputEl = topicWrapperEl.createEl('textarea', {
       cls: 'debate-topic-input',
       attr: {
         id: 'debate-topic',
-        type: 'text',
         placeholder: 'Enter debate topic'
       }
     });
