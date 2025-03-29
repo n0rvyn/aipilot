@@ -2103,7 +2103,8 @@
 
 /* Debate config panel improvements */
 .debate-language-select {
-  width: 100%;
+  width: 30%;
+  height: 36px;
   padding: 8px;
   border-radius: 4px;
   border: 1px solid var(--background-modifier-border);

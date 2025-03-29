@@ -2801,6 +2801,7 @@ var DebatePanel = class extends import_obsidian3.ItemView {
       defaultModelId,
       this.languageSelectEl.value
     );
+    this.updateModeDescription("debate");
   }
   onModeChange() {
     if (!this.debateConfig) return;
@@ -2815,6 +2816,113 @@ var DebatePanel = class extends import_obsidian3.ItemView {
       defaultModelId,
       language
     );
+    this.updateModeDescription(selectedMode);
+  }
+  updateModeDescription(mode) {
+    this.messagesContainerEl.empty();
+    const descriptionEl = this.messagesContainerEl.createDiv({ cls: "debate-mode-description" });
+    descriptionEl.createEl("h3", { text: this.getModeName(mode) });
+    const language = this.languageSelectEl.value;
+    descriptionEl.createEl("p", { text: this.getModeDescription(mode, language) });
+    if (this.debateConfig && this.debateConfig.agents.length > 0) {
+      const agentsEl = descriptionEl.createDiv({ cls: "debate-agents-preview" });
+      agentsEl.createEl("h4", { text: language === "Chinese" ? "\u53C2\u4E0E\u7684\u4EE3\u7406" : "Participating Agents" });
+      const agentsList = agentsEl.createEl("ul");
+      const hostItem = agentsList.createEl("li");
+      hostItem.createEl("strong", { text: this.debateConfig.hostAgent.name });
+      hostItem.createSpan({ text: language === "Chinese" ? ` \u2014 \u4E3B\u6301\u4EBA` : ` \u2014 Host` });
+      this.debateConfig.agents.forEach((agent) => {
+        const agentItem = agentsList.createEl("li");
+        agentItem.createEl("strong", { text: agent.name });
+        agentItem.createSpan({ text: ` \u2014 ${agent.role}` });
+      });
+    }
+  }
+  getModeDescription(mode, language = "English") {
+    if (language === "Chinese") {
+      return this.getChineseModeDescription(mode);
+    }
+    return this.getEnglishModeDescription(mode);
+  }
+  getEnglishModeDescription(mode) {
+    switch (mode) {
+      case "debate":
+        return "A structured debate between two opposing viewpoints (Pro vs Con) on the given topic. The agents will present arguments and counterarguments, with a moderator guiding the discussion.";
+      case "sixHats":
+        return "The Six Thinking Hats method is a discussion framework that explores a topic from six different perspectives: facts, emotions, caution, benefits, creativity, and process management.";
+      case "roundtable":
+        return "A collaborative discussion among multiple experts with different specialties, focusing on sharing diverse perspectives on the topic.";
+      case "smart":
+        return "SMART Goals framework helps define objectives that are Specific, Measurable, Achievable, Relevant, and Time-bound. Agents will analyze how to apply SMART criteria to your topic.";
+      case "okr":
+        return "Objectives and Key Results (OKR) framework focuses on setting ambitious objectives and defining measurable key results to track progress.";
+      case "swot":
+        return "SWOT Analysis examines the Strengths, Weaknesses, Opportunities, and Threats related to the topic, providing a comprehensive strategic overview.";
+      case "pest":
+        return "PEST Analysis evaluates Political, Economic, Social, and Technological factors that could impact the topic, ideal for understanding external influences.";
+      case "premortem":
+        return "Pre-Mortem Analysis imagines a future where a project or initiative has failed, then works backward to identify potential causes of failure before they occur.";
+      case "fivewhys":
+        return 'The 5 Whys method involves asking "why" multiple times to explore the cause-and-effect relationships underlying a problem, helping to identify the root cause.';
+      case "fishbone":
+        return "The Fishbone Diagram (Ishikawa) maps out all the possible causes of a problem, organizing them into categories to identify root causes.";
+      case "rubberduck":
+        return "Rubber Duck Debugging involves explaining a problem step-by-step as if to an inanimate object (like a rubber duck), which often helps reveal solutions.";
+      case "scamper":
+        return "SCAMPER is a creative thinking technique that explores how to Substitute, Combine, Adapt, Modify, Put to other uses, Eliminate, and Reverse aspects of the topic.";
+      case "lateralthinking":
+        return "Lateral Thinking involves approaching problems from unexpected angles and challenging conventional thinking patterns to generate innovative solutions.";
+      case "pmi":
+        return "Plus-Minus-Interesting analysis explores the positive aspects, negative aspects, and interesting implications of an idea or topic.";
+      case "doublediamond":
+        return "The Double Diamond design process consists of four phases: Discover (gather insights), Define (frame the challenge), Develop (create solutions), and Deliver (implement).";
+      case "feynman":
+        return "The Feynman Technique involves explaining complex topics in simple terms to test and deepen understanding, identifying and filling knowledge gaps.";
+      case "grow":
+        return "The GROW model (Goals, Reality, Options, Will) is a coaching framework for problem-solving and goal-setting through structured conversation.";
+      default:
+        return "Select a debate mode above and enter a topic to begin exploring this subject from multiple perspectives.";
+    }
+  }
+  getChineseModeDescription(mode) {
+    switch (mode) {
+      case "debate":
+        return "\u4E00\u573A\u6709\u5173\u7ED9\u5B9A\u4E3B\u9898\u7684\u6B63\u53CD\u4E24\u65B9\uFF08\u6B63\u65B9vs\u53CD\u65B9\uFF09\u4E4B\u95F4\u7684\u7ED3\u6784\u5316\u8FA9\u8BBA\u3002\u4EE3\u7406\u4EBA\u5C06\u63D0\u51FA\u8BBA\u70B9\u548C\u53CD\u9A73\uFF0C\u7531\u4E3B\u6301\u4EBA\u5F15\u5BFC\u8BA8\u8BBA\u3002";
+      case "sixHats":
+        return "\u516D\u9876\u601D\u8003\u5E3D\u65B9\u6CD5\u662F\u4E00\u4E2A\u4ECE\u516D\u4E2A\u4E0D\u540C\u89D2\u5EA6\u63A2\u8BA8\u4E3B\u9898\u7684\u8BA8\u8BBA\u6846\u67B6\uFF1A\u4E8B\u5B9E\u3001\u60C5\u611F\u3001\u8C28\u614E\u3001\u76CA\u5904\u3001\u521B\u9020\u6027\u548C\u8FC7\u7A0B\u7BA1\u7406\u3002";
+      case "roundtable":
+        return "\u7531\u4E0D\u540C\u4E13\u4E1A\u9886\u57DF\u7684\u591A\u4F4D\u4E13\u5BB6\u8FDB\u884C\u7684\u534F\u4F5C\u8BA8\u8BBA\uFF0C\u4FA7\u91CD\u4E8E\u5206\u4EAB\u5BF9\u4E3B\u9898\u7684\u591A\u5143\u89C6\u89D2\u3002";
+      case "smart":
+        return "SMART\u76EE\u6807\u6846\u67B6\u5E2E\u52A9\u5B9A\u4E49\u5177\u4F53\uFF08Specific\uFF09\u3001\u53EF\u8861\u91CF\uFF08Measurable\uFF09\u3001\u53EF\u5B9E\u73B0\uFF08Achievable\uFF09\u3001\u76F8\u5173\uFF08Relevant\uFF09\u548C\u6709\u65F6\u9650\uFF08Time-bound\uFF09\u7684\u76EE\u6807\u3002\u4EE3\u7406\u4EBA\u5C06\u5206\u6790\u5982\u4F55\u5C06SMART\u6807\u51C6\u5E94\u7528\u4E8E\u60A8\u7684\u4E3B\u9898\u3002";
+      case "okr":
+        return "\u76EE\u6807\u4E0E\u5173\u952E\u7ED3\u679C\uFF08OKR\uFF09\u6846\u67B6\u4E13\u6CE8\u4E8E\u8BBE\u5B9A\u5B8F\u5927\u7684\u76EE\u6807\u5E76\u5B9A\u4E49\u53EF\u8861\u91CF\u7684\u5173\u952E\u7ED3\u679C\u4EE5\u8DDF\u8E2A\u8FDB\u5EA6\u3002";
+      case "swot":
+        return "SWOT\u5206\u6790\u68C0\u67E5\u4E0E\u4E3B\u9898\u76F8\u5173\u7684\u4F18\u52BF\uFF08Strengths\uFF09\u3001\u52A3\u52BF\uFF08Weaknesses\uFF09\u3001\u673A\u4F1A\uFF08Opportunities\uFF09\u548C\u5A01\u80C1\uFF08Threats\uFF09\uFF0C\u63D0\u4F9B\u5168\u9762\u7684\u6218\u7565\u6982\u89C8\u3002";
+      case "pest":
+        return "PEST\u5206\u6790\u8BC4\u4F30\u53EF\u80FD\u5F71\u54CD\u4E3B\u9898\u7684\u653F\u6CBB\uFF08Political\uFF09\u3001\u7ECF\u6D4E\uFF08Economic\uFF09\u3001\u793E\u4F1A\uFF08Social\uFF09\u548C\u6280\u672F\uFF08Technological\uFF09\u56E0\u7D20\uFF0C\u9002\u5408\u7406\u89E3\u5916\u90E8\u5F71\u54CD\u3002";
+      case "premortem":
+        return "\u9884\u9632\u6027\u4E8B\u540E\u5206\u6790\u60F3\u8C61\u9879\u76EE\u6216\u8BA1\u5212\u5931\u8D25\u7684\u672A\u6765\uFF0C\u7136\u540E\u9006\u5411\u5DE5\u4F5C\u4EE5\u5728\u95EE\u9898\u53D1\u751F\u524D\u8BC6\u522B\u6F5C\u5728\u7684\u5931\u8D25\u539F\u56E0\u3002";
+      case "fivewhys":
+        return '\u4E94\u4E2A\u4E3A\u4EC0\u4E48\u65B9\u6CD5\u5305\u62EC\u591A\u6B21\u8BE2\u95EE"\u4E3A\u4EC0\u4E48"\u4EE5\u63A2\u7D22\u95EE\u9898\u80CC\u540E\u7684\u56E0\u679C\u5173\u7CFB\uFF0C\u5E2E\u52A9\u8BC6\u522B\u6839\u672C\u539F\u56E0\u3002';
+      case "fishbone":
+        return "\u9C7C\u9AA8\u56FE\uFF08\u77F3\u5DDD\u56FE\uFF09\u5217\u51FA\u95EE\u9898\u7684\u6240\u6709\u53EF\u80FD\u539F\u56E0\uFF0C\u5C06\u5B83\u4EEC\u7EC4\u7EC7\u6210\u7C7B\u522B\u4EE5\u8BC6\u522B\u6839\u672C\u539F\u56E0\u3002";
+      case "rubberduck":
+        return "\u5C0F\u9EC4\u9E2D\u8C03\u8BD5\u6CD5\u6D89\u53CA\u9010\u6B65\u5411\u4E00\u4E2A\u65E0\u751F\u547D\u7269\u4F53\uFF08\u5982\u5C0F\u9EC4\u9E2D\uFF09\u89E3\u91CA\u95EE\u9898\uFF0C\u8FD9\u901A\u5E38\u6709\u52A9\u4E8E\u53D1\u73B0\u89E3\u51B3\u65B9\u6848\u3002";
+      case "scamper":
+        return "SCAMPER\u662F\u4E00\u79CD\u521B\u9020\u6027\u601D\u7EF4\u6280\u672F\uFF0C\u63A2\u7D22\u5982\u4F55\u66FF\u4EE3\uFF08Substitute\uFF09\u3001\u7EC4\u5408\uFF08Combine\uFF09\u3001\u8C03\u6574\uFF08Adapt\uFF09\u3001\u4FEE\u6539\uFF08Modify\uFF09\u3001\u7528\u4E8E\u5176\u4ED6\u7528\u9014\uFF08Put to other uses\uFF09\u3001\u6D88\u9664\uFF08Eliminate\uFF09\u548C\u9006\u5411\u601D\u8003\uFF08Reverse\uFF09\u4E3B\u9898\u7684\u5404\u4E2A\u65B9\u9762\u3002";
+      case "lateralthinking":
+        return "\u6A2A\u5411\u601D\u7EF4\u6D89\u53CA\u4ECE\u610F\u60F3\u4E0D\u5230\u7684\u89D2\u5EA6\u5904\u7406\u95EE\u9898\uFF0C\u6311\u6218\u5E38\u89C4\u601D\u7EF4\u6A21\u5F0F\uFF0C\u4EE5\u4EA7\u751F\u521B\u65B0\u89E3\u51B3\u65B9\u6848\u3002";
+      case "pmi":
+        return "\u6B63\u8D1F\u9762\u767D\u5206\u6790\uFF08Plus-Minus-Interesting\uFF09\u63A2\u7D22\u4E00\u4E2A\u60F3\u6CD5\u6216\u4E3B\u9898\u7684\u79EF\u6781\u65B9\u9762\u3001\u6D88\u6781\u65B9\u9762\u548C\u6709\u8DA3\u7684\u542B\u4E49\u3002";
+      case "doublediamond":
+        return "\u53CC\u94BB\u77F3\u8BBE\u8BA1\u8FC7\u7A0B\u5305\u62EC\u56DB\u4E2A\u9636\u6BB5\uFF1A\u53D1\u73B0\uFF08\u6536\u96C6\u89C1\u89E3\uFF09\u3001\u5B9A\u4E49\uFF08\u6784\u5EFA\u6311\u6218\uFF09\u3001\u5F00\u53D1\uFF08\u521B\u5EFA\u89E3\u51B3\u65B9\u6848\uFF09\u548C\u4EA4\u4ED8\uFF08\u5B9E\u65BD\uFF09\u3002";
+      case "feynman":
+        return "\u8D39\u66FC\u6280\u5DE7\u5305\u62EC\u7528\u7B80\u5355\u7684\u672F\u8BED\u89E3\u91CA\u590D\u6742\u7684\u4E3B\u9898\uFF0C\u4EE5\u6D4B\u8BD5\u548C\u52A0\u6DF1\u7406\u89E3\uFF0C\u8BC6\u522B\u5E76\u586B\u8865\u77E5\u8BC6\u7A7A\u767D\u3002";
+      case "grow":
+        return "GROW\u6A21\u578B\uFF08\u76EE\u6807\u3001\u73B0\u5B9E\u3001\u9009\u62E9\u3001\u610F\u613F\uFF09\u662F\u4E00\u4E2A\u901A\u8FC7\u7ED3\u6784\u5316\u5BF9\u8BDD\u8FDB\u884C\u95EE\u9898\u89E3\u51B3\u548C\u76EE\u6807\u8BBE\u5B9A\u7684\u6559\u7EC3\u6846\u67B6\u3002";
+      default:
+        return "\u5728\u4E0A\u65B9\u9009\u62E9\u4E00\u4E2A\u8FA9\u8BBA\u6A21\u5F0F\u5E76\u8F93\u5165\u4E3B\u9898\uFF0C\u5F00\u59CB\u4ECE\u591A\u4E2A\u89D2\u5EA6\u63A2\u7D22\u6B64\u4E3B\u9898\u3002";
+    }
   }
   toggleConfigPanel() {
     this.isConfigPanelCollapsed = !this.isConfigPanelCollapsed;

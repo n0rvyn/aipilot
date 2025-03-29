@@ -249,6 +249,9 @@ export class DebatePanel extends ItemView {
       defaultModelId,
       this.languageSelectEl.value
     );
+    
+    // Show initial mode description
+    this.updateModeDescription('debate');
   }
   
   private onModeChange(): void {
@@ -270,7 +273,134 @@ export class DebatePanel extends ItemView {
       language
     );
     
-    // You could update UI here to show the different agents for the selected mode
+    // Update the message container to show mode description
+    this.updateModeDescription(selectedMode);
+  }
+  
+  private updateModeDescription(mode: DebateMode): void {
+    // Clear messages container
+    this.messagesContainerEl.empty();
+    
+    // Create container for mode description
+    const descriptionEl = this.messagesContainerEl.createDiv({ cls: 'debate-mode-description' });
+    
+    // Add mode title
+    descriptionEl.createEl('h3', { text: this.getModeName(mode) });
+    
+    // Get current language
+    const language = this.languageSelectEl.value;
+    
+    // Add mode description based on selected language
+    descriptionEl.createEl('p', { text: this.getModeDescription(mode, language) });
+    
+    // Add agents involved if available
+    if (this.debateConfig && this.debateConfig.agents.length > 0) {
+      const agentsEl = descriptionEl.createDiv({ cls: 'debate-agents-preview' });
+      agentsEl.createEl('h4', { text: language === 'Chinese' ? '参与的代理' : 'Participating Agents' });
+      
+      const agentsList = agentsEl.createEl('ul');
+      
+      // Add host agent
+      const hostItem = agentsList.createEl('li');
+      hostItem.createEl('strong', { text: this.debateConfig.hostAgent.name });
+      hostItem.createSpan({ text: language === 'Chinese' ? ` — 主持人` : ` — Host` });
+      
+      // Add other agents
+      this.debateConfig.agents.forEach(agent => {
+        const agentItem = agentsList.createEl('li');
+        agentItem.createEl('strong', { text: agent.name });
+        agentItem.createSpan({ text: ` — ${agent.role}` });
+      });
+    }
+  }
+  
+  private getModeDescription(mode: DebateMode, language: string = 'English'): string {
+    if (language === 'Chinese') {
+      return this.getChineseModeDescription(mode);
+    }
+    return this.getEnglishModeDescription(mode);
+  }
+  
+  private getEnglishModeDescription(mode: DebateMode): string {
+    switch (mode) {
+      case 'debate':
+        return 'A structured debate between two opposing viewpoints (Pro vs Con) on the given topic. The agents will present arguments and counterarguments, with a moderator guiding the discussion.';
+      case 'sixHats':
+        return 'The Six Thinking Hats method is a discussion framework that explores a topic from six different perspectives: facts, emotions, caution, benefits, creativity, and process management.';
+      case 'roundtable':
+        return 'A collaborative discussion among multiple experts with different specialties, focusing on sharing diverse perspectives on the topic.';
+      case 'smart':
+        return 'SMART Goals framework helps define objectives that are Specific, Measurable, Achievable, Relevant, and Time-bound. Agents will analyze how to apply SMART criteria to your topic.';
+      case 'okr':
+        return 'Objectives and Key Results (OKR) framework focuses on setting ambitious objectives and defining measurable key results to track progress.';
+      case 'swot':
+        return 'SWOT Analysis examines the Strengths, Weaknesses, Opportunities, and Threats related to the topic, providing a comprehensive strategic overview.';
+      case 'pest':
+        return 'PEST Analysis evaluates Political, Economic, Social, and Technological factors that could impact the topic, ideal for understanding external influences.';
+      case 'premortem':
+        return 'Pre-Mortem Analysis imagines a future where a project or initiative has failed, then works backward to identify potential causes of failure before they occur.';
+      case 'fivewhys':
+        return 'The 5 Whys method involves asking "why" multiple times to explore the cause-and-effect relationships underlying a problem, helping to identify the root cause.';
+      case 'fishbone':
+        return 'The Fishbone Diagram (Ishikawa) maps out all the possible causes of a problem, organizing them into categories to identify root causes.';
+      case 'rubberduck':
+        return 'Rubber Duck Debugging involves explaining a problem step-by-step as if to an inanimate object (like a rubber duck), which often helps reveal solutions.';
+      case 'scamper':
+        return 'SCAMPER is a creative thinking technique that explores how to Substitute, Combine, Adapt, Modify, Put to other uses, Eliminate, and Reverse aspects of the topic.';
+      case 'lateralthinking':
+        return 'Lateral Thinking involves approaching problems from unexpected angles and challenging conventional thinking patterns to generate innovative solutions.';
+      case 'pmi':
+        return 'Plus-Minus-Interesting analysis explores the positive aspects, negative aspects, and interesting implications of an idea or topic.';
+      case 'doublediamond':
+        return 'The Double Diamond design process consists of four phases: Discover (gather insights), Define (frame the challenge), Develop (create solutions), and Deliver (implement).';
+      case 'feynman':
+        return 'The Feynman Technique involves explaining complex topics in simple terms to test and deepen understanding, identifying and filling knowledge gaps.';
+      case 'grow':
+        return 'The GROW model (Goals, Reality, Options, Will) is a coaching framework for problem-solving and goal-setting through structured conversation.';
+      default:
+        return 'Select a debate mode above and enter a topic to begin exploring this subject from multiple perspectives.';
+    }
+  }
+  
+  private getChineseModeDescription(mode: DebateMode): string {
+    switch (mode) {
+      case 'debate':
+        return '一场有关给定主题的正反两方（正方vs反方）之间的结构化辩论。代理人将提出论点和反驳，由主持人引导讨论。';
+      case 'sixHats':
+        return '六顶思考帽方法是一个从六个不同角度探讨主题的讨论框架：事实、情感、谨慎、益处、创造性和过程管理。';
+      case 'roundtable':
+        return '由不同专业领域的多位专家进行的协作讨论，侧重于分享对主题的多元视角。';
+      case 'smart':
+        return 'SMART目标框架帮助定义具体（Specific）、可衡量（Measurable）、可实现（Achievable）、相关（Relevant）和有时限（Time-bound）的目标。代理人将分析如何将SMART标准应用于您的主题。';
+      case 'okr':
+        return '目标与关键结果（OKR）框架专注于设定宏大的目标并定义可衡量的关键结果以跟踪进度。';
+      case 'swot':
+        return 'SWOT分析检查与主题相关的优势（Strengths）、劣势（Weaknesses）、机会（Opportunities）和威胁（Threats），提供全面的战略概览。';
+      case 'pest':
+        return 'PEST分析评估可能影响主题的政治（Political）、经济（Economic）、社会（Social）和技术（Technological）因素，适合理解外部影响。';
+      case 'premortem':
+        return '预防性事后分析想象项目或计划失败的未来，然后逆向工作以在问题发生前识别潜在的失败原因。';
+      case 'fivewhys':
+        return '五个为什么方法包括多次询问"为什么"以探索问题背后的因果关系，帮助识别根本原因。';
+      case 'fishbone':
+        return '鱼骨图（石川图）列出问题的所有可能原因，将它们组织成类别以识别根本原因。';
+      case 'rubberduck':
+        return '小黄鸭调试法涉及逐步向一个无生命物体（如小黄鸭）解释问题，这通常有助于发现解决方案。';
+      case 'scamper':
+        return 'SCAMPER是一种创造性思维技术，探索如何替代（Substitute）、组合（Combine）、调整（Adapt）、修改（Modify）、用于其他用途（Put to other uses）、消除（Eliminate）和逆向思考（Reverse）主题的各个方面。';
+      case 'lateralthinking':
+        return '横向思维涉及从意想不到的角度处理问题，挑战常规思维模式，以产生创新解决方案。';
+      case 'pmi':
+        return '正负面白分析（Plus-Minus-Interesting）探索一个想法或主题的积极方面、消极方面和有趣的含义。';
+      case 'doublediamond':
+        return '双钻石设计过程包括四个阶段：发现（收集见解）、定义（构建挑战）、开发（创建解决方案）和交付（实施）。';
+      case 'feynman':
+        return '费曼技巧包括用简单的术语解释复杂的主题，以测试和加深理解，识别并填补知识空白。';
+      case 'grow':
+        return 'GROW模型（目标、现实、选择、意愿）是一个通过结构化对话进行问题解决和目标设定的教练框架。';
+      default:
+        return '在上方选择一个辩论模式并输入主题，开始从多个角度探索此主题。';
+    }
   }
   
   private toggleConfigPanel(): void {
