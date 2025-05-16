@@ -1,6 +1,6 @@
 {
   "name": "aipilot",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "AI powered writing & organization assistance",
   "main": "dist/main.js",
   "license": "MIT",
