@@ -577,10 +577,9 @@ export default class AIPilotPlugin extends Plugin {
     
     migrateEmbeddingConfig(): void {
         // If we have legacy embedding settings but no embedding config
-        if (this.settings.embeddingModels && 
-            (!this.settings.embeddingModels || !this.settings.embeddingModels.length)) {
+        if (!this.settings.embeddingModels || !this.settings.embeddingModels.length) {
             
-            // Migrating legacy embedding configuration (removed console.log)
+            // Create default embedding models with both OpenAI and ZhipuAI for fallback
             this.settings.embeddingModels = [
                 {
                     id: 'default-openai-embedding',
@@ -589,8 +588,61 @@ export default class AIPilotPlugin extends Plugin {
                     modelName: 'text-embedding-3-small',
                     active: true,
                     description: 'Default OpenAI embedding model'
+                },
+                {
+                    id: 'default-zhipuai-embedding',
+                    name: 'ZhipuAI Embedding',
+                    type: 'zhipuai',
+                    modelName: 'embedding-3',
+                    active: false,
+                    description: 'Fallback ZhipuAI embedding model',
+                    dimensions: 1024
                 }
             ];
+        } 
+        
+        // Make sure we have both OpenAI and ZhipuAI models for fallback
+        const hasOpenAI = this.settings.embeddingModels.some(model => model.type === 'openai');
+        const hasZhipuAI = this.settings.embeddingModels.some(model => model.type === 'zhipuai');
+        
+        if (!hasOpenAI) {
+            this.settings.embeddingModels.push({
+                id: 'default-openai-embedding',
+                name: 'OpenAI Embedding 3',
+                type: 'openai',
+                modelName: 'text-embedding-3-small',
+                active: false,
+                description: 'Fallback OpenAI embedding model'
+            });
+        }
+        
+        if (!hasZhipuAI) {
+            this.settings.embeddingModels.push({
+                id: 'default-zhipuai-embedding',
+                name: 'ZhipuAI Embedding',
+                type: 'zhipuai',
+                modelName: 'embedding-3',
+                active: false,
+                description: 'Fallback ZhipuAI embedding model',
+                dimensions: 1024
+            });
+        }
+        
+        // Ensure exactly one model is active
+        const activeModels = this.settings.embeddingModels.filter(model => model.active);
+        if (activeModels.length === 0 && this.settings.embeddingModels.length > 0) {
+            // Default to OpenAI if available, otherwise the first model
+            const openAIModel = this.settings.embeddingModels.find(model => model.type === 'openai');
+            if (openAIModel) {
+                openAIModel.active = true;
+            } else {
+                this.settings.embeddingModels[0].active = true;
+            }
+        } else if (activeModels.length > 1) {
+            // Only keep the first active model
+            for (let i = 1; i < activeModels.length; i++) {
+                activeModels[i].active = false;
+            }
         }
     }
     

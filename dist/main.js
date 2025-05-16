@@ -444,7 +444,7 @@ var ChatView = class extends import_obsidian2.ItemView {
       attr: { "aria-label": "Copy message" }
     });
     (0, import_obsidian2.setIcon)(copyButton, "copy");
-    copyButton.onclick = () => __async(this, null, function* () {
+    copyButton.onclick = () => __async(null, null, function* () {
       try {
         const contentDiv = messageEl.querySelector(".message-content");
         if (contentDiv) {
@@ -1206,7 +1206,7 @@ var ModelManager = class {
       };
       const payload = {
         model: options.modelName || model.modelName || "gpt-3.5-turbo",
-        messages: [
+        messages: options.messages || [
           { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
           { role: "user", content: prompt }
         ],
@@ -1228,9 +1228,13 @@ var ModelManager = class {
       const headers = {
         "Content-Type": "application/json"
       };
+      let effectivePrompt = prompt;
+      if (!prompt && options.messages && options.messages.length > 0) {
+        effectivePrompt = options.messages.map((msg) => `${msg.role}: ${msg.content}`).join("\n");
+      }
       const payload = {
         model: options.modelName || model.modelName || "llama2",
-        prompt,
+        prompt: effectivePrompt,
         system: model.systemPrompt || "You are a helpful assistant.",
         options: {
           temperature: options.temperature || 0.7,
@@ -1258,7 +1262,7 @@ var ModelManager = class {
       }
       const payload = {
         model: options.modelName || model.modelName || "claude-3-opus-20240229",
-        messages: [
+        messages: options.messages || [
           { role: "user", content: prompt }
         ],
         system: model.systemPrompt || "You are Claude, a helpful AI assistant.",
@@ -1286,12 +1290,13 @@ var ModelManager = class {
       } else {
         baseUrl = isZhipuAI ? "https://open.bigmodel.cn/api/paas/v4/chat/completions" : "https://open.bigmodel.cn/api/paas/v3/chat/completions";
       }
-      let headers = {
-        "Content-Type": "application/json"
-      };
-      if (model.apiKey) {
-        headers["Authorization"] = `Bearer ${model.apiKey}`;
+      if (!this.validateApiKey(model.apiKey, "zhipuai")) {
+        throw new Error("Invalid or missing ZhipuAI API key");
       }
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${model.apiKey}`
+      };
       const modelNameMap = {
         "GLM-4-Long": "glm-4",
         "GLM-4-Air": "glm-4",
@@ -1302,12 +1307,27 @@ var ModelManager = class {
       const modelIdentifier = modelNameMap[model.modelName] || model.modelName || options.modelName || "glm-4";
       const streaming = !!options.streaming;
       const onChunk = options.onChunk;
+      if (!prompt && (!options.conversation || options.conversation.length === 0) && (!options.messages || options.messages.length === 0)) {
+        console.warn("Empty prompt and no messages provided to ZhipuAI, using fallback prompt");
+        prompt = "Hello";
+      }
+      const messages = options.conversation || options.messages || [
+        { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+        { role: "user", content: prompt }
+      ];
+      const validMessages = messages.filter(
+        (msg) => msg && typeof msg === "object" && typeof msg.role === "string" && typeof msg.content === "string" && msg.content.trim().length > 0
+      );
+      if (validMessages.length === 0) {
+        console.warn("No valid messages for ZhipuAI, using fallback message");
+        validMessages.push({
+          role: "user",
+          content: "Hello, can you help me?"
+        });
+      }
       const payload = {
         model: modelIdentifier,
-        messages: options.conversation || [
-          { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
-          { role: "user", content: prompt }
-        ],
+        messages: validMessages,
         temperature: options.temperature || 0.7,
         max_tokens: options.maxTokens || 2048,
         stream: streaming
@@ -1322,8 +1342,8 @@ var ModelManager = class {
           }, useProxy);
           if (!response.ok) {
             const errorData = yield response.text();
-            console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
-            throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
+            console.error(`ZhipuAI API error (${response.status}):`, errorData);
+            throw new Error(`ZhipuAI API error: ${response.status}`);
           }
           const reader = (_a = response.body) == null ? void 0 : _a.getReader();
           if (!reader) {
@@ -1368,8 +1388,8 @@ var ModelManager = class {
           }, useProxy);
           if (!response.ok) {
             const errorData = yield response.text();
-            console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
-            throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
+            console.error(`ZhipuAI API error (${response.status}):`, errorData);
+            throw new Error(`ZhipuAI API error: ${response.status}`);
           }
           const data = yield response.json();
           if (data.choices && data.choices[0] && data.choices[0].message) {
@@ -1382,6 +1402,15 @@ var ModelManager = class {
         }
       } catch (error) {
         console.error("Error calling ZhipuAI:", error);
+        if (error instanceof Error) {
+          if (error.message.includes("400")) {
+            console.error("ZhipuAI 400 error - common causes: invalid input format, invalid model name, or exceeded context length");
+          } else if (error.message.includes("401")) {
+            console.error("ZhipuAI 401 error - authentication failure: check API key");
+          } else if (error.message.includes("429")) {
+            console.error("ZhipuAI 429 error - rate limit exceeded: slow down requests");
+          }
+        }
         throw error;
       }
     });
@@ -1394,7 +1423,7 @@ var ModelManager = class {
         "Authorization": `Bearer ${model.apiKey}`
       };
       const payload = {
-        messages: [
+        messages: options.messages || [
           { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
           { role: "user", content: prompt }
         ],
@@ -1419,19 +1448,55 @@ var ModelManager = class {
       if (model.apiKey) {
         headers["Authorization"] = `Bearer ${model.apiKey}`;
       }
-      const payload = {
-        prompt,
-        system_prompt: model.systemPrompt || "You are a helpful assistant.",
-        temperature: options.temperature || 0.7,
-        max_tokens: options.maxTokens || 2048
-      };
+      if (options.customHeaders) {
+        Object.keys(options.customHeaders).forEach((key) => {
+          headers[key] = options.customHeaders[key];
+        });
+      }
+      let payload = {};
+      if (options.requestFormat) {
+        try {
+          const format = options.requestFormat.replace("{{prompt}}", prompt || "").replace("{{system_prompt}}", model.systemPrompt || "You are a helpful assistant.").replace("{{temperature}}", String(options.temperature || 0.7)).replace("{{max_tokens}}", String(options.maxTokens || 2048));
+          payload = JSON.parse(format);
+        } catch (e) {
+          console.error("Error parsing custom request format:", e);
+          payload = {
+            model: model.modelName,
+            prompt,
+            messages: options.messages || [
+              { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+              { role: "user", content: prompt }
+            ],
+            temperature: options.temperature || 0.7,
+            max_tokens: options.maxTokens || 2048
+          };
+        }
+      } else {
+        payload = {
+          model: model.modelName,
+          messages: options.messages || [
+            { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+            { role: "user", content: prompt }
+          ],
+          temperature: options.temperature || 0.7,
+          max_tokens: options.maxTokens || 2048
+        };
+      }
       const response = yield this.fetchWithProxy(model.baseUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(payload)
       }, useProxy);
       const data = yield response.json();
-      return data.response || data.result || data.text || JSON.stringify(data);
+      if (options.responseField) {
+        return options.responseField.split(".").reduce((o, key) => o == null ? void 0 : o[key], data);
+      } else {
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          return data.choices[0].message.content;
+        } else {
+          throw new Error("Unexpected response format from custom API");
+        }
+      }
     });
   }
   fetchWithProxy(url, options, useProxy) {
@@ -1521,19 +1586,43 @@ var ModelManager = class {
           return cached;
         }
         let vector;
-        switch (activeModel.type) {
-          case "openai":
-            vector = yield this.getOpenAIEmbedding(activeModel, text, activeModel.useProxy !== void 0 ? activeModel.useProxy : this.proxyConfig.enabled);
-            break;
-          case "zhipuai":
-          case "zhipu":
-            vector = yield this.getZhipuEmbedding(activeModel, text, activeModel.useProxy !== void 0 ? activeModel.useProxy : this.proxyConfig.enabled);
-            break;
-          case "custom":
-            vector = yield this.getCustomEmbedding(activeModel, text, activeModel.useProxy !== void 0 ? activeModel.useProxy : this.proxyConfig.enabled);
-            break;
-          default:
-            throw new Error(`Embedding not supported for provider: ${activeModel.type}`);
+        try {
+          switch (activeModel.type) {
+            case "openai":
+              vector = yield this.getOpenAIEmbedding(activeModel, text, activeModel.useProxy !== void 0 ? activeModel.useProxy : this.proxyConfig.enabled);
+              break;
+            case "zhipuai":
+            case "zhipu":
+              vector = yield this.getZhipuEmbedding(activeModel, text, activeModel.useProxy !== void 0 ? activeModel.useProxy : this.proxyConfig.enabled);
+              break;
+            case "custom":
+              vector = yield this.getCustomEmbedding(activeModel, text, activeModel.useProxy !== void 0 ? activeModel.useProxy : this.proxyConfig.enabled);
+              break;
+            default:
+              throw new Error(`Embedding not supported for provider: ${activeModel.type}`);
+          }
+        } catch (error) {
+          console.error(`Error with primary embedding model (${activeModel.type}):`, error);
+          const fallbackModel = this.embeddingModels.find((m) => m.id !== activeModel.id && m.type !== activeModel.type);
+          if (fallbackModel) {
+            console.log(`Attempting fallback to ${fallbackModel.type} embedding model`);
+            switch (fallbackModel.type) {
+              case "openai":
+                vector = yield this.getOpenAIEmbedding(fallbackModel, text, fallbackModel.useProxy !== void 0 ? fallbackModel.useProxy : this.proxyConfig.enabled);
+                break;
+              case "zhipuai":
+              case "zhipu":
+                vector = yield this.getZhipuEmbedding(fallbackModel, text, fallbackModel.useProxy !== void 0 ? fallbackModel.useProxy : this.proxyConfig.enabled);
+                break;
+              case "custom":
+                vector = yield this.getCustomEmbedding(fallbackModel, text, fallbackModel.useProxy !== void 0 ? fallbackModel.useProxy : this.proxyConfig.enabled);
+                break;
+              default:
+                throw error;
+            }
+          } else {
+            throw error;
+          }
         }
         this.setCachedEmbedding(text, activeModel.id, vector);
         return vector;
@@ -1543,46 +1632,88 @@ var ModelManager = class {
       }
     });
   }
+  /**
+   * Validate API key format
+   * @param apiKey API key to validate
+   * @param provider Provider type
+   * @returns Whether the API key appears valid
+   */
+  validateApiKey(apiKey, provider) {
+    if (!apiKey) {
+      return false;
+    }
+    switch (provider) {
+      case "openai":
+        return /^sk-[a-zA-Z0-9]{32,}$/.test(apiKey);
+      case "zhipuai":
+      case "zhipu":
+        return /^[a-zA-Z0-9_\.-]{40,}$/.test(apiKey);
+      default:
+        return apiKey.length >= 8;
+    }
+  }
   getOpenAIEmbedding(model, text, useProxy) {
     return __async(this, null, function* () {
-      var _a, _b;
-      const url = model.baseUrl || "https://api.openai.com/v1/embeddings";
-      if (!model.apiKey) {
-        throw new Error("API key is required for OpenAI embeddings");
+      if (!text || text.trim().length === 0) {
+        console.warn("Empty text provided to OpenAI embedding, using fallback text");
+        text = "placeholder text for embedding";
+      }
+      const truncatedText = text.slice(0, 8e3);
+      const baseUrl = model.baseUrl || "https://api.openai.com/v1/embeddings";
+      if (!this.validateApiKey(model.apiKey, "openai")) {
+        throw new Error("Invalid or missing OpenAI API key");
       }
       const headers = {
-        "Authorization": `Bearer ${model.apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${model.apiKey}`
       };
       const payload = {
-        model: model.modelName,
-        input: text
+        model: model.modelName || "text-embedding-3-small",
+        input: truncatedText
       };
-      const response = yield this.fetchWithProxy(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload)
-      }, useProxy);
-      const data = yield response.json();
-      if (!((_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding)) {
-        throw new Error("Invalid embedding response from OpenAI");
+      try {
+        const response = yield this.fetchWithProxy(baseUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        }, useProxy);
+        if (!response.ok) {
+          const errorData = yield response.text();
+          console.error(`OpenAI API error (${response.status}):`, errorData);
+          throw new Error(`OpenAI embedding API error: ${response.status}`);
+        }
+        const data = yield response.json();
+        if (data.data && data.data[0] && data.data[0].embedding) {
+          return data.data[0].embedding;
+        } else {
+          console.error("Unexpected OpenAI embedding response format:", data);
+          throw new Error("Invalid embedding response format from OpenAI");
+        }
+      } catch (error) {
+        console.error("Error getting OpenAI embedding:", error);
+        throw error;
       }
-      return data.data[0].embedding;
     });
   }
   getZhipuEmbedding(model, text, useProxy) {
     return __async(this, null, function* () {
+      if (!text || text.trim().length === 0) {
+        console.warn("Empty text provided to ZhipuEmbedding, using fallback text");
+        text = "placeholder text for embedding";
+      }
+      const processedText = text.slice(0, 3e3).replace(/[\uD800-\uDFFF]/g, "");
       const version = model.modelName === "embedding-2" ? "v3" : "v4";
       const baseUrl = model.baseUrl || `https://open.bigmodel.cn/api/paas/${version}/embeddings`;
       const headers = {
         "Content-Type": "application/json"
       };
-      if (model.apiKey) {
-        headers["Authorization"] = `Bearer ${model.apiKey}`;
+      if (!this.validateApiKey(model.apiKey, "zhipuai")) {
+        throw new Error("Invalid or missing ZhipuAI API key");
       }
+      headers["Authorization"] = `Bearer ${model.apiKey}`;
       const payload = {
         model: model.modelName,
-        input: text
+        input: processedText
       };
       try {
         const response = yield this.fetchWithProxy(baseUrl, {
@@ -1593,7 +1724,7 @@ var ModelManager = class {
         if (!response.ok) {
           const errorText = yield response.text();
           console.error(`ZhipuAI embedding API error (${response.status}):`, errorText);
-          throw new Error(`ZhipuAI embedding API error: ${response.status} ${response.statusText}`);
+          throw new Error(`ZhipuAI embedding API error: ${response.status}`);
         }
         const data = yield response.json();
         if (data.data && data.data[0] && data.data[0].embedding) {
@@ -1613,6 +1744,10 @@ var ModelManager = class {
   getCustomEmbedding(model, text, useProxy) {
     return __async(this, null, function* () {
       var _a, _b;
+      if (!text || text.trim().length === 0) {
+        console.warn("Empty text provided to custom embedding, using fallback text");
+        text = "placeholder text for embedding";
+      }
       if (!model.baseUrl) {
         throw new Error("Base URL is required for custom embedding API");
       }
@@ -1624,7 +1759,8 @@ var ModelManager = class {
       }
       const payload = {
         model: model.modelName,
-        input: text,
+        input: text.slice(0, 8e3),
+        // Limit text length
         dimensions: model.dimensions
       };
       const response = yield this.fetchWithProxy(model.baseUrl + "/embeddings", {
@@ -3848,13 +3984,17 @@ var AIService = class {
     this.modelManager = modelManager;
   }
   /**
-   * 获取AI回复
-   * @param prompt 提示词
-   * @returns AI生成的响应
+   * Get AI response
+   * @param prompt Prompt
+   * @returns AI-generated response
    */
   getAIResponse(prompt) {
     return __async(this, null, function* () {
       try {
+        if (!prompt || prompt.trim().length === 0) {
+          console.warn("Empty prompt provided to getAIResponse, using placeholder prompt");
+          prompt = "Hello, please provide a general response.";
+        }
         const defaultModel = this.modelManager.getDefaultModel();
         if (!defaultModel) {
           throw new Error("No default model configured. Please configure a model in settings.");
@@ -3864,6 +4004,9 @@ var AIService = class {
         });
       } catch (error) {
         console.error("Error getting AI response:", error);
+        if (error instanceof Error && error.message.includes("ZhipuAI API error: 400")) {
+          console.error("This might be due to invalid input format, exceeded context length, or API rate limiting");
+        }
         throw error;
       }
     });
@@ -3877,16 +4020,44 @@ var AIService = class {
   callAIChat(messages, onChunk) {
     return __async(this, null, function* () {
       try {
+        if (!messages || messages.length === 0) {
+          console.warn("No messages provided to callAIChat, using default message");
+          messages = [{ role: "user", content: "Hello" }];
+        }
+        messages = messages.filter(
+          (msg) => msg && typeof msg.role === "string" && typeof msg.content === "string" && msg.content.trim().length > 0
+        );
+        if (messages.length === 0) {
+          console.warn("No valid messages after filtering, using default message");
+          messages = [{ role: "user", content: "Hello" }];
+        }
         const defaultModel = this.modelManager.getDefaultModel();
         if (!defaultModel) {
           throw new Error("No default model configured. Please configure a model in settings.");
         }
-        return yield this.modelManager.callModel(defaultModel.id, "", {
-          streaming: !!onChunk,
-          onChunk,
-          isChat: true,
-          messages
-        });
+        try {
+          return yield this.modelManager.callModel(defaultModel.id, "", {
+            streaming: !!onChunk,
+            onChunk,
+            isChat: true,
+            messages
+          });
+        } catch (error) {
+          console.error(`Error with default model (${defaultModel.name}):`, error);
+          const activeModels = this.modelManager.getActiveModels();
+          const alternativeModel = activeModels.find((m) => m.id !== defaultModel.id);
+          if (alternativeModel) {
+            console.log(`Attempting with alternative model: ${alternativeModel.name}`);
+            return yield this.modelManager.callModel(alternativeModel.id, "", {
+              streaming: !!onChunk,
+              onChunk,
+              isChat: true,
+              messages
+            });
+          } else {
+            throw error;
+          }
+        }
       } catch (error) {
         console.error("Error in AI chat:", error);
         throw error;
@@ -3894,13 +4065,17 @@ var AIService = class {
     });
   }
   /**
-   * 简单的AI调用
-   * @param content 要处理的内容
-   * @returns AI生成的响应
+   * Simple AI call
+   * @param content Content to process
+   * @returns AI-generated response
    */
   callAI(content) {
     return __async(this, null, function* () {
       try {
+        if (!content || content.trim().length === 0) {
+          console.warn("Empty content provided to callAI, using placeholder content");
+          content = "Hello, please provide a general response.";
+        }
         const defaultModel = this.modelManager.getDefaultModel();
         if (!defaultModel) {
           throw new Error("No default model configured. Please configure a model in settings.");
@@ -3969,20 +4144,33 @@ var VectorRetriever = class extends BaseRetriever {
       try {
         const files = yield this.getKnowledgeBaseNotes();
         const results = [];
-        const queryEmbedding = yield this.modelManager.getEmbedding(query);
-        const similarityThreshold = this.settings.similarityThreshold || 0.5;
-        for (const file of files) {
-          try {
-            const content = yield this.app.vault.read(file);
-            const contentEmbedding = yield this.modelManager.getEmbedding(content);
-            const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
-            if (similarity > similarityThreshold) {
-              const snippet = this.getRelevantSnippet(content, query, 1e3);
-              results.push({ file, similarity, content: snippet });
-            }
-          } catch (error) {
-            console.error(`Error processing file ${file.path} for vector search:`, error);
+        try {
+          const queryEmbedding = yield this.modelManager.getEmbedding(query);
+          const similarityThreshold = this.settings.similarityThreshold || 0.5;
+          const batchSize = 5;
+          for (let i = 0; i < files.length; i += batchSize) {
+            const batch = files.slice(i, i + batchSize);
+            yield Promise.all(batch.map((file) => __async(this, null, function* () {
+              try {
+                const content = yield this.app.vault.read(file);
+                if (!content || content.trim().length === 0) {
+                  console.warn(`Skipping empty file: ${file.path}`);
+                  return;
+                }
+                const contentEmbedding = yield this.modelManager.getEmbedding(content);
+                const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
+                if (similarity > similarityThreshold) {
+                  const snippet = this.getRelevantSnippet(content, query, 1e3);
+                  results.push({ file, similarity, content: snippet });
+                }
+              } catch (error) {
+                console.error(`Error processing file ${file.path} for vector search:`, error);
+              }
+            })));
           }
+        } catch (error) {
+          console.error("Failed to get embeddings:", error);
+          return this.fallbackKeywordSearch(query, files, limit);
         }
         const maxResults = limit || this.settings.maxResults || 5;
         return results.sort((a, b) => b.similarity - a.similarity).slice(0, maxResults);
@@ -4064,6 +4252,49 @@ var VectorRetriever = class extends BaseRetriever {
     }
     return matchCount / queryWords.size;
   }
+  /**
+   * Fallback to keyword-based search if embedding fails
+   * @param query User query
+   * @param files Files to search
+   * @param limit Result limit
+   * @returns Search results
+   */
+  fallbackKeywordSearch(query, files, limit) {
+    return __async(this, null, function* () {
+      console.log("Falling back to keyword search");
+      const results = [];
+      const keywords = query.toLowerCase().split(/\s+/).filter((word) => word.length > 3).map((word) => word.replace(/[.,;:?!]/g, ""));
+      if (keywords.length === 0) {
+        return [];
+      }
+      for (const file of files) {
+        try {
+          const content = yield this.app.vault.read(file);
+          const contentLower = content.toLowerCase();
+          let score = 0;
+          let matchCount = 0;
+          for (const keyword of keywords) {
+            const matches = contentLower.match(new RegExp(keyword, "g"));
+            if (matches) {
+              score += matches.length;
+              matchCount++;
+            }
+          }
+          if (matchCount >= Math.max(1, Math.floor(keywords.length / 2))) {
+            const similarity = score / (content.length / 100);
+            results.push({
+              file,
+              similarity,
+              content: this.getRelevantSnippet(content, query, 1e3)
+            });
+          }
+        } catch (error) {
+          console.error(`Error in keyword search for file ${file.path}:`, error);
+        }
+      }
+      return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
+    });
+  }
 };
 
 // src/rag/enhancement/QueryRewriter.ts
@@ -4142,6 +4373,10 @@ var HyDE = class {
    */
   generateHypotheticalDoc(query) {
     return __async(this, null, function* () {
+      if (!query || query.trim().length === 0) {
+        console.warn("Empty query provided to HyDE, cannot generate hypothetical document");
+        return "";
+      }
       try {
         const messages = [
           {
@@ -4153,10 +4388,40 @@ var HyDE = class {
             content: query
           }
         ];
-        return yield this.aiService.callAIChat(messages);
+        const result = yield this.aiService.callAIChat(messages);
+        if (!result || result.trim().length === 0) {
+          return this.generateFallbackDocument(query);
+        }
+        return result;
       } catch (error) {
         console.error("Error generating hypothetical document:", error);
-        return "";
+        return this.generateFallbackDocument(query);
+      }
+    });
+  }
+  /**
+   * Generate a fallback document with simpler prompt when primary method fails
+   * @param query User query
+   * @returns Simplified hypothetical document
+   */
+  generateFallbackDocument(query) {
+    return __async(this, null, function* () {
+      try {
+        console.log("Using fallback approach for hypothetical document generation");
+        const simpleMessages = [
+          {
+            role: "system",
+            content: `You are a helpful assistant. Answer the following question briefly.`
+          },
+          {
+            role: "user",
+            content: `Please write a brief answer about: ${query}`
+          }
+        ];
+        return (yield this.aiService.callAIChat(simpleMessages)) || "";
+      } catch (error) {
+        console.error("Fallback document generation also failed:", error);
+        return `Information about ${query}: This is a placeholder for relevant information.`;
       }
     });
   }
@@ -4955,70 +5220,103 @@ var KnowledgeBaseView = class extends import_obsidian8.ItemView {
       try {
         const selectedDir = this.dirSelector.value;
         if (this.plugin.ragService) {
+          let streamedAnswer = "";
+          const streamContainer = this.resultsContainer.createDiv({
+            cls: "kb-stream-container"
+          });
+          const handleStream = (chunk) => {
+            streamedAnswer += chunk;
+            streamContainer.setText(streamedAnswer);
+          };
           const updateProgress = (stage, percent) => {
             this.progressText.textContent = stage;
             this.progressBar.style.width = `${percent}%`;
             this.countText.textContent = `Processing ${stage}`;
           };
-          let streamedAnswer = "";
-          const handleStream = (chunk) => {
-            if (!chunk) return;
-            streamedAnswer += chunk;
-            this.resultsContainer.empty();
-            const streamingContainer = this.resultsContainer.createDiv({ cls: "kb-rag-results-container streaming" });
-            const answerDiv = streamingContainer.createDiv({ cls: "kb-rag-answer" });
-            try {
-              MarkdownRenderer.renderMarkdown(
-                streamedAnswer,
-                answerDiv,
-                "",
-                this.plugin
-              );
-            } catch (error) {
-              console.warn("Error rendering streaming markdown:", error);
-              answerDiv.setText(streamedAnswer);
+          try {
+            const result = yield this.plugin.ragService.performCompleteRAG(query, {
+              showProgress: true,
+              onProgress: updateProgress,
+              streaming: true,
+              onChunk: handleStream,
+              limit: 10,
+              directory: selectedDir || void 0
+            });
+            this.progressContainer.style.display = "none";
+            yield this.displayRAGResults(__spreadProps(__spreadValues({}, result), {
+              answer: streamedAnswer || result.answer,
+              query
+            }));
+          } catch (error) {
+            console.error("Error in RAG service:", error);
+            this.progressContainer.style.display = "none";
+            if (error.message && (error.message.includes("embedding API error") || error.message.includes("No active embedding model configured"))) {
+              this.handleEmbeddingError();
+            } else {
+              this.resultsContainer.empty();
+              this.resultsContainer.createDiv({
+                cls: "kb-error-message",
+                text: "Error processing your query. Please try again later."
+              });
             }
-            if (this.progressContainer.style.display !== "none" && streamedAnswer.length > 50) {
-              this.progressContainer.style.opacity = "0.7";
-            }
-          };
-          const result = yield this.plugin.ragService.performCompleteRAG(query, {
-            showProgress: true,
-            onProgress: updateProgress,
-            streaming: true,
-            onChunk: handleStream,
-            limit: 10,
-            directory: selectedDir || void 0
-          });
-          this.progressContainer.style.display = "none";
-          yield this.displayRAGResults(__spreadProps(__spreadValues({}, result), {
-            answer: streamedAnswer || result.answer,
-            query
-          }));
+          }
         } else {
           const loadingModal = new LoadingModal(this.app, true, "Searching your knowledge base...");
           loadingModal.open();
-          const results = yield this.plugin.advancedSearch(query, 10, loadingModal);
-          loadingModal.close();
-          this.progressContainer.style.display = "none";
-          if (results.length === 0) {
-            this.resultsContainer.createDiv({
-              cls: "kb-error-message",
-              text: "No relevant documents found for your query."
-            });
-            return;
+          try {
+            const results = yield this.plugin.advancedSearch(query, 10, loadingModal);
+            loadingModal.close();
+            this.progressContainer.style.display = "none";
+            if (results.length === 0) {
+              this.resultsContainer.createDiv({
+                cls: "kb-error-message",
+                text: "No relevant documents found for your query."
+              });
+              return;
+            }
+            new SearchResultsModal(this.app, results, query).open();
+          } catch (error) {
+            loadingModal.close();
+            this.progressContainer.style.display = "none";
+            console.error("Error in legacy search:", error);
+            if (error.message && (error.message.includes("embedding API error") || error.message.includes("No active embedding model configured"))) {
+              this.handleEmbeddingError();
+            } else {
+              this.resultsContainer.createDiv({
+                cls: "kb-error-message",
+                text: "Error processing your query. Please try again later."
+              });
+            }
           }
-          new SearchResultsModal(this.app, results, query).open();
         }
       } catch (error) {
-        console.error("Error searching knowledge base:", error);
+        console.error("Search error:", error);
         this.progressContainer.style.display = "none";
-        this.resultsContainer.empty();
         this.resultsContainer.createDiv({
           cls: "kb-error-message",
-          text: `Error searching knowledge base: ${error.message}`
+          text: "An unexpected error occurred. Please try again later."
         });
       }
+    });
+  }
+  /**
+   * Handle embedding API errors with user-friendly message and settings link
+   */
+  handleEmbeddingError() {
+    const errorContainer = this.resultsContainer.createDiv({
+      cls: "kb-error-message"
+    });
+    errorContainer.createEl("h3", { text: "Embedding API Error" });
+    errorContainer.createEl("p", {
+      text: "There was an error connecting to the embedding API. This might be due to:"
+    });
+    const errorList = errorContainer.createEl("ul");
+    errorList.createEl("li", { text: "Missing or invalid API key" });
+    errorList.createEl("li", { text: "Network connectivity issues" });
+    errorList.createEl("li", { text: "Rate limiting by the API provider" });
+    errorList.createEl("li", { text: "Incorrect model configuration" });
+    errorContainer.createEl("p", {
+      text: "Please check your API key configuration in settings."
     });
   }
   displayRAGResults(result) {
@@ -5496,7 +5794,7 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
     }
   }
   migrateEmbeddingConfig() {
-    if (this.settings.embeddingModels && (!this.settings.embeddingModels || !this.settings.embeddingModels.length)) {
+    if (!this.settings.embeddingModels || !this.settings.embeddingModels.length) {
       this.settings.embeddingModels = [
         {
           id: "default-openai-embedding",
@@ -5505,8 +5803,53 @@ var AIPilotPlugin = class extends import_obsidian9.Plugin {
           modelName: "text-embedding-3-small",
           active: true,
           description: "Default OpenAI embedding model"
+        },
+        {
+          id: "default-zhipuai-embedding",
+          name: "ZhipuAI Embedding",
+          type: "zhipuai",
+          modelName: "embedding-3",
+          active: false,
+          description: "Fallback ZhipuAI embedding model",
+          dimensions: 1024
         }
       ];
+    }
+    const hasOpenAI = this.settings.embeddingModels.some((model) => model.type === "openai");
+    const hasZhipuAI = this.settings.embeddingModels.some((model) => model.type === "zhipuai");
+    if (!hasOpenAI) {
+      this.settings.embeddingModels.push({
+        id: "default-openai-embedding",
+        name: "OpenAI Embedding 3",
+        type: "openai",
+        modelName: "text-embedding-3-small",
+        active: false,
+        description: "Fallback OpenAI embedding model"
+      });
+    }
+    if (!hasZhipuAI) {
+      this.settings.embeddingModels.push({
+        id: "default-zhipuai-embedding",
+        name: "ZhipuAI Embedding",
+        type: "zhipuai",
+        modelName: "embedding-3",
+        active: false,
+        description: "Fallback ZhipuAI embedding model",
+        dimensions: 1024
+      });
+    }
+    const activeModels = this.settings.embeddingModels.filter((model) => model.active);
+    if (activeModels.length === 0 && this.settings.embeddingModels.length > 0) {
+      const openAIModel = this.settings.embeddingModels.find((model) => model.type === "openai");
+      if (openAIModel) {
+        openAIModel.active = true;
+      } else {
+        this.settings.embeddingModels[0].active = true;
+      }
+    } else if (activeModels.length > 1) {
+      for (let i = 1; i < activeModels.length; i++) {
+        activeModels[i].active = false;
+      }
     }
   }
   loadDiffMatchPatchLibrary() {

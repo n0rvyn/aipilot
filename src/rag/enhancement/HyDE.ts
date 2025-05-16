@@ -61,6 +61,12 @@ export class HyDE {
    * @returns Hypothetical document
    */
   private async generateHypotheticalDoc(query: string): Promise<string> {
+    // Make sure query is valid
+    if (!query || query.trim().length === 0) {
+      console.warn("Empty query provided to HyDE, cannot generate hypothetical document");
+      return "";
+    }
+
     try {
       // Create prompt for ideal hypothetical document
       const messages = [
@@ -74,10 +80,49 @@ export class HyDE {
         }
       ];
       
-      return await this.aiService!.callAIChat(messages);
+      const result = await this.aiService!.callAIChat(messages);
+      
+      // Ensure we have valid content
+      if (!result || result.trim().length === 0) {
+        // Try a simpler fallback prompt
+        return this.generateFallbackDocument(query);
+      }
+      
+      return result;
     } catch (error) {
       console.error("Error generating hypothetical document:", error);
-      return "";
+      
+      // Try a fallback approach with a simpler prompt
+      return this.generateFallbackDocument(query);
+    }
+  }
+
+  /**
+   * Generate a fallback document with simpler prompt when primary method fails
+   * @param query User query
+   * @returns Simplified hypothetical document
+   */
+  private async generateFallbackDocument(query: string): Promise<string> {
+    try {
+      console.log("Using fallback approach for hypothetical document generation");
+      
+      // Use a simpler prompt with minimal formatting requirements
+      const simpleMessages = [
+        { 
+          role: 'system', 
+          content: `You are a helpful assistant. Answer the following question briefly.` 
+        },
+        {
+          role: 'user',
+          content: `Please write a brief answer about: ${query}`
+        }
+      ];
+      
+      return await this.aiService!.callAIChat(simpleMessages) || "";
+    } catch (error) {
+      console.error("Fallback document generation also failed:", error);
+      // Return a minimal document based on the query itself
+      return `Information about ${query}: This is a placeholder for relevant information.`;
     }
   }
   

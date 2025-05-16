@@ -44,28 +44,46 @@ export class VectorRetriever extends BaseRetriever {
       const results: Source[] = [];
       
       // Get query embedding using model manager
-      const queryEmbedding = await this.modelManager.getEmbedding(query);
-      
-      // Set similarity threshold from settings or default to 0.5
-      const similarityThreshold = this.settings.similarityThreshold || 0.5;
-      
-      for (const file of files) {
-        try {
-          const content = await this.app.vault.read(file);
+      try {
+        const queryEmbedding = await this.modelManager.getEmbedding(query);
+        
+        // Set similarity threshold from settings or default to 0.5
+        const similarityThreshold = this.settings.similarityThreshold || 0.5;
+        
+        // Process files in smaller batches to avoid overwhelming the API
+        const batchSize = 5; 
+        for (let i = 0; i < files.length; i += batchSize) {
+          const batch = files.slice(i, i + batchSize);
           
-          // Get content embedding using model manager
-          const contentEmbedding = await this.modelManager.getEmbedding(content);
-          
-          // Calculate cosine similarity
-          const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
-          
-          if (similarity > similarityThreshold) {
-            const snippet = this.getRelevantSnippet(content, query, 1000);
-            results.push({ file, similarity, content: snippet });
-          }
-        } catch (error) {
-          console.error(`Error processing file ${file.path} for vector search:`, error);
+          await Promise.all(batch.map(async (file) => {
+            try {
+              const content = await this.app.vault.read(file);
+              
+              // Skip processing if content is empty
+              if (!content || content.trim().length === 0) {
+                console.warn(`Skipping empty file: ${file.path}`);
+                return;
+              }
+              
+              // Get content embedding using model manager
+              const contentEmbedding = await this.modelManager.getEmbedding(content);
+              
+              // Calculate cosine similarity
+              const similarity = this.calculateCosineSimilarity(queryEmbedding, contentEmbedding);
+              
+              if (similarity > similarityThreshold) {
+                const snippet = this.getRelevantSnippet(content, query, 1000);
+                results.push({ file, similarity, content: snippet });
+              }
+            } catch (error) {
+              console.error(`Error processing file ${file.path} for vector search:`, error);
+            }
+          }));
         }
+      } catch (error) {
+        console.error("Failed to get embeddings:", error);
+        // Fallback to keyword-based search if embeddings fail
+        return this.fallbackKeywordSearch(query, files, limit);
       }
       
       // Sort by similarity and limit results
@@ -166,5 +184,62 @@ export class VectorRetriever extends BaseRetriever {
     }
     
     return matchCount / queryWords.size;
+  }
+  
+  /**
+   * Fallback to keyword-based search if embedding fails
+   * @param query User query
+   * @param files Files to search
+   * @param limit Result limit
+   * @returns Search results
+   */
+  private async fallbackKeywordSearch(query: string, files: TFile[], limit: number): Promise<Source[]> {
+    console.log("Falling back to keyword search");
+    const results: Source[] = [];
+    
+    // Extract keywords from query
+    const keywords = query.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 3) // Only use words with more than 3 characters
+      .map(word => word.replace(/[.,;:?!]/g, '')); // Remove punctuation
+    
+    if (keywords.length === 0) {
+      return [];
+    }
+    
+    for (const file of files) {
+      try {
+        const content = await this.app.vault.read(file);
+        const contentLower = content.toLowerCase();
+        
+        // Count keyword occurrences
+        let score = 0;
+        let matchCount = 0;
+        
+        for (const keyword of keywords) {
+          const matches = contentLower.match(new RegExp(keyword, 'g'));
+          if (matches) {
+            score += matches.length;
+            matchCount++;
+          }
+        }
+        
+        // Only include if at least half of keywords are found
+        if (matchCount >= Math.max(1, Math.floor(keywords.length / 2))) {
+          const similarity = score / (content.length / 100); // Normalize by content length
+          results.push({ 
+            file, 
+            similarity, 
+            content: this.getRelevantSnippet(content, query, 1000)
+          });
+        }
+      } catch (error) {
+        console.error(`Error in keyword search for file ${file.path}:`, error);
+      }
+    }
+    
+    return results
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
   }
 } 

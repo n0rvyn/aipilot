@@ -308,7 +308,7 @@ export class ModelManager {
     
     const payload = {
       model: options.modelName || model.modelName || "gpt-3.5-turbo",
-      messages: [
+      messages: options.messages || [
         { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
         { role: "user", content: prompt }
       ],
@@ -332,9 +332,15 @@ export class ModelManager {
       "Content-Type": "application/json"
     };
     
+    // Handle case where we have messages instead of prompt
+    let effectivePrompt = prompt;
+    if (!prompt && options.messages && options.messages.length > 0) {
+      effectivePrompt = options.messages.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+    }
+    
     const payload = {
       model: options.modelName || model.modelName || "llama2",
-      prompt: prompt,
+      prompt: effectivePrompt,
       system: model.systemPrompt || "You are a helpful assistant.",
       options: {
         temperature: options.temperature || 0.7,
@@ -366,7 +372,7 @@ export class ModelManager {
     
     const payload = {
       model: options.modelName || model.modelName || "claude-3-opus-20240229",
-      messages: [
+      messages: options.messages || [
         { role: "user", content: prompt }
       ],
       system: model.systemPrompt || "You are Claude, a helpful AI assistant.",
@@ -401,16 +407,16 @@ export class ModelManager {
         : "https://open.bigmodel.cn/api/paas/v3/chat/completions";
     }
     
-    // Using ZhipuAI endpoint for model type
-    
-    // For ZhipuAI, we need to generate the proper authentication header
-    let headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    };
-    
-    if (model.apiKey) {
-      headers["Authorization"] = `Bearer ${model.apiKey}`;
+    // Validate API key
+    if (!this.validateApiKey(model.apiKey, 'zhipuai')) {
+      throw new Error('Invalid or missing ZhipuAI API key');
     }
+    
+    // Headers with authentication
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${model.apiKey}`
+    };
     
     // Map model names to their API identifiers
     const modelNameMap: Record<string, string> = {
@@ -428,21 +434,44 @@ export class ModelManager {
     const streaming = !!options.streaming;
     const onChunk = options.onChunk;
     
-    // Prepare the payload based on the specific API requirements
+    // Ensure prompt or messages are not empty
+    if (!prompt && (!options.conversation || options.conversation.length === 0) && (!options.messages || options.messages.length === 0)) {
+      console.warn('Empty prompt and no messages provided to ZhipuAI, using fallback prompt');
+      prompt = "Hello";
+    }
+    
+    // Prepare messages array
+    const messages = options.conversation || options.messages || [
+      { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+      { role: "user", content: prompt }
+    ];
+    
+    // Validate messages format
+    const validMessages = messages.filter(msg => 
+      msg && typeof msg === 'object' && 
+      typeof msg.role === 'string' && 
+      typeof msg.content === 'string' &&
+      msg.content.trim().length > 0
+    );
+    
+    if (validMessages.length === 0) {
+      console.warn('No valid messages for ZhipuAI, using fallback message');
+      validMessages.push({ 
+        role: "user", 
+        content: "Hello, can you help me?" 
+      });
+    }
+    
+    // Prepare the payload with validated data
     const payload = {
       model: modelIdentifier,
-      messages: options.conversation || [
-        { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
-        { role: "user", content: prompt }
-      ],
+      messages: validMessages,
       temperature: options.temperature || 0.7,
       max_tokens: options.maxTokens || 2048,
       stream: streaming
     };
     
     try {
-      // Using ZhipuAI model with streaming setting
-      
       // Handle streaming
       if (streaming && typeof onChunk === 'function') {
         let fullResponse = '';
@@ -455,8 +484,8 @@ export class ModelManager {
         
         if (!response.ok) {
           const errorData = await response.text();
-          console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
-          throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
+          console.error(`ZhipuAI API error (${response.status}):`, errorData);
+          throw new Error(`ZhipuAI API error: ${response.status}`);
         }
         
         const reader = response.body?.getReader();
@@ -524,13 +553,11 @@ export class ModelManager {
         
         if (!response.ok) {
           const errorData = await response.text();
-          console.error(`ZhipuAI API error (${response.status}): ${errorData}`);
-          throw new Error(`ZhipuAI API error: ${response.status} ${response.statusText}`);
+          console.error(`ZhipuAI API error (${response.status}):`, errorData);
+          throw new Error(`ZhipuAI API error: ${response.status}`);
         }
         
         const data = await response.json();
-        
-        // ZhipuAI response processing
         
         // Handle different response formats
         // For v4 API
@@ -546,6 +573,18 @@ export class ModelManager {
       }
     } catch (error) {
       console.error('Error calling ZhipuAI:', error);
+      
+      // Try to provide helpful error messages based on common issues
+      if (error instanceof Error) {
+        if (error.message.includes('400')) {
+          console.error('ZhipuAI 400 error - common causes: invalid input format, invalid model name, or exceeded context length');
+        } else if (error.message.includes('401')) {
+          console.error('ZhipuAI 401 error - authentication failure: check API key');
+        } else if (error.message.includes('429')) {
+          console.error('ZhipuAI 429 error - rate limit exceeded: slow down requests');
+        }
+      }
+      
       throw error;
     }
   }
@@ -560,7 +599,7 @@ export class ModelManager {
     };
     
     const payload = {
-      messages: [
+      messages: options.messages || [
         { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
         { role: "user", content: prompt }
       ],
@@ -590,13 +629,53 @@ export class ModelManager {
       headers["Authorization"] = `Bearer ${model.apiKey}`;
     }
     
-    // This is a generic implementation - would need to be customized based on the actual API
-    const payload = {
-      prompt: prompt,
-      system_prompt: model.systemPrompt || "You are a helpful assistant.",
-      temperature: options.temperature || 0.7,
-      max_tokens: options.maxTokens || 2048
-    };
+    // Add custom headers if provided
+    if (options.customHeaders) {
+      Object.keys(options.customHeaders).forEach(key => {
+        headers[key] = options.customHeaders![key];
+      });
+    }
+    
+    // Prepare payload based on format
+    let payload: any = {};
+    
+    // If requestFormat is set, use it
+    if (options.requestFormat) {
+      try {
+        // Replace placeholders
+        const format = options.requestFormat
+          .replace('{{prompt}}', prompt || '')
+          .replace('{{system_prompt}}', model.systemPrompt || 'You are a helpful assistant.')
+          .replace('{{temperature}}', String(options.temperature || 0.7))
+          .replace('{{max_tokens}}', String(options.maxTokens || 2048));
+        
+        payload = JSON.parse(format);
+      } catch (e) {
+        console.error('Error parsing custom request format:', e);
+        // Fallback to default format
+        payload = {
+          model: model.modelName,
+          prompt: prompt,
+          messages: options.messages || [
+            { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+            { role: "user", content: prompt }
+          ],
+          temperature: options.temperature || 0.7,
+          max_tokens: options.maxTokens || 2048
+        };
+      }
+    } else {
+      // Default format (similar to OpenAI)
+      payload = {
+        model: model.modelName,
+        messages: options.messages || [
+          { role: "system", content: model.systemPrompt || "You are a helpful assistant." },
+          { role: "user", content: prompt }
+        ],
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 2048
+      };
+    }
     
     const response = await this.fetchWithProxy(model.baseUrl, {
       method: "POST",
@@ -605,7 +684,19 @@ export class ModelManager {
     }, useProxy);
     
     const data = await response.json();
-    return data.response || data.result || data.text || JSON.stringify(data);
+    
+    // Extract the response based on responseField or default path
+    if (options.responseField) {
+      // Split by dots and traverse the object
+      return options.responseField.split('.').reduce((o, key) => o?.[key], data);
+    } else {
+      // Default OpenAI format
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        return data.choices[0].message.content;
+      } else {
+        throw new Error('Unexpected response format from custom API');
+      }
+    }
   }
   
   private async fetchWithProxy(url: string, options: RequestInit, useProxy: boolean): Promise<Response> {
@@ -719,19 +810,44 @@ export class ModelManager {
       // Getting embedding using provider and model
       
       let vector: number[];
-      switch(activeModel.type) {
-        case 'openai':
-          vector = await this.getOpenAIEmbedding(activeModel, text, activeModel.useProxy !== undefined ? activeModel.useProxy : this.proxyConfig.enabled);
-          break;
-        case 'zhipuai':
-        case 'zhipu':
-          vector = await this.getZhipuEmbedding(activeModel, text, activeModel.useProxy !== undefined ? activeModel.useProxy : this.proxyConfig.enabled);
-          break;
-        case 'custom':
-          vector = await this.getCustomEmbedding(activeModel, text, activeModel.useProxy !== undefined ? activeModel.useProxy : this.proxyConfig.enabled);
-          break;
-        default:
-          throw new Error(`Embedding not supported for provider: ${activeModel.type}`);
+      try {
+        switch(activeModel.type) {
+          case 'openai':
+            vector = await this.getOpenAIEmbedding(activeModel, text, activeModel.useProxy !== undefined ? activeModel.useProxy : this.proxyConfig.enabled);
+            break;
+          case 'zhipuai':
+          case 'zhipu':
+            vector = await this.getZhipuEmbedding(activeModel, text, activeModel.useProxy !== undefined ? activeModel.useProxy : this.proxyConfig.enabled);
+            break;
+          case 'custom':
+            vector = await this.getCustomEmbedding(activeModel, text, activeModel.useProxy !== undefined ? activeModel.useProxy : this.proxyConfig.enabled);
+            break;
+          default:
+            throw new Error(`Embedding not supported for provider: ${activeModel.type}`);
+        }
+      } catch (error) {
+        console.error(`Error with primary embedding model (${activeModel.type}):`, error);
+        // Try to find a fallback model if primary fails
+        const fallbackModel = this.embeddingModels.find(m => m.id !== activeModel.id && m.type !== activeModel.type);
+        if (fallbackModel) {
+          console.log(`Attempting fallback to ${fallbackModel.type} embedding model`);
+          switch(fallbackModel.type) {
+            case 'openai':
+              vector = await this.getOpenAIEmbedding(fallbackModel, text, fallbackModel.useProxy !== undefined ? fallbackModel.useProxy : this.proxyConfig.enabled);
+              break;
+            case 'zhipuai':
+            case 'zhipu':
+              vector = await this.getZhipuEmbedding(fallbackModel, text, fallbackModel.useProxy !== undefined ? fallbackModel.useProxy : this.proxyConfig.enabled);
+              break;
+            case 'custom':
+              vector = await this.getCustomEmbedding(fallbackModel, text, fallbackModel.useProxy !== undefined ? fallbackModel.useProxy : this.proxyConfig.enabled);
+              break;
+            default:
+              throw error; // Re-throw if no fallback available
+          }
+        } else {
+          throw error; // Re-throw if no fallback available
+        }
       }
       
       // Cache the result
@@ -744,40 +860,98 @@ export class ModelManager {
     }
   }
   
+  /**
+   * Validate API key format
+   * @param apiKey API key to validate
+   * @param provider Provider type
+   * @returns Whether the API key appears valid
+   */
+  private validateApiKey(apiKey: string | undefined, provider: string): boolean {
+    if (!apiKey) {
+      return false;
+    }
+    
+    // Basic validation for common API key formats
+    switch(provider) {
+      case 'openai':
+        return /^sk-[a-zA-Z0-9]{32,}$/.test(apiKey);
+      case 'zhipuai':
+      case 'zhipu':
+        return /^[a-zA-Z0-9_\.-]{40,}$/.test(apiKey);
+      default:
+        // For other providers, just check if it's not empty and has a reasonable length
+        return apiKey.length >= 8;
+    }
+  }
+
   private async getOpenAIEmbedding(model: EmbeddingModelConfig, text: string, useProxy: boolean): Promise<number[]> {
-    const url = model.baseUrl || 'https://api.openai.com/v1/embeddings';
-    
-    if (!model.apiKey) {
-      throw new Error('API key is required for OpenAI embeddings');
+    // Check and process text first
+    if (!text || text.trim().length === 0) {
+      console.warn("Empty text provided to OpenAI embedding, using fallback text");
+      // Use placeholder text instead of throwing an error
+      text = "placeholder text for embedding";
     }
     
-    const headers = {
-      'Authorization': `Bearer ${model.apiKey}`,
-      'Content-Type': 'application/json',
-    };
+    // Trim text to avoid token limits
+    const truncatedText = text.slice(0, 8000);
     
+    const baseUrl = model.baseUrl || "https://api.openai.com/v1/embeddings";
+    
+    // Validate API key
+    if (!this.validateApiKey(model.apiKey, 'openai')) {
+      throw new Error('Invalid or missing OpenAI API key');
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${model.apiKey}`
+    };
+
     const payload = {
-      model: model.modelName,
-      input: text,
+      model: model.modelName || "text-embedding-3-small",
+      input: truncatedText
     };
-    
-    const response = await this.fetchWithProxy(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload)
-    }, useProxy);
-    
-    const data = await response.json();
-    
-    if (!data.data?.[0]?.embedding) {
-      throw new Error('Invalid embedding response from OpenAI');
+
+    try {
+      const response = await this.fetchWithProxy(baseUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      }, useProxy);
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error(`OpenAI API error (${response.status}):`, errorData);
+        throw new Error(`OpenAI embedding API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.data && data.data[0] && data.data[0].embedding) {
+        return data.data[0].embedding;
+      } else {
+        console.error('Unexpected OpenAI embedding response format:', data);
+        throw new Error('Invalid embedding response format from OpenAI');
+      }
+    } catch (error) {
+      console.error('Error getting OpenAI embedding:', error);
+      throw error;
     }
-    
-    return data.data[0].embedding;
   }
   
   private async getZhipuEmbedding(model: EmbeddingModelConfig, text: string, useProxy: boolean): Promise<number[]> {
-    // Use v3 endpoint for embedding-2 and v4 for embedding-3
+    // Check and process text first
+    if (!text || text.trim().length === 0) {
+      console.warn("Empty text provided to ZhipuEmbedding, using fallback text");
+      // Use placeholder text instead of throwing an error
+      text = "placeholder text for embedding";
+    }
+
+    // Trim very long text to avoid API failures (ZhipuAI has length limits)
+    // Also remove any characters that might cause issues with the API
+    const processedText = text.slice(0, 3000).replace(/[\uD800-\uDFFF]/g, '');
+    
+    // Use v3 endpoint for embedding-2 and v4 for embedding-3  
     const version = model.modelName === 'embedding-2' ? 'v3' : 'v4';
     const baseUrl = model.baseUrl || `https://open.bigmodel.cn/api/paas/${version}/embeddings`;
     
@@ -785,13 +959,18 @@ export class ModelManager {
       "Content-Type": "application/json"
     };
 
-    if (model.apiKey) {
-      headers["Authorization"] = `Bearer ${model.apiKey}`;
+    // Validate API key
+    if (!this.validateApiKey(model.apiKey, 'zhipuai')) {
+      throw new Error('Invalid or missing ZhipuAI API key');
     }
+    
+    headers["Authorization"] = `Bearer ${model.apiKey}`;
+
+    // Text has already been validated and prepared above
 
     const payload = {
       model: model.modelName,
-      input: text
+      input: processedText
     };
 
     try {
@@ -804,7 +983,7 @@ export class ModelManager {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`ZhipuAI embedding API error (${response.status}):`, errorText);
-        throw new Error(`ZhipuAI embedding API error: ${response.status} ${response.statusText}`);
+        throw new Error(`ZhipuAI embedding API error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -825,6 +1004,13 @@ export class ModelManager {
   }
   
   private async getCustomEmbedding(model: EmbeddingModelConfig, text: string, useProxy: boolean): Promise<number[]> {
+    // Check and process text first
+    if (!text || text.trim().length === 0) {
+      console.warn("Empty text provided to custom embedding, using fallback text");
+      // Use placeholder text instead of throwing an error
+      text = "placeholder text for embedding";
+    }
+    
     if (!model.baseUrl) {
       throw new Error('Base URL is required for custom embedding API');
     }
@@ -839,7 +1025,7 @@ export class ModelManager {
     
     const payload = {
       model: model.modelName,
-      input: text,
+      input: text.slice(0, 8000), // Limit text length
       dimensions: model.dimensions
     };
     

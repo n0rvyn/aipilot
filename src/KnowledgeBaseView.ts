@@ -203,6 +203,19 @@ export class KnowledgeBaseView extends ItemView {
             
             // Use RAG service if available
             if (this.plugin.ragService) {
+                // Initialize streaming results
+                let streamedAnswer = '';
+                const streamContainer = this.resultsContainer.createDiv({ 
+                    cls: "kb-stream-container" 
+                });
+                
+                // Create stream handler for real-time response
+                const handleStream = (chunk: string) => {
+                    streamedAnswer += chunk;
+                    // Use basic HTML rendering for simplicity
+                    streamContainer.setText(streamedAnswer);
+                };
+                
                 // Setup progress callback
                 const updateProgress = (stage: string, percent: number) => {
                     this.progressText.textContent = stage;
@@ -210,84 +223,116 @@ export class KnowledgeBaseView extends ItemView {
                     this.countText.textContent = `Processing ${stage}`;
                 };
                 
-                // Setup streaming handler for real-time updates
-                let streamedAnswer = '';
-                const handleStream = (chunk: string) => {
-                    if (!chunk) return;
-                    
-                    streamedAnswer += chunk;
-                    
-                    // Clear current results and show streaming content
-                    this.resultsContainer.empty();
-                    const streamingContainer = this.resultsContainer.createDiv({ cls: "kb-rag-results-container streaming" });
-                    const answerDiv = streamingContainer.createDiv({ cls: "kb-rag-answer" });
-                    
-                    // Render the streamed content as markdown
-                    try {
-                        NewMarkdownRenderer.renderMarkdown(
-                            streamedAnswer,
-                            answerDiv,
-                            '',
-                            this.plugin
-                        );
-                    } catch (error) {
-                        console.warn("Error rendering streaming markdown:", error);
-                        answerDiv.setText(streamedAnswer);
-                    }
-                    
-                    // Gradually fade out progress indicator once content starts streaming
-                    if (this.progressContainer.style.display !== 'none' && streamedAnswer.length > 50) {
-                        this.progressContainer.style.opacity = '0.7';
-                    }
-                };
-                
                 // Call RAG service with progress updates and streaming
-                const result = await this.plugin.ragService.performCompleteRAG(query, {
-                    showProgress: true,
-                    onProgress: updateProgress,
-                    streaming: true,
-                    onChunk: handleStream,
-                    limit: 10,
-                    directory: selectedDir || undefined
-                });
-                
-                // Display final RAG results with sources
-                this.progressContainer.style.display = 'none';
-                await this.displayRAGResults({
-                    ...result,
-                    answer: streamedAnswer || result.answer,
-                    query: query
-                });
+                try {
+                    const result = await this.plugin.ragService.performCompleteRAG(query, {
+                        showProgress: true,
+                        onProgress: updateProgress,
+                        streaming: true,
+                        onChunk: handleStream,
+                        limit: 10,
+                        directory: selectedDir || undefined
+                    });
+                    
+                    // Display final RAG results with sources
+                    this.progressContainer.style.display = 'none';
+                    await this.displayRAGResults({
+                        ...result,
+                        answer: streamedAnswer || result.answer,
+                        query: query
+                    });
+                } catch (error) {
+                    console.error("Error in RAG service:", error);
+                    this.progressContainer.style.display = 'none';
+                    
+                    // Handle specific API errors
+                    if (error.message && (
+                        error.message.includes("embedding API error") ||
+                        error.message.includes("No active embedding model configured")
+                    )) {
+                        this.handleEmbeddingError();
+                    } else {
+                        // Generic error handling
+                        this.resultsContainer.empty();
+                        this.resultsContainer.createDiv({ 
+                            cls: "kb-error-message", 
+                            text: "Error processing your query. Please try again later."
+                        });
+                    }
+                }
             } else {
                 // Fallback to legacy search
                 const loadingModal = new LoadingModal(this.app, true, "Searching your knowledge base...");
                 loadingModal.open();
                 
-                const results = await this.plugin.advancedSearch(query, 10, loadingModal);
-                
-                loadingModal.close();
-                this.progressContainer.style.display = 'none';
-                
-                if (results.length === 0) {
-                    this.resultsContainer.createDiv({ 
-                        cls: "kb-error-message", 
-                        text: "No relevant documents found for your query." 
-                    });
-                    return;
+                try {
+                    const results = await this.plugin.advancedSearch(query, 10, loadingModal);
+                    
+                    loadingModal.close();
+                    this.progressContainer.style.display = 'none';
+                    
+                    if (results.length === 0) {
+                        this.resultsContainer.createDiv({ 
+                            cls: "kb-error-message", 
+                            text: "No relevant documents found for your query." 
+                        });
+                        return;
+                    }
+                    
+                    // Use the plugin's SearchResultsModal to display results
+                    new SearchResultsModal(this.app, results, query).open();
+                } catch (error) {
+                    loadingModal.close();
+                    this.progressContainer.style.display = 'none';
+                    console.error("Error in legacy search:", error);
+                    
+                    // Handle specific API errors
+                    if (error.message && (
+                        error.message.includes("embedding API error") ||
+                        error.message.includes("No active embedding model configured")
+                    )) {
+                        this.handleEmbeddingError();
+                    } else {
+                        // Generic error handling
+                        this.resultsContainer.createDiv({ 
+                            cls: "kb-error-message", 
+                            text: "Error processing your query. Please try again later."
+                        });
+                    }
                 }
-                
-                // Use the plugin's SearchResultsModal to display results
-                new SearchResultsModal(this.app, results, query).open();
             }
         } catch (error) {
-            console.error("Error searching knowledge base:", error);
+            console.error("Search error:", error);
             this.progressContainer.style.display = 'none';
-            this.resultsContainer.empty();
             this.resultsContainer.createDiv({ 
                 cls: "kb-error-message", 
-                text: `Error searching knowledge base: ${error.message}` 
+                text: "An unexpected error occurred. Please try again later."
             });
         }
+    }
+
+    /**
+     * Handle embedding API errors with user-friendly message and settings link
+     */
+    private handleEmbeddingError(): void {
+        const errorContainer = this.resultsContainer.createDiv({ 
+            cls: "kb-error-message" 
+        });
+        
+        errorContainer.createEl("h3", { text: "Embedding API Error" });
+        errorContainer.createEl("p", { 
+            text: "There was an error connecting to the embedding API. This might be due to:"
+        });
+        
+        const errorList = errorContainer.createEl("ul");
+        errorList.createEl("li", { text: "Missing or invalid API key" });
+        errorList.createEl("li", { text: "Network connectivity issues" });
+        errorList.createEl("li", { text: "Rate limiting by the API provider" });
+        errorList.createEl("li", { text: "Incorrect model configuration" });
+        
+        errorContainer.createEl("p", {
+            text: "Please check your API key configuration in settings."
+        });
     }
 
     private async displayRAGResults(result: { 
