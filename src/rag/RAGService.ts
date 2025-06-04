@@ -143,26 +143,36 @@ export class RAGService {
    * @returns Generated answer
    */
   private async generateAnswer(
-    query: string, 
+    query: string,
     optimizedQuery: string,
     results: Source[],
     hypotheticalDoc?: string
   ): Promise<string> {
-    // Detect primary language
-    const contextText = results.map(c => c.content).join("\n\n");
-    const primaryLanguage = this.detectLanguage(contextText);
-    
-    // Format context
-    const formattedContext = results.map((source, index) => {
+    // Build combined context from retrieved documents and hypothetical document
+    const combinedContext = [
+      ...results.map(r => r.content),
+      hypotheticalDoc || ''
+    ].filter(Boolean).join("\n\n");
+
+    // Detect primary language based on combined context
+    const primaryLanguage = this.detectLanguage(combinedContext);
+
+    // Format context for prompt
+    let formattedContext = results.map((source, index) => {
       return `Source [${index + 1}]: ${source.file.basename}\n${source.content}`;
     }).join('\n\n');
+
+    // Include hypothetical document if available
+    if (hypotheticalDoc) {
+      formattedContext += `\n\nHypothetical answer based on the query:\n${hypotheticalDoc}`;
+    }
     
     // Create prompt
     let prompt = '';
     if (primaryLanguage === 'chinese') {
       prompt = `Please answer the following question in Chinese:
-      
-Question: "${query}"
+
+Question: "${optimizedQuery || query}"
 
 Below are document sections that may contain relevant information:
 
@@ -179,8 +189,8 @@ Instructions:
 8. Keep your answer focused and concise`;
     } else {
       prompt = `Please answer the following question in English:
-      
-QUESTION: "${query}"
+
+QUESTION: "${optimizedQuery || query}"
 
 Below are document sections that may contain relevant information:
 
