@@ -1,0 +1,437 @@
+---
+description: "防止过度设计 - 证据优先与复杂度控制 - 详细参考"
+scopes: [chat, edit]
+tags: [anti-overengineering, evidence-first, complexity, decision-making, detailed-reference]
+priority: 204
+globs: []
+alwaysApply: false
+---
+
+# 防止过度设计 - 证据优先与复杂度控制（详细参考）
+
+> **注意**：本文件为详细参考，不会自动加载。  
+> **辨证思考铁律**：见 `000-critical-rules.mdc` 的"AI 工作原则"部分
+
+---
+
+> **核心原则**: 每个决策必须有证据支持，优先使用现有模式，避免不必要的复杂性
+
+---
+
+## 🎯 核心原则
+
+> **"Every decision must be backed by evidence from existing code, documentation, or verified sources."**
+
+### 三大支柱
+1. **证据优先** - 基于现有代码和文档做决策
+2. **复杂度控制** - 默认选择最简单的解决方案（≤3/10 复杂度）
+3. **模式一致性** - 遵循项目现有模式，不随意创新
+
+---
+
+## 📋 Evidence-First 决策流程
+
+### Before Proposing Any Solution
+
+**必须完成的步骤**：
+
+1. **Find Existing Code** - 找到 2-3 个类似实现的例子
+2. **Cite Sources** - 提供文件路径和行号
+3. **Explain Patterns** - 描述现有代码如何工作
+4. **Justify Deviations** - 解释为什么现有模式不适用（如果偏离）
+
+### Evidence Quality Standards
+
+| 证据类型 | 优先级 | 说明 |
+|---------|--------|------|
+| **Primary Evidence** | ⭐⭐⭐⭐⭐ | 项目中现有的工作代码 |
+| **Secondary Evidence** | ⭐⭐⭐⭐ | Obsidian API 文档、TypeScript 文档 |
+| **Tertiary Evidence** | ⭐⭐⭐ | 社区最佳实践（需验证） |
+| **Never Accept** | ❌ | 假设、"常识"、未经支持的声明 |
+
+---
+
+## 🚨 Pre-Implementation Checks
+
+### Rule 1: Evidence-First Analysis
+
+**Before implementing ANY solution:**
+
+```markdown
+1. ✅ Find existing working code that solves similar problems
+   - File: `src/ChatView.ts:123-145`
+   - Pattern: Uses ItemView for custom views
+   
+2. ✅ Cite file paths + line numbers
+   - Show me the exact code reference
+   
+3. ✅ Show me the existing pattern
+   - How does it currently work?
+   - What dependencies does it have?
+   
+4. ✅ Explain WHY that pattern won't work for this case
+   - Be specific about the limitations
+   - Provide evidence, not assumptions
+   
+5. ✅ Only then propose minimal changes
+   - Build on existing patterns
+   - Minimize new abstractions
+```
+
+### Rule 2: Complexity Rating System
+
+**Rate every solution complexity 1-10:**
+
+| Rating | Category | Action Required |
+|--------|----------|----------------|
+| **1-3** | 简单（首选） | 使用现有模式，直接实现 |
+| **4-6** | 中等 | 需要书面说明理由 |
+| **7-10** | 复杂 | 需要明确批准 |
+
+**DEFAULT**: Always choose ≤3/10 complexity solutions
+
+**Example:**
+```markdown
+COMPLEXITY ASSESSMENT:
+- Solution Complexity: 2/10
+- Justification: Reuses existing ChatView pattern, only adds one new method
+- Existing Pattern: Similar to `renderMessage()` in ChatView.ts:200-220
+```
+
+### Rule 3: Simplicity Challenge
+
+**If solution has >3 implementation steps:**
+
+```markdown
+1. ❓ Justify why 1-step solution won't work
+   - Show evidence that simpler approach fails
+   
+2. ❓ Justify why 2-step solution won't work
+   - Explain what additional complexity is needed
+   
+3. ❓ Show evidence that 3+ steps are actually needed
+   - Cite similar complex solutions in codebase
+   
+4. ✋ Get explicit approval before proceeding
+   - Wait for user confirmation
+```
+
+### Rule 4: Pattern Compliance
+
+**For any new implementation:**
+
+```markdown
+1. ✅ Find 2-3 existing similar patterns in codebase
+   - ChatView.ts: Uses ItemView for views
+   - MarkdownRenderer.ts: Uses MarkdownRenderer.render()
+   - main.ts: Uses Plugin lifecycle hooks
+   
+2. ✅ Show me how they work
+   - Explain the pattern and its benefits
+   
+3. ✅ Use the SAME pattern unless you can prove it won't work
+   - Consistency is more important than "better" approaches
+   
+4. ✅ If deviating from pattern, get explicit approval
+   - Explain why deviation is necessary
+   - Provide evidence that existing pattern fails
+```
+
+---
+
+## 🔍 Evidence Collection Process
+
+### Step 1: Search for Existing Patterns
+
+```bash
+# Use grep to find similar implementations
+grep -r "ItemView" src/
+grep -r "MarkdownRenderer" src/
+
+# Or use semantic search
+# "How does chat view work in this project?"
+# "Where is markdown rendering implemented?"
+```
+
+### Step 2: Analyze Existing Code
+
+**Documentation Format:**
+```markdown
+EVIDENCE FOUND:
+- File: `src/ChatView.ts:100-150`
+- Pattern: Uses ItemView.onOpen() to initialize UI
+- Context: Custom view needs to display content in sidebar
+- Dependencies: 
+  - Requires ItemView base class
+  - Uses containerEl for DOM manipulation
+  - Follows Obsidian plugin patterns
+```
+
+### Step 3: Document Evidence
+
+**Code Citations:**
+```typescript
+// Based on existing pattern in src/ChatView.ts:100-150
+// Following the same approach as src/KnowledgeBaseView.ts:50-70
+// Using pattern established in src/main.ts:200-220
+```
+
+**Documentation Citations:**
+```typescript
+// Obsidian Documentation: https://docs.obsidian.md/Plugins/Views
+// TypeScript Guide: https://www.typescriptlang.org/docs/
+// CodeMirror 6: https://codemirror.net/docs/
+```
+
+---
+
+## 🚫 Prohibited Without Evidence
+
+### Don't Assume
+
+```markdown
+❌ "This pattern is wrong" (without showing why)
+❌ "This is the standard way" (without documentation)
+❌ "This will cause problems" (without evidence)
+❌ "This is better" (without comparison)
+```
+
+### Don't Invent
+
+```markdown
+❌ New patterns without existing examples
+❌ New APIs without documentation
+❌ New architectures without justification
+❌ New conventions without precedent
+```
+
+**Example of BAD approach:**
+```markdown
+"We should use a complex state management library like Redux."
+❌ No evidence that current state management is failing
+❌ No similar patterns in existing codebase
+❌ Adds complexity without proven benefit
+```
+
+**Example of GOOD approach:**
+```markdown
+"We should continue using simple object state management."
+✅ Currently used in ChatView.ts:30-50
+✅ Simple and effective for our use case
+✅ Complexity: 2/10 (simple, consistent)
+✅ No evidence that current approach is insufficient
+```
+
+---
+
+## ✅ Required With Evidence
+
+### Always Show
+
+```markdown
+✅ Existing working code that solves similar problems
+✅ File paths and line numbers for all references
+✅ Explanation of how existing patterns work
+✅ Justification for any deviations from existing patterns
+```
+
+### Always Cite
+
+```markdown
+✅ Official documentation for all API usage
+✅ Existing project patterns for all architectural decisions
+✅ Verified sources for all best practices
+✅ Specific examples for all recommendations
+```
+
+---
+
+## 📋 Evidence Templates
+
+### Existing Code Analysis
+
+```markdown
+EXISTING PATTERN ANALYSIS:
+- File: `src/ChatView.ts`
+- Lines: 100-150
+- Pattern: ItemView-based custom view
+- Context: Needs to display chat interface in sidebar
+- Dependencies: ItemView, containerEl, Obsidian API
+- Similarity: Solving same problem - custom UI in Obsidian
+
+CONCLUSION:
+- Reuse this pattern ✅
+- Complexity: 2/10
+- No new abstractions needed
+```
+
+### Solution Justification
+
+```markdown
+SOLUTION JUSTIFICATION:
+- Based on: `src/ChatView.ts:100-150`
+- Pattern: ItemView with custom rendering
+- Adaptation: Add new `renderDiff()` method
+- Evidence: Same UI pattern, proven to work
+- Complexity: 2/10 (minimal change to existing view)
+```
+
+### Deviation Justification
+
+```markdown
+DEVIATION JUSTIFICATION:
+- Existing pattern: All views extend ItemView
+- Why it won't work: This component needs to be a modal dialog
+- Reason: Different UX requirement - overlay instead of sidebar
+- Alternative approach: Use Modal class instead of ItemView
+- Evidence: Similar pattern in Obsidian sample plugins
+- Complexity: 3/10 (different base class but same patterns)
+- Approval Required: ✅ No (still using Obsidian API patterns)
+```
+
+---
+
+## 🎯 Quality Gates
+
+### Before Implementation
+
+- [ ] **Evidence collected**: Found 2-3 existing similar patterns
+- [ ] **Sources cited**: All references include file paths/line numbers
+- [ ] **Patterns understood**: Can explain how existing code works
+- [ ] **Complexity rated**: Solution rated 1-10, justified if >3
+- [ ] **Pattern compliance**: Using existing project patterns
+- [ ] **Justification complete**: Can explain why approach is appropriate
+
+### During Implementation
+
+- [ ] **Following evidence**: Implementation matches cited patterns
+- [ ] **Maintaining consistency**: Using same approaches as existing code
+- [ ] **Documenting decisions**: Adding comments explaining choices
+- [ ] **No over-engineering**: Not adding unnecessary abstractions
+
+### After Implementation
+
+- [ ] **Verification complete**: Solution works as expected
+- [ ] **Pattern consistency**: Follows established project patterns
+- [ ] **Documentation updated**: Changes properly documented
+- [ ] **No regressions**: Existing functionality still works
+
+---
+
+## 🚨 Violation Consequences
+
+### Missing Evidence
+
+| Violation Type | Response |
+|---------------|----------|
+| **First violation** | Request evidence before proceeding |
+| **Repeated violations** | Require evidence for all future decisions |
+| **Pattern violations** | Require explicit approval for any deviations |
+
+### False Evidence
+
+| Issue Type | Action |
+|-----------|--------|
+| **Incorrect citations** | Correct immediately and verify all other citations |
+| **Misleading patterns** | Explain actual pattern and adjust solution |
+| **Outdated references** | Update to current documentation/patterns |
+
+---
+
+## 📚 AIPilot Project Evidence Sources
+
+### Primary Sources (Existing Code)
+- **Views**: `src/ChatView.ts`, `src/KnowledgeBaseView.ts` - View patterns
+- **Rendering**: `src/MarkdownRenderer.ts` - Markdown rendering
+- **Services**: `src/services/`, `src/rag/` - Service patterns
+- **Models**: `src/models/` - Model management
+- **Main**: `src/main.ts` - Plugin lifecycle
+
+### Secondary Sources (Documentation)
+- **Project Docs**: `docs/` - Architecture, API, guides
+- **Structure**: `docs/STRUCTURE.md` - Project organization
+- **Architecture**: `docs/architecture/` - Design decisions
+
+### External Sources
+- **Obsidian API**: https://docs.obsidian.md/
+- **TypeScript**: https://www.typescriptlang.org/docs/
+- **CodeMirror**: https://codemirror.net/docs/
+
+---
+
+## 📊 Practical Examples
+
+### ✅ Good Example: Following Existing Pattern
+
+```markdown
+USER: "We need to add a new view to display statistics."
+
+AI RESPONSE:
+EVIDENCE ANALYSIS:
+- Existing: `ChatView.ts:30-100` extends ItemView
+- Pattern: Custom view in sidebar
+- Complexity: 2/10 (add one similar view)
+
+PROPOSED SOLUTION:
+```typescript
+// Based on existing pattern in ChatView.ts:30-100
+export class StatsView extends ItemView {
+    getViewType() {
+        return 'aipilot-stats';
+    }
+    
+    getDisplayText() {
+        return 'Statistics';
+    }
+    
+    async onOpen() {
+        const container = this.containerEl.children[1];
+        container.empty();
+        // Render stats...
+    }
+}
+```
+
+JUSTIFICATION:
+- Reuses existing ItemView pattern
+- Follows same structure as ChatView
+- No new abstractions needed
+```
+
+### ❌ Bad Example: Over-Engineering
+
+```markdown
+USER: "We need to add a new view to display statistics."
+
+AI RESPONSE (DON'T DO THIS):
+"Let's create a complex component framework with:
+
+```typescript
+abstract class BaseComponent {
+    abstract render(): void;
+    abstract update(): void;
+    // ... complex lifecycle
+}
+
+class ComponentRegistry { ... }
+class ComponentFactory { ... }
+```
+
+This is more flexible and scalable..."
+
+WHY THIS IS BAD:
+❌ No evidence of similar pattern in codebase
+❌ Adds unnecessary complexity (8/10 complexity)
+❌ Over-engineering a simple requirement
+❌ Invents new pattern without justification
+```
+
+---
+
+**Remember**: Evidence-first approach prevents overengineering, ensures consistency, and builds on proven patterns rather than inventing new solutions. When in doubt, use existing patterns and keep it simple.
+
+---
+
+**最后更新**: 2025-11-09  
+**版本**: 1.0  
+**适配自**: Epoch 项目规则（改造为 TypeScript/Obsidian 环境）

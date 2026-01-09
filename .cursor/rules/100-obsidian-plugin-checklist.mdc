@@ -1,0 +1,505 @@
+---
+description: "Obsidian 插件开发检查清单"
+scopes: [chat, edit]
+tags: [obsidian, plugin, security, dom]
+priority: 100
+globs: ["**/*.ts", "**/*.js"]
+alwaysApply: false
+---
+
+# Obsidian 插件开发检查清单
+
+> **重要性**: ⭐⭐⭐⭐ 高优先级  
+> **加载方式**: Auto-Attach（编辑 TS/JS 文件时自动加载）  
+> **用途**: Obsidian 插件特定的开发约束和最佳实践  
+
+---
+
+## 🔒 安全性规则（绝对禁止）
+
+### 1. 永不使用不安全的 DOM 操作 ⚠️
+
+```typescript
+// ❌ 绝对禁止
+element.innerHTML = userContent;
+element.outerHTML = '<div>...</div>';
+container.insertAdjacentHTML('beforeend', htmlString);
+
+// ✅ 正确做法
+const div = this.containerEl.createDiv({ cls: 'my-class' });
+div.appendText(userContent);
+div.createEl('span', { text: 'Safe text' });
+```
+
+**原因**：
+- `innerHTML` 可能导致 XSS 攻击
+- 用户输入未经清理直接渲染是严重安全漏洞
+- Obsidian 提供了安全的 DOM API
+
+### 2. 必须清理用户输入 ⚠️
+
+```typescript
+// ❌ 危险
+const userInput = this.inputEl.value;
+container.innerHTML = userInput; // XSS 风险
+
+// ✅ 正确
+const userInput = this.inputEl.value;
+container.empty();
+container.appendText(userInput); // 自动转义
+
+// ✅ 或使用 Obsidian 的渲染器
+MarkdownRenderer.render(
+    this.app,
+    userInput,
+    container,
+    '',
+    this
+);
+```
+
+---
+
+## 🎨 DOM 操作最佳实践
+
+### 使用 Obsidian 提供的辅助函数
+
+```typescript
+// ✅ 创建元素
+const container = this.containerEl.createDiv({ cls: 'chat-container' });
+const header = container.createEl('h2', { text: 'AI Chat' });
+const button = container.createEl('button', {
+    text: 'Send',
+    cls: 'chat-send-btn'
+});
+
+// ✅ 添加文本
+container.appendText('Plain text content');
+
+// ✅ 设置属性
+button.setAttribute('disabled', 'true');
+button.addEventListener('click', () => { ... });
+
+// ✅ 清空容器
+container.empty();
+
+// ✅ 移除元素
+element.remove();
+```
+
+### 常用 DOM API 参考
+
+| 方法 | 用途 | 示例 |
+|------|------|------|
+| `createDiv(attrs)` | 创建 div 元素 | `container.createDiv({ cls: 'my-class' })` |
+| `createEl(tag, attrs)` | 创建指定元素 | `container.createEl('span', { text: 'Hi' })` |
+| `appendText(text)` | 添加文本（自动转义） | `el.appendText(userInput)` |
+| `empty()` | 清空所有子元素 | `container.empty()` |
+| `remove()` | 移除元素 | `element.remove()` |
+| `addClass(cls)` | 添加 CSS 类 | `el.addClass('active')` |
+| `removeClass(cls)` | 移除 CSS 类 | `el.removeClass('active')` |
+| `toggleClass(cls)` | 切换 CSS 类 | `el.toggleClass('hidden')` |
+
+---
+
+## ⚙️ 插件生命周期
+
+### 标准结构
+
+```typescript
+import { Plugin, PluginSettingTab, Setting } from 'obsidian';
+
+export default class MyPlugin extends Plugin {
+    settings: MyPluginSettings;
+    
+    async onload() {
+        console.log('Loading plugin...');
+        
+        // 1. 加载设置
+        await this.loadSettings();
+        
+        // 2. 注册视图
+        this.registerView(
+            VIEW_TYPE,
+            (leaf) => new MyView(leaf, this)
+        );
+        
+        // 3. 注册命令
+        this.addCommand({
+            id: 'my-command',
+            name: 'My Command',
+            callback: () => { ... }
+        });
+        
+        // 4. 注册事件
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', () => { ... })
+        );
+        
+        // 5. 注册 DOM 事件
+        this.registerDomEvent(document, 'click', (evt) => { ... });
+        
+        // 6. 注册设置面板
+        this.addSettingTab(new MySettingTab(this.app, this));
+    }
+    
+    onunload() {
+        console.log('Unloading plugin...');
+        // 清理资源（Obsidian 会自动清理注册的事件）
+    }
+    
+    async loadSettings() {
+        this.settings = Object.assign(
+            {},
+            DEFAULT_SETTINGS,
+            await this.loadData()
+        );
+    }
+    
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
+}
+```
+
+---
+
+## 🎯 视图（View）开发
+
+### 标准视图结构
+
+```typescript
+import { ItemView, WorkspaceLeaf } from 'obsidian';
+
+export const VIEW_TYPE = 'my-view';
+
+export class MyView extends ItemView {
+    constructor(leaf: WorkspaceLeaf) {
+        super(leaf);
+    }
+    
+    getViewType() {
+        return VIEW_TYPE;
+    }
+    
+    getDisplayText() {
+        return 'My View';
+    }
+    
+    getIcon() {
+        return 'dice'; // Obsidian 内置图标
+    }
+    
+    async onOpen() {
+        // 初始化 UI
+        const container = this.containerEl.children[1];
+        container.empty();
+        container.addClass('my-view-container');
+        
+        // 构建 UI
+        const header = container.createEl('h2', { text: 'My View' });
+        // ...
+    }
+    
+    async onClose() {
+        // 清理资源
+    }
+}
+```
+
+### 激活视图
+
+```typescript
+// 在插件的 onload() 中
+this.addCommand({
+    id: 'open-my-view',
+    name: 'Open My View',
+    callback: async () => {
+        const { workspace } = this.app;
+        
+        // 检查视图是否已存在
+        let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
+        
+        if (!leaf) {
+            // 创建新视图
+            const leaf = workspace.getRightLeaf(false);
+            await leaf.setViewState({
+                type: VIEW_TYPE,
+                active: true
+            });
+        }
+        
+        // 激活视图
+        workspace.revealLeaf(leaf);
+    }
+});
+```
+
+---
+
+## ⚙️ 设置（Settings）开发
+
+### 定义设置接口
+
+```typescript
+interface MyPluginSettings {
+    apiKey: string;
+    model: string;
+    temperature: number;
+    enabled: boolean;
+}
+
+const DEFAULT_SETTINGS: MyPluginSettings = {
+    apiKey: '',
+    model: 'gpt-4',
+    temperature: 0.7,
+    enabled: true
+};
+```
+
+### 设置面板
+
+```typescript
+import { App, PluginSettingTab, Setting } from 'obsidian';
+
+export class MySettingTab extends PluginSettingTab {
+    plugin: MyPlugin;
+    
+    constructor(app: App, plugin: MyPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+    
+    display(): void {
+        const { containerEl } = this;
+        containerEl.empty();
+        
+        containerEl.createEl('h2', { text: 'My Plugin Settings' });
+        
+        // 文本输入
+        new Setting(containerEl)
+            .setName('API Key')
+            .setDesc('Your API key')
+            .addText(text => text
+                .setPlaceholder('Enter API key')
+                .setValue(this.plugin.settings.apiKey)
+                .onChange(async (value) => {
+                    this.plugin.settings.apiKey = value;
+                    await this.plugin.saveSettings();
+                }));
+        
+        // 下拉选择
+        new Setting(containerEl)
+            .setName('Model')
+            .setDesc('Choose AI model')
+            .addDropdown(dropdown => dropdown
+                .addOption('gpt-4', 'GPT-4')
+                .addOption('gpt-3.5-turbo', 'GPT-3.5 Turbo')
+                .setValue(this.plugin.settings.model)
+                .onChange(async (value) => {
+                    this.plugin.settings.model = value;
+                    await this.plugin.saveSettings();
+                }));
+        
+        // 滑块
+        new Setting(containerEl)
+            .setName('Temperature')
+            .setDesc('Creativity level')
+            .addSlider(slider => slider
+                .setLimits(0, 1, 0.1)
+                .setValue(this.plugin.settings.temperature)
+                .setDynamicTooltip()
+                .onChange(async (value) => {
+                    this.plugin.settings.temperature = value;
+                    await this.plugin.saveSettings();
+                }));
+        
+        // 开关
+        new Setting(containerEl)
+            .setName('Enable feature')
+            .setDesc('Turn on/off')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.enabled)
+                .onChange(async (value) => {
+                    this.plugin.settings.enabled = value;
+                    await this.plugin.saveSettings();
+                }));
+    }
+}
+```
+
+---
+
+## 🎹 快捷键（Hotkeys）
+
+### ❌ 不要设置默认快捷键
+
+```typescript
+// ❌ 错误：设置默认快捷键
+this.addCommand({
+    id: 'my-command',
+    name: 'My Command',
+    hotkeys: [{ modifiers: ['Ctrl'], key: 'K' }], // 可能冲突
+    callback: () => { ... }
+});
+
+// ✅ 正确：不设置默认快捷键
+this.addCommand({
+    id: 'my-command',
+    name: 'My Command',
+    // 不设置 hotkeys，让用户自己配置
+    callback: () => { ... }
+});
+```
+
+**原因**：
+- 避免与用户现有快捷键冲突
+- 让用户通过 Obsidian 设置自己配置
+- 在 README 中建议推荐快捷键
+
+---
+
+## 🚀 性能优化
+
+### 1. 最小化控制台日志
+
+```typescript
+// ❌ 生产环境有大量日志
+console.log('Debug info...');
+console.log('User input:', userInput);
+
+// ✅ 使用条件日志
+const DEBUG = false; // 或从设置中读取
+
+if (DEBUG) {
+    console.log('Debug info...');
+}
+
+// ✅ 或使用开发环境标志
+if (process.env.NODE_ENV === 'development') {
+    console.log('Debug info...');
+}
+```
+
+### 2. 异步操作
+
+```typescript
+// ✅ 使用 async/await
+async loadData() {
+    try {
+        const data = await this.loadData();
+        this.processData(data);
+    } catch (error) {
+        console.error('Failed to load data:', error);
+        new Notice('Failed to load data');
+    }
+}
+
+// ✅ 避免阻塞主线程
+async heavyComputation() {
+    // 分批处理
+    for (let i = 0; i < items.length; i += 100) {
+        const batch = items.slice(i, i + 100);
+        await this.processBatch(batch);
+        
+        // 给主线程喘息时间
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+}
+```
+
+### 3. 事件清理
+
+```typescript
+// ✅ 使用 registerEvent 自动清理
+this.registerEvent(
+    this.app.workspace.on('active-leaf-change', () => { ... })
+);
+
+// ✅ 使用 registerDomEvent 自动清理
+this.registerDomEvent(document, 'click', (evt) => { ... });
+
+// ❌ 手动添加的事件需要手动清理
+document.addEventListener('click', handler);
+// 需要在 onunload() 中：
+document.removeEventListener('click', handler);
+```
+
+---
+
+## 🔧 错误处理
+
+### 标准错误处理模式
+
+```typescript
+import { Notice } from 'obsidian';
+
+// ✅ 完整的错误处理
+async myFunction() {
+    try {
+        const result = await someAsyncOperation();
+        return result;
+    } catch (error) {
+        // 1. 记录详细错误
+        console.error('MyFunction failed:', error);
+        
+        // 2. 向用户显示友好消息
+        new Notice('Operation failed. Please try again.');
+        
+        // 3. 处理特定错误
+        if (error.message.includes('network')) {
+            new Notice('Network error. Check your connection.');
+        }
+        
+        // 4. 重新抛出或返回默认值
+        throw error; // 或 return null;
+    }
+}
+```
+
+---
+
+## 📋 开发检查清单
+
+### 代码提交前检查
+
+- [ ] **安全性**
+  - [ ] 未使用 `innerHTML` / `outerHTML`
+  - [ ] 所有用户输入已清理
+  - [ ] 使用 Obsidian DOM API
+
+- [ ] **性能**
+  - [ ] 移除或条件化所有 `console.log`
+  - [ ] 异步操作不阻塞主线程
+  - [ ] 事件监听已正确注册
+
+- [ ] **错误处理**
+  - [ ] 所有 async 操作有 try/catch
+  - [ ] 错误有友好的用户提示
+  - [ ] 错误有详细的日志
+
+- [ ] **用户体验**
+  - [ ] 未设置默认快捷键
+  - [ ] 设置面板清晰易用
+  - [ ] Notice 消息简洁明了
+
+- [ ] **代码质量**
+  - [ ] 无 TypeScript 错误
+  - [ ] 遵循项目代码风格
+  - [ ] 注释清晰完整
+
+---
+
+## 🔗 相关资源
+
+- **Obsidian API**: https://docs.obsidian.md/
+- **插件开发指南**: https://marcus.se.net/obsidian-plugin-docs/
+- **示例插件**: https://github.com/obsidianmd/obsidian-sample-plugin
+
+---
+
+**最后更新**: 2025-11-09  
+**版本**: 1.0  
+**Token 估算**: ~1,000 tokens  
+**加载方式**: Auto-Attach  
+**优先级**: 100

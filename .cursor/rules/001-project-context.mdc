@@ -1,0 +1,353 @@
+---
+description: "项目状态与上下文（每次会话必读）"
+scopes: [chat, edit]
+tags: [project-context, current-status]
+priority: 2
+globs: ["**/*.ts", "**/*.js"]
+alwaysApply: true
+---
+
+# AIPilot 项目状态
+
+> **重要性**: ⭐⭐⭐⭐⭐ 最高优先级  
+> **加载方式**: Always Applied  
+> **用途**: 让 AI 了解项目当前状态  
+
+---
+
+## 📊 项目概览
+
+### 基本信息
+
+- **项目名称**: AIPilot
+- **类型**: Obsidian Plugin
+- **当前版本**: v1.0.19
+- **开发语言**: TypeScript
+- **构建工具**: esbuild
+- **包管理**: npm
+
+### 核心功能
+
+1. **AI 聊天界面** - 支持多个 AI 提供商（OpenAI、智谱AI、Groq）
+2. **RAG 知识库** - 利用本地笔记作为上下文增强 AI 回答
+3. **文本润色** - 智能文本改进与可视化差异对比
+4. **多代理辩论** - 生成多视角讨论和分析
+5. **自定义功能** - 创建个性化 AI 工作流
+6. **聊天历史** - 保存和管理 AI 对话记录
+
+---
+
+## 🛠️ 技术栈
+
+### 核心技术
+
+```typescript
+{
+  "语言": "TypeScript 5.x",
+  "框架": "Obsidian Plugin API",
+  "构建": "esbuild",
+  "编辑器": "CodeMirror 6",
+  "渲染": "marked (Markdown)",
+  "Token计数": "tiktoken",
+  "HTTP": "axios"
+}
+```
+
+### 主要依赖
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| obsidian | ^1.7.2 | Obsidian API |
+| @codemirror/view | ^6.35.0 | 编辑器视图 |
+| @codemirror/state | ^6.4.1 | 编辑器状态 |
+| marked | ^14.1.3 | Markdown 渲染 |
+| tiktoken | ^1.0.17 | Token 计数 |
+| axios | ^1.7.7 | HTTP 请求 |
+
+---
+
+## 📁 项目结构
+
+```
+aipilot/
+├── src/                              # 源代码
+│   ├── main.ts                      # 插件入口（2000+ 行）
+│   ├── ChatView.ts                  # 聊天视图（2000+ 行）
+│   ├── KnowledgeBaseView.ts         # 知识库视图
+│   ├── MarkdownRenderer.ts          # Markdown 渲染器
+│   ├── icons.ts                     # 图标定义
+│   ├── modals.ts                    # 模态对话框
+│   ├── styles.css                   # 样式表
+│   ├── debate/                      # 多代理辩论系统
+│   │   ├── AgentDebateEngine.ts
+│   │   └── DebatePanel.ts
+│   ├── models/                      # 模型管理
+│   │   ├── ModelManager.ts
+│   │   ├── ModelConfigModal.ts
+│   │   └── EmbeddingModelConfigModal.ts
+│   ├── rag/                         # RAG 系统
+│   │   ├── index.ts
+│   │   ├── AIService.ts
+│   │   ├── RAGService.ts
+│   │   ├── enhancement/
+│   │   ├── ranking/
+│   │   ├── reflection/
+│   │   └── retrieval/
+│   └── services/
+│       ├── AIService.ts
+│       └── RAGService.ts
+├── docs/                            # 文档目录
+│   ├── README.md                    # 文档中心
+│   ├── STRUCTURE.md                 # 项目结构
+│   ├── architecture/                # 架构文档
+│   ├── api/                         # API 文档
+│   ├── guides/                      # 使用指南
+│   └── development/                 # 开发文档
+├── dist/                            # 构建输出
+├── manifest.json                    # 插件清单
+├── package.json                     # npm 配置
+└── esbuild.config.mjs              # 构建配置
+```
+
+---
+
+## 🎯 当前状态
+
+### 开发阶段
+
+- ✅ **核心功能完成** - 所有主要功能已实现
+- ✅ **稳定版本** - v1.0.19 已发布
+- 🔄 **持续优化** - 性能和用户体验改进中
+
+### 最近变更（2025-11）
+
+- 2025-11-09: 建立 Cursor 规则体系（三层架构）
+- 2025-11-09: 更新文档结构
+
+---
+
+## 📚 关键文档索引
+
+### 架构与设计
+
+- **项目结构**: `docs/STRUCTURE.md`
+- **架构总览**: `docs/architecture/overview.md`
+- **RAG 系统**: `docs/architecture/rag-system.md`
+- **辩论系统**: `docs/architecture/debate-system.md`
+- **数据流**: `docs/architecture/data-flow.md`
+
+### API 文档
+
+- **主插件**: `docs/api/main-plugin.md`
+- **聊天视图**: `docs/api/chat-view.md`
+- **RAG 服务**: `docs/api/rag-service.md`
+- **模型管理**: `docs/api/model-manager.md`
+
+### 开发指南
+
+- **开发环境**: `docs/development/setup.md`
+- **构建流程**: `docs/development/build-process.md`
+- **贡献指南**: `docs/development/contributing.md`
+- **测试指南**: `docs/development/testing.md`
+
+---
+
+## 🔍 代码模式参考
+
+### 插件生命周期
+
+```typescript
+// src/main.ts
+export default class AIPilot extends Plugin {
+    settings: AIPilotSettings;
+    
+    async onload() {
+        // 加载设置
+        await this.loadSettings();
+        
+        // 注册视图
+        this.registerView(VIEW_TYPE_CHAT, ...);
+        
+        // 注册命令
+        this.addCommand({ ... });
+        
+        // 注册设置面板
+        this.addSettingTab(new AIPilotSettingTab(this.app, this));
+    }
+    
+    onunload() {
+        // 清理资源
+    }
+}
+```
+
+### 视图模式
+
+```typescript
+// src/ChatView.ts
+export class ChatView extends ItemView {
+    getViewType() {
+        return VIEW_TYPE_CHAT;
+    }
+    
+    getDisplayText() {
+        return "AI Chat";
+    }
+    
+    async onOpen() {
+        // 初始化 UI
+        this.containerEl.empty();
+        this.containerEl.addClass('aipilot-chat-view');
+    }
+    
+    async onClose() {
+        // 清理资源
+    }
+}
+```
+
+### 设置模式
+
+```typescript
+// src/main.ts
+interface AIPilotSettings {
+    apiProvider: 'openai' | 'zhipu' | 'groq';
+    apiKey: string;
+    model: string;
+    // ...
+}
+
+const DEFAULT_SETTINGS: AIPilotSettings = {
+    apiProvider: 'openai',
+    apiKey: '',
+    model: 'gpt-4',
+};
+```
+
+### DOM 操作模式
+
+```typescript
+// ✅ 推荐：使用 Obsidian API
+const container = this.containerEl.createDiv({ cls: 'chat-container' });
+const header = container.createEl('h2', { text: 'AI Chat' });
+const input = container.createEl('input', {
+    type: 'text',
+    placeholder: 'Type your message...'
+});
+
+// ❌ 禁止：直接操作 innerHTML
+container.innerHTML = '<div>...</div>'; // 不安全！
+```
+
+---
+
+## 🚨 已知约束
+
+### Obsidian 插件特定约束
+
+1. **安全性**
+   - 禁止使用 `innerHTML` / `outerHTML`
+   - 必须清理用户输入
+   - 使用 Obsidian DOM API
+
+2. **性能**
+   - 避免阻塞主线程
+   - 大文件处理使用异步
+   - 及时清理事件监听
+
+3. **兼容性**
+   - 兼容 Obsidian 1.0+
+   - 考虑移动端兼容性
+   - 测试多主题兼容性
+
+### TypeScript 约束
+
+1. **类型安全**
+   - 避免 `as any`
+   - 定义明确接口
+   - 使用泛型处理通用类型
+
+2. **代码风格**
+   - 使用 `const` / `let`，避免 `var`
+   - 优先使用箭头函数
+   - 使用可选链 `?.` 和空值合并 `??`
+
+---
+
+## 🔧 开发工作流
+
+### 本地开发
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式（监听文件变化）
+npm run dev
+
+# 生产构建
+npm run build
+
+# 版本发布
+npm version patch/minor/major
+```
+
+### 测试流程
+
+1. 在本地 Obsidian vault 测试
+2. 验证核心功能
+3. 检查控制台无错误
+4. 测试多个 AI 提供商
+5. 验证 RAG 功能
+
+---
+
+## 📝 常见任务
+
+### 添加新功能
+
+1. 分析需求（属于哪个模块）
+2. 制定计划（2-3 个方案）
+3. 等待批准
+4. 实施代码
+5. 更新文档
+6. 测试验证
+
+### 修复 Bug
+
+1. 重现问题
+2. 定位代码
+3. 分析原因
+4. 实施修复
+5. 验证修复
+6. 添加测试（如适用）
+
+### 重构代码
+
+1. 识别问题代码
+2. 提出重构方案
+3. 评估风险
+4. 等待批准
+5. 逐步重构
+6. 确保功能不变
+
+---
+
+## 🌐 外部资源
+
+### 官方文档
+- **Obsidian API**: https://docs.obsidian.md/
+- **TypeScript**: https://www.typescriptlang.org/docs/
+- **CodeMirror 6**: https://codemirror.net/docs/
+
+### 社区资源
+- **Obsidian Plugin Docs**: https://marcus.se.net/obsidian-plugin-docs/
+- **Obsidian Forum**: https://forum.obsidian.md/
+
+---
+
+**最后更新**: 2025-11-09  
+**版本**: 1.0  
+**Token 估算**: ~1,500 tokens  
+**加载方式**: Always Applied  
+**优先级**: 2
