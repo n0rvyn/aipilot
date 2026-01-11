@@ -1,0 +1,11 @@
+// This is a clean version without duplicates.
+// Remove the classes that are now in modals.ts:
+// - LoadingModal class 
+// - SearchResultsModal class
+// Also ensure there's only one implementation of searchKnowledgeBase function
+
+// Keep only one implementation of searchKnowledgeBase:
+async searchKnowledgeBase() {
+    // Instead of implementing search here, use the new KnowledgeBaseView
+    this.activateKnowledgeBaseView();
+} 

@@ -1,0 +1,493 @@
+---
+description: "项目概述 - 完整背景和架构设计 - 详细参考"
+scopes: [chat, edit]
+tags: [project-overview, architecture, background, detailed-reference]
+priority: 200
+globs: []
+alwaysApply: false
+---
+
+# AIPilot 项目概述（详细参考）
+
+> **注意**：本文件为详细参考，不会自动加载。  
+> **简版**: 见 `001-project-context.mdc`
+
+---
+
+## 📖 项目背景
+
+### 项目起源
+
+AIPilot 是一个为 Obsidian 设计的 AI 助手插件，旨在增强知识管理和写作体验。
+
+**核心目标**：
+1. 将 AI 能力深度集成到 Obsidian 工作流
+2. 利用本地笔记作为上下文（RAG）
+3. 提供多样化的 AI 功能（聊天、润色、辩论）
+4. 支持多个 AI 提供商，增加灵活性
+
+### 技术选型
+
+**为什么选择 TypeScript？**
+- Obsidian 插件官方开发语言
+- 类型安全，减少运行时错误
+- 良好的 IDE 支持和代码提示
+
+**为什么选择 esbuild？**
+- 极快的构建速度
+- 简单的配置
+- 良好的 TypeScript 支持
+
+**为什么选择这些依赖？**
+- **CodeMirror 6**: Obsidian 使用的编辑器，深度集成
+- **marked**: 轻量级 Markdown 解析器
+- **tiktoken**: 准确的 token 计数（兼容 OpenAI）
+- **axios**: 可靠的 HTTP 客户端
+
+---
+
+## 🏗️ 架构设计
+
+### 整体架构
+
+```
+┌─────────────────────────────────────────┐
+│           Obsidian Application          │
+└─────────────┬───────────────────────────┘
+              │
+    ┌─────────┴─────────┐
+    │   AIPilot Plugin  │
+    └─────────┬─────────┘
+              │
+    ┌─────────┴─────────┐
+    │                   │
+┌───▼────┐      ┌──────▼──────┐
+│ Views  │      │  Services   │
+│        │      │             │
+│ Chat   │      │ AI Service  │
+│ KB     │      │ RAG Service │
+│ Debate │      │             │
+└────────┘      └─────────────┘
+```
+
+### 核心组件
+
+#### 1. Plugin Entry (main.ts)
+
+```typescript
+// 插件入口，负责：
+// - 生命周期管理（onload/onunload）
+// - 视图注册
+// - 命令注册
+// - 设置管理
+
+export default class AIPilot extends Plugin {
+    settings: AIPilotSettings;
+    
+    async onload() {
+        // 初始化
+    }
+}
+```
+
+#### 2. Views（视图层）
+
+**ChatView** (`src/ChatView.ts`)
+- 聊天界面
+- 消息渲染
+- 流式响应处理
+- 自定义功能按钮
+
+**KnowledgeBaseView** (`src/KnowledgeBaseView.ts`)
+- 知识库管理
+- 文档检索
+- 向量搜索
+
+**DebatePanel** (`src/debate/DebatePanel.ts`)
+- 多代理辩论界面
+- 视角切换
+- 讨论线索
+
+#### 3. Services（服务层）
+
+**AIService** (`src/services/AIService.ts`)
+- 统一的 AI 接口
+- 多提供商支持（OpenAI、智谱、Groq）
+- 流式响应处理
+
+**RAGService** (`src/rag/RAGService.ts`)
+- 文档检索
+- 向量化
+- 上下文构建
+
+#### 4. Models（模型层）
+
+**ModelManager** (`src/models/ModelManager.ts`)
+- 模型配置管理
+- 模型切换
+- 参数调整
+
+---
+
+## 📐 设计模式
+
+### 1. Plugin Pattern
+
+```typescript
+// Obsidian 插件模式
+export default class AIPilot extends Plugin {
+    // 插件生命周期
+    async onload() { }
+    onunload() { }
+    
+    // 设置管理
+    async loadSettings() { }
+    async saveSettings() { }
+}
+```
+
+**为什么**：
+- 遵循 Obsidian 官方规范
+- 自动管理资源生命周期
+- 统一的插件接口
+
+### 2. View Pattern
+
+```typescript
+// 自定义视图模式
+export class ChatView extends ItemView {
+    getViewType() { return 'aipilot-chat'; }
+    getDisplayText() { return 'AI Chat'; }
+    
+    async onOpen() { /* 初始化 UI */ }
+    async onClose() { /* 清理资源 */ }
+}
+```
+
+**为什么**：
+- Obsidian 推荐的视图创建方式
+- 自动集成到工作区
+- 状态保存和恢复
+
+### 3. Service Pattern
+
+```typescript
+// 服务接口模式
+interface AIServiceInterface {
+    generate(prompt: string): Promise<string>;
+    stream(prompt: string): AsyncIterator<string>;
+}
+
+class OpenAIService implements AIServiceInterface {
+    // 具体实现
+}
+```
+
+**为什么**：
+- 易于扩展新的 AI 提供商
+- 统一的接口，降低耦合
+- 便于测试和 mock
+
+---
+
+## 🔄 数据流
+
+### 聊天流程
+
+```
+User Input
+   ↓
+ChatView (UI)
+   ↓
+AIService (选择提供商)
+   ↓
+RAGService (检索相关文档)
+   ↓
+API Request (OpenAI/Zhipu/Groq)
+   ↓
+Stream Response
+   ↓
+MarkdownRenderer (渲染)
+   ↓
+Display to User
+```
+
+### RAG 流程
+
+```
+User Query
+   ↓
+RAGService.search()
+   ↓
+1. 向量化查询
+2. 搜索相似文档
+3. 排序和过滤
+   ↓
+构建上下文
+   ↓
+发送到 AI
+   ↓
+增强的回答
+```
+
+---
+
+## 🗂️ 文件组织
+
+### 核心文件说明
+
+| 文件 | 行数 | 职责 | 复杂度 |
+|------|------|------|--------|
+| `main.ts` | 2000+ | 插件入口、设置、命令 | 高 |
+| `ChatView.ts` | 2000+ | 聊天界面、消息管理 | 高 |
+| `MarkdownRenderer.ts` | 500+ | Markdown 渲染、代码高亮 | 中 |
+| `AIService.ts` | 400+ | AI 请求处理 | 中 |
+| `RAGService.ts` | 600+ | 文档检索、向量化 | 中 |
+| `ModelManager.ts` | 300+ | 模型配置管理 | 低 |
+
+### 目录职责
+
+```
+src/
+├── main.ts              # 插件入口
+├── ChatView.ts          # 聊天视图
+├── KnowledgeBaseView.ts # 知识库视图
+├── MarkdownRenderer.ts  # 渲染器
+├── icons.ts             # 图标定义
+├── modals.ts            # 对话框
+├── styles.css           # 样式
+│
+├── debate/              # 多代理辩论
+│   ├── AgentDebateEngine.ts
+│   └── DebatePanel.ts
+│
+├── models/              # 模型管理
+│   ├── ModelManager.ts
+│   ├── ModelConfigModal.ts
+│   └── EmbeddingModelConfigModal.ts
+│
+├── rag/                 # RAG 系统
+│   ├── index.ts
+│   ├── AIService.ts
+│   ├── RAGService.ts
+│   ├── enhancement/     # 查询增强
+│   ├── ranking/         # 结果排序
+│   ├── reflection/      # 反思机制
+│   └── retrieval/       # 检索模块
+│
+└── services/            # 服务层
+    ├── AIService.ts
+    └── RAGService.ts
+```
+
+---
+
+## 🔧 关键技术细节
+
+### 1. 流式响应处理
+
+```typescript
+async function* streamResponse(prompt: string): AsyncIterator<string> {
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ prompt, stream: true }),
+        headers: { /* ... */ }
+    });
+    
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        yield chunk;
+    }
+}
+```
+
+**为什么使用流式**：
+- 更好的用户体验（实时反馈）
+- 降低首次响应延迟
+- 支持大文本生成
+
+### 2. 安全的 DOM 操作
+
+```typescript
+// ✅ 安全：使用 Obsidian API
+const container = this.containerEl.createDiv({ cls: 'chat-message' });
+container.appendText(userInput); // 自动转义
+
+// ❌ 危险：直接 innerHTML
+container.innerHTML = userInput; // XSS 风险
+```
+
+**为什么**：
+- 防止 XSS 攻击
+- 遵循 Obsidian 安全规范
+- 自动处理特殊字符
+
+### 3. 错误处理策略
+
+```typescript
+try {
+    const result = await apiCall();
+    return result;
+} catch (error) {
+    // 1. 记录详细错误
+    console.error('API call failed:', error);
+    
+    // 2. 用户友好提示
+    new Notice('Failed to connect to AI service');
+    
+    // 3. 优雅降级
+    return fallbackResult;
+}
+```
+
+**为什么**：
+- 避免插件崩溃
+- 提供明确的错误信息
+- 保持用户体验
+
+---
+
+## 📊 性能考虑
+
+### 1. 懒加载
+
+```typescript
+// 视图只在需要时创建
+this.registerView(VIEW_TYPE, (leaf) => {
+    return new ChatView(leaf);
+});
+```
+
+### 2. 事件防抖
+
+```typescript
+// 避免频繁的 API 调用
+const debouncedSearch = debounce(async (query: string) => {
+    const results = await ragService.search(query);
+    this.updateResults(results);
+}, 300);
+```
+
+### 3. 缓存策略
+
+```typescript
+// 缓存 AI 响应
+const cache = new Map<string, string>();
+
+async function getCachedResponse(prompt: string): Promise<string> {
+    if (cache.has(prompt)) {
+        return cache.get(prompt)!;
+    }
+    
+    const response = await aiService.generate(prompt);
+    cache.set(prompt, response);
+    return response;
+}
+```
+
+---
+
+## 🔐 安全措施
+
+### 1. API Key 保护
+
+```typescript
+// 设置中存储，不在代码中硬编码
+interface Settings {
+    apiKey: string; // 由用户配置
+}
+
+// 不在日志中输出
+console.log('API Key:', '***'); // 脱敏
+```
+
+### 2. 输入验证
+
+```typescript
+function validateInput(input: string): boolean {
+    if (!input || input.trim().length === 0) {
+        return false;
+    }
+    
+    if (input.length > MAX_LENGTH) {
+        new Notice('Input too long');
+        return false;
+    }
+    
+    return true;
+}
+```
+
+### 3. 权限最小化
+
+```typescript
+// 只请求必要的权限
+// 不访问不需要的文件
+// 不执行不安全的操作
+```
+
+---
+
+## 📚 关键文档索引
+
+### 架构文档
+- `docs/architecture/overview.md` - 架构总览
+- `docs/architecture/plugin-lifecycle.md` - 插件生命周期
+- `docs/architecture/rag-system.md` - RAG 系统设计
+- `docs/architecture/debate-system.md` - 辩论系统
+
+### API 文档
+- `docs/api/main-plugin.md` - 主插件 API
+- `docs/api/chat-view.md` - 聊天视图 API
+- `docs/api/rag-service.md` - RAG 服务 API
+
+### 开发文档
+- `docs/development/setup.md` - 开发环境搭建
+- `docs/development/build-process.md` - 构建流程
+- `docs/development/contributing.md` - 贡献指南
+
+---
+
+## 🎯 设计决策记录
+
+### 为什么使用 marked 而不是其他 Markdown 解析器？
+
+**决策**: 使用 marked
+
+**理由**:
+1. 轻量级（~20KB）
+2. 高度可配置
+3. 社区活跃
+4. 与 CodeMirror 集成良好
+
+### 为什么支持多个 AI 提供商？
+
+**决策**: 支持 OpenAI、智谱AI、Groq
+
+**理由**:
+1. 增加灵活性（用户可选择）
+2. 降低依赖风险（API 限制、服务中断）
+3. 成本优化（不同提供商价格不同）
+4. 功能互补（不同模型擅长领域不同）
+
+### 为什么使用 RAG 而不是直接调用 AI？
+
+**决策**: 实现 RAG 系统
+
+**理由**:
+1. 利用本地知识库
+2. 提供更准确的上下文
+3. 减少幻觉问题
+4. 符合 Obsidian 用户工作流
+
+---
+
+**最后更新**: 2025-11-09  
+**版本**: 1.0  
+**维护者**: AIPilot Development Team

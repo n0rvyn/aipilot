@@ -1,0 +1,166 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    # Auto-increment the patch version to avoid conflicts
+    - name: Increment version
+      id: increment_version
+      run: |
+        # Get current version from package.json
+        CURRENT_VERSION=$(jq -r '.version' package.json)
+        echo "Current version: $CURRENT_VERSION"
+        
+        # Split version into major, minor, patch
+        IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR="${VERSION_PARTS[0]}"
+        MINOR="${VERSION_PARTS[1]}"
+        PATCH="${VERSION_PARTS[2]}"
+        
+        # Increment patch version
+        NEW_PATCH=$((PATCH + 1))
+        NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+        echo "New version: $NEW_VERSION"
+        
+        # Update package.json with new version
+        jq ".version = \"$NEW_VERSION\"" package.json > package.json.tmp
+        mv package.json.tmp package.json
+        
+        # Update manifest.json with new version
+        jq ".version = \"$NEW_VERSION\"" manifest.json > manifest.json.tmp
+        mv manifest.json.tmp manifest.json
+        
+        # Set output for later steps
+        echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Commit version bump
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+        git add package.json manifest.json
+        git commit -m "Bump version to ${{ steps.increment_version.outputs.VERSION }}"
+        git push
+
+    - name: Build the project
+      run: npm run build
+
+    # Validate Obsidian plugin requirements before release
+    - name: Validate Plugin
+      id: validate_plugin
+      run: |
+        echo "Validating Obsidian plugin structure and requirements..."
+        
+        # Check manifest.json exists in dist
+        if [ ! -f ./dist/manifest.json ]; then
+          echo "::error::Missing manifest.json file in dist directory"
+          exit 1
+        fi
+        
+        # Check required fields in manifest.json
+        echo "Checking manifest.json fields..."
+        MISSING_FIELDS=$(node -e "
+          const manifest = require('./dist/manifest.json');
+          const requiredFields = ['id', 'name', 'version', 'minAppVersion', 'description', 'author'];
+          const missingFields = requiredFields.filter(field => !manifest[field]);
+          console.log(missingFields.join(', '));
+          process.exit(missingFields.length > 0 ? 1 : 0);
+        ")
+        
+        if [ $? -ne 0 ]; then
+          echo "::error::Missing required fields in manifest.json: $MISSING_FIELDS"
+          exit 1
+        fi
+        
+        # Validate version format
+        VALID_VERSION=$(node -e "
+          const manifest = require('./dist/manifest.json');
+          const isValid = /^[0-9.]+$/.test(manifest.version);
+          console.log(isValid ? 'true' : 'false');
+          process.exit(isValid ? 0 : 1);
+        ")
+        
+        if [ $? -ne 0 ]; then
+          echo "::error::Invalid version format in manifest.json. Only numbers and dots allowed."
+          exit 1
+        fi
+        
+        # Check main.js exists in dist
+        if [ ! -f ./dist/main.js ]; then
+          echo "::error::Missing main.js file in dist directory"
+          exit 1
+        fi
+        
+        # Check LICENSE exists
+        if [ ! -f LICENSE ]; then
+          echo "::warning::Missing LICENSE file. It is recommended to include a license for open-source projects."
+        fi
+        
+        # Ensure manifest version matches the incremented version
+        MANIFEST_VERSION=$(node -e "console.log(require('./dist/manifest.json').version)")
+        if [ "$MANIFEST_VERSION" != "${{ steps.increment_version.outputs.VERSION }}" ]; then
+          echo "::error::Version mismatch: manifest.json ($MANIFEST_VERSION) doesn't match incremented version (${{ steps.increment_version.outputs.VERSION }})"
+          exit 1
+        fi
+        
+        echo "Plugin validation successful!"
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.increment_version.outputs.VERSION }}
+        release_name: Release ${{ steps.increment_version.outputs.VERSION }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/main.js
+        asset_name: main.js
+        asset_content_type: application/javascript
+
+    - name: Upload styles.css
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/styles.css
+        asset_name: styles.css
+        asset_content_type: text/css
+
+    - name: Upload manifest.json
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/manifest.json
+        asset_name: manifest.json
+        asset_content_type: application/json

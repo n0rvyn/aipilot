@@ -1,0 +1,469 @@
+---
+description: "TypeScript 最佳实践检查清单"
+scopes: [chat, edit]
+tags: [typescript, types, best-practices]
+priority: 101
+globs: ["**/*.ts"]
+alwaysApply: false
+---
+
+# TypeScript 最佳实践检查清单
+
+> **重要性**: ⭐⭐⭐⭐ 高优先级  
+> **加载方式**: Auto-Attach（编辑 TS 文件时自动加载）  
+> **用途**: TypeScript 类型安全和代码质量  
+
+---
+
+## 🎯 类型安全原则
+
+### 1. 避免使用 `as any` ⚠️
+
+```typescript
+// ❌ 错误：丢失类型安全
+const data = response as any;
+const value = data.someProperty; // 无类型检查
+
+// ✅ 正确：定义明确接口
+interface ResponseData {
+    someProperty: string;
+    anotherProperty: number;
+}
+
+const data = response as ResponseData;
+const value = data.someProperty; // 类型安全
+```
+
+**例外情况**（需要注释说明）：
+```typescript
+// ✅ 可接受：第三方库无类型定义
+// @ts-ignore - marked library typing issue
+const renderer = new marked.Renderer() as any;
+
+// ✅ 可接受：临时解决方案，有 TODO
+// TODO: Define proper type for this API response
+const temp = unknownData as any;
+```
+
+---
+
+## 📝 接口定义
+
+### 所有数据结构必须定义接口
+
+```typescript
+// ❌ 错误：无类型定义
+const message = {
+    role: 'user',
+    content: 'Hello',
+    timestamp: Date.now()
+};
+
+// ✅ 正确：定义接口
+interface Message {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: number;
+}
+
+const message: Message = {
+    role: 'user',
+    content: 'Hello',
+    timestamp: Date.now()
+};
+```
+
+### 接口命名规范
+
+```typescript
+// ✅ 推荐：使用 I 前缀或描述性名称
+interface ISettings { ... }
+interface UserSettings { ... }
+
+// ✅ 推荐：使用 Type 后缀表示类型别名
+type ModelType = 'gpt-4' | 'gpt-3.5-turbo';
+type ConfigType = { ... };
+
+// ✅ 推荐：使用 Enum 表示枚举
+enum MessageRole {
+    User = 'user',
+    Assistant = 'assistant',
+    System = 'system'
+}
+```
+
+---
+
+## 🔧 类型工具
+
+### 1. 可选链（Optional Chaining）
+
+```typescript
+// ❌ 繁琐的空值检查
+if (obj && obj.prop && obj.prop.nested) {
+    const value = obj.prop.nested.value;
+}
+
+// ✅ 使用可选链
+const value = obj?.prop?.nested?.value;
+```
+
+### 2. 空值合并（Nullish Coalescing）
+
+```typescript
+// ❌ 使用 || 可能产生意外结果
+const timeout = settings.timeout || 5000; // 0 会被当作 false
+
+// ✅ 使用 ?? 只处理 null/undefined
+const timeout = settings.timeout ?? 5000; // 0 不会被替换
+```
+
+### 3. 类型守卫（Type Guards）
+
+```typescript
+// ✅ 使用类型守卫
+function isString(value: unknown): value is string {
+    return typeof value === 'string';
+}
+
+function processValue(value: unknown) {
+    if (isString(value)) {
+        // value 在这里是 string 类型
+        console.log(value.toUpperCase());
+    }
+}
+```
+
+### 4. 泛型（Generics）
+
+```typescript
+// ✅ 使用泛型处理通用逻辑
+interface ApiResponse<T> {
+    data: T;
+    status: number;
+    message: string;
+}
+
+async function fetchData<T>(url: string): Promise<ApiResponse<T>> {
+    const response = await fetch(url);
+    return response.json();
+}
+
+// 使用时指定具体类型
+const result = await fetchData<User>('/api/user');
+// result.data 是 User 类型
+```
+
+---
+
+## 📦 导入和导出
+
+### 模块化最佳实践
+
+```typescript
+// ✅ 命名导出（推荐用于工具函数）
+export function formatDate(date: Date): string { ... }
+export function parseDate(str: string): Date { ... }
+
+// ✅ 默认导出（推荐用于类和主要组件）
+export default class MyPlugin extends Plugin { ... }
+
+// ✅ 类型导出
+export type { Message, Settings };
+export interface User { ... }
+
+// ✅ 批量导入
+import { formatDate, parseDate } from './utils';
+import type { Message, Settings } from './types';
+```
+
+### 避免循环依赖
+
+```typescript
+// ❌ 错误：A.ts 依赖 B.ts，B.ts 依赖 A.ts
+
+// ✅ 正确：将共享类型提取到独立文件
+// types.ts
+export interface SharedType { ... }
+
+// A.ts
+import type { SharedType } from './types';
+
+// B.ts
+import type { SharedType } from './types';
+```
+
+---
+
+## 🎨 代码风格
+
+### 1. 变量声明
+
+```typescript
+// ✅ 使用 const / let，避免 var
+const API_KEY = 'xxx'; // 常量
+let counter = 0; // 可变
+
+// ❌ 避免 var
+var oldStyle = 'no'; // 不推荐
+```
+
+### 2. 箭头函数
+
+```typescript
+// ✅ 推荐：箭头函数
+const add = (a: number, b: number): number => a + b;
+
+// ✅ 多行时使用大括号
+const process = (data: Data): Result => {
+    const cleaned = cleanData(data);
+    return transform(cleaned);
+};
+
+// ✅ 异步箭头函数
+const fetchUser = async (id: string): Promise<User> => {
+    const response = await fetch(`/api/user/${id}`);
+    return response.json();
+};
+```
+
+### 3. 解构赋值
+
+```typescript
+// ✅ 对象解构
+const { apiKey, model, temperature } = settings;
+
+// ✅ 数组解构
+const [first, second, ...rest] = items;
+
+// ✅ 参数解构
+function render({ title, content, author }: Article) {
+    // ...
+}
+
+// ✅ 带默认值的解构
+const { timeout = 5000, retries = 3 } = config;
+```
+
+### 4. 模板字符串
+
+```typescript
+// ✅ 使用模板字符串
+const message = `Hello, ${user.name}!`;
+const url = `/api/user/${userId}/posts`;
+
+// ✅ 多行字符串
+const html = `
+    <div class="message">
+        <h2>${title}</h2>
+        <p>${content}</p>
+    </div>
+`;
+```
+
+---
+
+## 🔄 异步处理
+
+### 1. Async/Await
+
+```typescript
+// ✅ 推荐：async/await
+async function loadData() {
+    try {
+        const response = await fetch('/api/data');
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Failed to load data:', error);
+        throw error;
+    }
+}
+
+// ❌ 避免：Promise 链（除非必要）
+function loadDataOld() {
+    return fetch('/api/data')
+        .then(response => response.json())
+        .then(data => data)
+        .catch(error => {
+            console.error('Failed:', error);
+        });
+}
+```
+
+### 2. 并发请求
+
+```typescript
+// ✅ 使用 Promise.all 并发
+async function loadMultiple() {
+    const [users, posts, comments] = await Promise.all([
+        fetchUsers(),
+        fetchPosts(),
+        fetchComments()
+    ]);
+    
+    return { users, posts, comments };
+}
+
+// ✅ 使用 Promise.allSettled 处理部分失败
+async function loadWithFallback() {
+    const results = await Promise.allSettled([
+        fetchUsers(),
+        fetchPosts(),
+        fetchComments()
+    ]);
+    
+    return results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
+}
+```
+
+---
+
+## 🎯 类型断言
+
+### 何时使用类型断言
+
+```typescript
+// ✅ 可接受：确定类型比 TypeScript 推断的更具体
+const element = document.querySelector('.my-element') as HTMLDivElement;
+
+// ✅ 可接受：类型收窄
+interface Cat { meow(): void; }
+interface Dog { bark(): void; }
+
+function handleAnimal(animal: Cat | Dog) {
+    if ('meow' in animal) {
+        (animal as Cat).meow();
+    } else {
+        (animal as Dog).bark();
+    }
+}
+
+// ❌ 避免：绕过类型检查
+const data = apiResponse as any; // 危险！
+
+// ✅ 更好：定义正确的类型
+interface ApiResponse {
+    data: unknown;
+}
+const response = apiResponse as ApiResponse;
+```
+
+---
+
+## 🔍 常见模式
+
+### 1. 单例模式
+
+```typescript
+class ServiceManager {
+    private static instance: ServiceManager;
+    
+    private constructor() {
+        // 私有构造函数
+    }
+    
+    static getInstance(): ServiceManager {
+        if (!ServiceManager.instance) {
+            ServiceManager.instance = new ServiceManager();
+        }
+        return ServiceManager.instance;
+    }
+}
+```
+
+### 2. 工厂模式
+
+```typescript
+interface Model {
+    generate(prompt: string): Promise<string>;
+}
+
+class ModelFactory {
+    static create(type: string, config: Config): Model {
+        switch (type) {
+            case 'openai':
+                return new OpenAIModel(config);
+            case 'zhipu':
+                return new ZhipuModel(config);
+            default:
+                throw new Error(`Unknown model type: ${type}`);
+        }
+    }
+}
+```
+
+### 3. 观察者模式
+
+```typescript
+type Listener<T> = (data: T) => void;
+
+class EventEmitter<T> {
+    private listeners: Listener<T>[] = [];
+    
+    on(listener: Listener<T>): void {
+        this.listeners.push(listener);
+    }
+    
+    off(listener: Listener<T>): void {
+        const index = this.listeners.indexOf(listener);
+        if (index > -1) {
+            this.listeners.splice(index, 1);
+        }
+    }
+    
+    emit(data: T): void {
+        this.listeners.forEach(listener => listener(data));
+    }
+}
+```
+
+---
+
+## 📋 检查清单
+
+### 代码提交前检查
+
+- [ ] **类型安全**
+  - [ ] 避免使用 `as any`（除非必要且有注释）
+  - [ ] 所有数据结构有明确接口
+  - [ ] 使用泛型处理通用类型
+
+- [ ] **代码风格**
+  - [ ] 使用 `const` / `let`，避免 `var`
+  - [ ] 优先使用箭头函数
+  - [ ] 使用可选链 `?.` 和空值合并 `??`
+  - [ ] 使用模板字符串和解构赋值
+
+- [ ] **异步处理**
+  - [ ] 使用 async/await 代替 Promise 链
+  - [ ] 所有 async 函数有错误处理
+  - [ ] 并发请求使用 Promise.all
+
+- [ ] **模块化**
+  - [ ] 导入导出清晰
+  - [ ] 避免循环依赖
+  - [ ] 类型单独导出
+
+- [ ] **编译检查**
+  - [ ] 无 TypeScript 错误
+  - [ ] 无 linter 警告
+  - [ ] 构建成功
+
+---
+
+## 🔗 相关资源
+
+- **TypeScript 官方文档**: https://www.typescriptlang.org/docs/
+- **TypeScript Deep Dive**: https://basarat.gitbook.io/typescript/
+- **TypeScript Cheatsheet**: https://www.typescriptlang.org/cheatsheets
+
+---
+
+**最后更新**: 2025-11-09  
+**版本**: 1.0  
+**Token 估算**: ~800 tokens  
+**加载方式**: Auto-Attach  
+**优先级**: 101
